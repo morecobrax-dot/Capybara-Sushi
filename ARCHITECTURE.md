@@ -1,6 +1,8 @@
-# Starter architecture
+# Architecture
 
-How the pieces fit, and where your product goes.
+How the pieces fit. Capybara Sushi was generated from the app-starter
+template. The foundation half of this document describes what came from it,
+and [The slicing game](#the-slicing-game) describes what Capybara Sushi adds.
 
 ---
 
@@ -11,9 +13,9 @@ The whole application is one file with four blocks, in this order:
 | Block | Contains |
 |---|---|
 | `<head>` | Meta, viewport, manifest link. The block between `APP-META-BEGIN/END` is **derived** — written by `config:sync`. |
-| One `<style>` | Design tokens, then base, shell, controls, surfaces, overlay presentation, toast, responsive. |
-| `<body>` markup | The shell, the tab views, and every overlay declared statically. All other DOM is generated. |
-| One `<script>` | Config, release notes, storage, migration, overlay engine, toast, confirmation, icons, navigation, demo domain, boot. |
+| One `<style>` | Design tokens, then base, shell, controls, surfaces, overlay presentation, toast, the game stage, responsive. |
+| `<body>` markup | A hidden heading, the one play view (the stage canvas), and every overlay declared statically. All other DOM is generated. |
+| One `<script>` | Config, release notes, storage, migration, overlay engine, toast, confirmation, icons, navigation, the Domain seam, the slicing game, settings, boot. |
 
 **Keep it to one substantial `<script>` block.** The test harness evaluates
 only the largest one. Code in a second block, or in a linked `.js` file, is
@@ -38,6 +40,9 @@ APP_UPDATES[0].version ── APP_VERSION ──┬── CACHE_NAMESPACE
 
 APP_CONFIG.name/shortName/description/themeColor
                 └── <head> meta, manifest.webmanifest
+
+APP_CONFIG.orientation ── manifest.webmanifest (validated: only values the
+                          manifest spec allows are written)
 ```
 
 Static files cannot read a JavaScript object at runtime, so
@@ -65,7 +70,11 @@ Four layers in one `:root`, meant to be edited in order:
    editing to change the look.
 3. **Scale** — type, space, radius, shadow, motion, layout, touch, safe-area
    insets, breakpoints. Rarely changed.
-4. **Domain** — deliberately empty. Your product's own category colours go here.
+4. **Domain** — Capybara Sushi's gray-box stage colours (`--stage-*`,
+   `--roll-*`, `--guide-mark`, `--blade-trail`, `--incision`, `--hint-ghost`,
+   `--done-mark`). The canvas cannot use `var()`, so the game reads these at
+   runtime with `getComputedStyle`; no colour is typed into the drawing code,
+   and a contract checks it.
 
 Two contracts keep the system real rather than aspirational: no `font-family`
 literal outside layer 1, and no `font-size` outside the type scale. Genuine
@@ -129,6 +138,11 @@ sequence. Every key is backed up first; a failure restores it and surfaces a
 warning. Bump `DATA_SCHEMA_VERSION` only when the *shape* of stored data
 changes.
 
+**Capybara Sushi saves nothing yet.** The roll, the tuning and every gesture
+live in memory, and the only key written is the schema version. Backup & data
+counts records from whatever `data.*` keys exist, so it does not depend on
+any one product's collection.
+
 ## Feedback
 
 - `toast(message, variant)` — non-blocking, one `aria-live` region, capped at
@@ -168,14 +182,39 @@ Top-level `const`/`let` create lexical bindings that do not attach to
 storage-failure contracts run: two identities against one store, or a store
 that refuses writes.
 
+What the harness gives the game, so it can be tested without a browser:
+
+- **Virtual time.** `setTimeout`, `requestAnimationFrame` and
+  `performance.now()` run on one clock that moves only when a contract calls
+  `ctx.__advance(ms)`. A frame requested during a frame runs on the next one,
+  and a cancelled frame never runs. The template ran frames synchronously,
+  which makes any animation that schedules its next frame recurse at boot.
+- **A canvas.** `<canvas>` elements get a 2D context that counts calls, and
+  records them with their arguments when `recording` is on. Pointer capture is
+  tracked per element.
+- **A screen.** `loadApp({ viewport: { width, height, dpr, insets },
+  reducedMotion, search })` sets the screen, safe-area insets, motion
+  preference and query string. `ctx.__resize()` and `ctx.__setReducedMotion()`
+  change them mid-play, firing the same resize and `change` events a browser
+  would. Design tokens come from the shipped `:root` block.
+- **`window` is the global object**, as in a browser, so the overlay engine can
+  find a sheet's close function by name.
+- **No network.** `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`,
+  `EventSource` and `Image` record instead of reaching anything.
+- **Nothing fails quietly.** An exception inside a listener, timer or frame
+  lands in `errors`.
+
 Contracts are grouped by what they protect, in dependency order — identity and
 storage first, because everything above them is meaningless if those are wrong.
-Aim for high-value contracts, not volume.
+The game's own contracts (20–27) run last. Aim for high-value contracts, not
+volume. The harness cannot see a real browser's hit-testing, so every touch
+surface is also exercised with real CDP input in headless Edge (CLAUDE.md
+rule 43).
 
 ## The foundation → domain seam
 
-The foundation reaches a product through exactly four points, declared together
-just above the demo section:
+The foundation reaches the product through exactly four points, declared
+together just above the game section:
 
 ```js
 const Domain = {
@@ -186,33 +225,66 @@ const Domain = {
 };
 ```
 
-They are no-ops by default, so **deleting the demo leaves an app that still
+They are no-ops by default, so **deleting the game leaves an app that still
 boots**, into a working but empty shell. `boot()` and `renderAll()` call only
-these, and a contract asserts that no foundation code names anything the demo
-defines.
+these. A contract takes every name the game section declares and checks that
+no foundation code uses any of them. The template's own check looked only for
+names containing "item", which is how Backup & data came to depend on the demo
+unnoticed.
+
+Capybara Sushi claims them as: `hydrate` (nothing to read: nothing is saved),
+`render` (re-measure and draw), `wire` (the stage's pointer, keyboard,
+visibility, resize and reduced-motion listeners, attached once) and `tabIcons`
+(none: play is one screen).
 
 Two more things follow the same rule rather than being special-cased:
 
-- **Which tabs exist** is declared once, in the markup. `paintStaticIcons()`
-  reads `data-tab` off each `.tab-btn` and looks the glyph up in
-  `Domain.tabIcons`, so adding a tab is a markup edit plus one icon entry.
+- **Which screens exist** is declared once, in the markup. Capybara Sushi
+  declares one `.view` and no tab bar; `switchTab()` stays as foundation and
+  refuses a screen that does not exist.
 - **Backup import** merges whatever collections the backup file itself
-  declares, recognising a record by it having an `id`. A product that replaces
-  the demo does not have to rewrite import — and, more importantly, import
-  cannot silently restore nothing while reporting success.
+  declares, recognising a record by it having an `id`, so import cannot
+  silently restore nothing while reporting success.
 
-## Where your product goes
+## The slicing game
+
+The `GAME DOMAIN — Slicing` section, in the order a touch travels through it:
+
+| Part | What it owns |
+|---|---|
+| `TUNING`, `TUNING_SPEC` | Every feel value, and the only values `?tune` accepts. Hypotheses, not requirements. |
+| `SLICE` | Rules rather than feel: the minimum piece, the most a guide may pull, the knife's slop above and below the roll, spring frequency, fade times. |
+| Model | A roll is `{ id, n, cuts }`. Pieces are derived (`piecesOf`), never stored. `planCut()` decides where a stroke really cuts, or refuses it; `cutTarget()` always finds a legal cut while the roll is unfinished, which is what makes every roll finishable. |
+| Layout | `computeLayout()` sizes the roll so that, fully cut, it fits the safe area on any tablet or phone, either way up. The safe-area insets come from an invisible probe, because a canvas cannot read `env()`. |
+| Geometry | `pieceRects()` is the one answer to "where is the food on screen". `draw()` paints it and `pieceAt()` hit-tests it, so a moving piece is cut where it appears. |
+| Gesture | One pointer owns the knife. `feed()` clips each segment to the roll's band, so a sparse flick still crosses it; `tryCut()` cuts the moment a pass is deep and steep enough over real food. A stroke cuts at most once. |
+| Motion | Springs (`stepMotion`) and the finished-roll beat (`stepPhase`: ready → done → clear → enter → ready), both on one clock. Reduced motion settles springs and drops sliding, live. |
+| Frames | `requestFrame()` keeps at most one frame waiting, and none when nothing moves. `onFrame()` caps a step at 50 ms and restarts the clock after any pause. |
+| Lifecycle | `pausePlay()` / `resumePlay()` for hiding the page and for the tuning sheet: no stroke survives a pause and no time passes during one. A resize ends the stroke and settles motion; cuts keep their proportions because they are stored as fractions of the roll. |
+| Hint | After `hintS` quiet seconds, a ghost finger swipes where `cutTarget()` says a cut can go, or a still picture of it with reduced motion. |
+| Tuning UI | The `?tune` developer sheet, on the overlay engine. |
+
+The contracts for all of this are 20–27 in `test/contracts.js`. The feel
+itself is not something a contract can judge: [docs/DEVICE-QA.md](docs/DEVICE-QA.md).
+
+**Canvas 2D is a prototype choice.** The model, the tuning values, the state
+machine and the contracts carry over to any renderer. The drawing (`draw*`
+functions) is a thin layer to be replaced once the final art and renderer are
+decided.
+
+## Where things go
 
 | You are adding | Put it |
 |---|---|
-| A screen | A `.view` in the body, a tab button, a render function |
+| Anything a child plays | The game section, behind the `Domain` seams |
+| A feel value | A `TUNING_DEFAULTS` entry and a `TUNING_SPEC` line |
+| A colour the canvas draws | A layer-4 token, read in `readColors()` |
 | A destination opened from a row | A `.overlay.overlay-page` + `open*/close*` pair |
 | A decision or short form | A `.overlay` sheet |
 | Persistent state | A key in `KEYS`, under `data.` or `ui.` |
 | A data shape change | Bump `DATA_SCHEMA_VERSION`, add a migration |
-| A category colour | Token layer 4 |
-| A new primitive | Only if the demo or your product actually uses it |
+| A new primitive | Only if the product actually uses it |
 | A release | An `APP_UPDATES` entry, then `npm run config:sync` |
 
-Replace the `DEMO DOMAIN` section wholesale. Nothing above it depends on
-anything below it.
+The `GAME DOMAIN — Slicing` section is the product. Nothing outside it names
+anything declared inside it.

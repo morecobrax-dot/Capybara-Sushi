@@ -115,7 +115,7 @@ function run(){
   if(!hits.length){
     console.log('  clean — no fitness-domain residue found');
     console.log('\n  Note: binary assets are checked by filename only. Icons and images');
-    console.log('  still need a human to look at them. See NEW-PROJECT.md.');
+    console.log('  still need a human to look at them. See docs/REMAINING-WORK.md.');
     return 0;
   }
 

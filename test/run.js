@@ -40,7 +40,17 @@ const SUITES = [
   C.testStress,
   C.testSourcesOfTruth,
   C.testPortability,
-  C.testContamination
+  C.testContamination,
+  /* The game's own contracts run last: they mean nothing if the foundation
+     beneath them is broken, and a failure there should be reported first. */
+  C.testCutModel,
+  C.testStrokes,
+  C.testGeometry,
+  C.testRhythm,
+  C.testLayout,
+  C.testMotion,
+  C.testLifecycle,
+  C.testPermanentRules
 ];
 
 async function main(){

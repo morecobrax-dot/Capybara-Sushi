@@ -3,6 +3,12 @@
 The rules this foundation encodes. They are not preferences — each one is here
 because ignoring it produced a real defect in a real shipped product.
 
+They came from the app-starter template and still apply to Capybara Sushi's
+sheets and pages. Where the game itself differs, its own rules win and live in
+[CLAUDE.md](CLAUDE.md) (29–45). It is designed for tablets first, with phones
+in either orientation still playable. Play is one drawn stage rather than
+screens of controls, and it asks for no reading.
+
 Where a rule is enforced by a test, that is noted. The rest are judgment, and
 judgment is what code review is for.
 

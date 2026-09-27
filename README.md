@@ -1,98 +1,113 @@
-# app-starter
+# Capybara Sushi
 
-An opinionated foundation for local-first, installable mobile web applications.
+A cozy children's game set in a tiny Tokyo neighbourhood, where a calm
+capybara chef runs a sushi counter. At its heart is satisfying sushi slicing:
+order, slice, the pieces separate, the chef reacts, plate, serve, next roll.
 
-It exists so that building a new product means answering *"what should this
-product do?"* rather than solving mobile navigation, overlays, safe areas,
-forms, storage namespacing and PWA installation again from scratch.
+**Status: Phase 0B, a gray-box slicing prototype (v0.1.0).** One plain roll on
+one screen. There is no chef, artwork, sound, saving or final branding yet.
+It exists to prove the slicing feels good before any art is made. See
+[docs/PRODUCT.md](docs/PRODUCT.md) for the product and roadmap, and
+[docs/REMAINING-WORK.md](docs/REMAINING-WORK.md) for what is not done.
 
----
-
-## What it is
-
-One HTML file, one service worker, one manifest, two icons. No framework, no
-build step, no dependencies. `npm` is used only for the test and config
-tooling — the app itself runs by opening `index.html`.
-
-```
-index.html              the entire application: tokens, shell, engine, demo
-sw.js                   offline shell, cache identity derived from APP_CONFIG
-manifest.webmanifest    install metadata, derived from APP_CONFIG
-icon-192/512.png        placeholder icons — replace them
-scripts/config.js       sync / verify static files against APP_CONFIG
-scripts/contamination.js permanent domain-residue guard
-test/harness.js         loads the app into a Node vm with a DOM stub
-test/contracts.js       the contract suite
-test/run.js             the runner
-```
-
-## What it includes
-
-- **App shell** — header, bottom navigation, full-page detail flows, safe-area
-  handling on all four edges, landscape and text-scaling behaviour that has
-  been through real devices.
-- **One overlay engine** — a single `MutationObserver` owning background scroll
-  lock, focus trapping and restoration, open-order stacking and ARIA state, for
-  every sheet and page. Adding a surface cannot forget any of it.
-- **Namespaced storage** — one adapter, every key prefixed with `APP_ID`,
-  honest reporting when a write cannot land, versioned migrations, and the rule
-  that absent data stays absent.
-- **Toast and confirmation** — non-blocking feedback and one confirmation
-  sheet. No `alert()`, `confirm()` or `prompt()` anywhere, enforced by a test.
-- **A design system that is enforced** — four token layers, with contracts that
-  fail the build on a raw `font-family` or an off-scale `font-size`.
-- **PWA** — installable, offline-capable, fully relative paths, and a cache
-  identity that cannot collide with another app on the same origin.
-- **A demo domain** — a small `Item` collection proving list, detail, create,
-  edit, delete, validate, persist, confirm and empty state.
-- **Contracts** — a few hundred assertions defending the foundation, not
-  thousands defending a domain.
-
-## What it deliberately does not include
-
-No authentication, no backend, no database, no account system, no API layer, no
-router, no state-management library, no component framework, no CSS framework,
-no icon package, no charting, no date library, no analytics.
-
-Those belong to a product, not to a foundation. Add them when a product
-actually needs them.
-
-## Run it
+## Play it locally
 
 ```bash
-npx --yes http-server -p 8181 -c-1 .
+npx --yes http-server -p 8395 -c-1 .
 ```
 
-Then open `http://localhost:8181`. A service worker needs `http(s)`, so opening
-the file directly works but will not exercise offline behaviour.
+- Play: <http://localhost:8395/>
+- Play with the developer feel-tuning sheet: <http://localhost:8395/?tune>
 
-## Verify it
+Swipe down across the roll to cut it; slow drags and quick flicks both work.
+With a mouse, drag with the left button. Space, Enter or the down arrow also
+cut. After a quiet moment a ghost finger shows the swipe.
+
+A service worker needs `http(s)`, so opening `index.html` from disk works but
+cannot test offline play. Port 8395 is this project's own. Other projects on
+this machine use 8391, and sharing a localhost origin lets their service
+workers replace each other.
+
+## Tune the feel (developer only)
+
+Add `?tune` to the address and a small button appears in the top-right
+corner. It opens the Feel tuning sheet, which pauses play while it is open:
+
+| Group | Control | Starts at |
+|---|---|---|
+| Cut forgiveness | Depth needed to cut (share of the roll's thickness) | 0.6 |
+| Cut forgiveness | Slant allowed (degrees off vertical) | 50 |
+| Guide attraction | Pull toward guides (0 = none, at most 0.8) | 0.6 |
+| Separation | Gap after a cut (px) | 10 |
+| Separation | Pop (px/s) | 220 |
+| Separation | Bounce (0 = none, 1 = most) | 0.35 |
+| Transitions | Finished roll shown (ms) | 650 |
+| Transitions | Clear and next roll (ms, each) | 300 |
+| Transitions | Hint after (s) | 5 |
+| Roll | Pieces per roll (4–8; a new count starts a fresh roll when the sheet closes) | 6 |
+
+Values last until the page reloads. **Copy** puts a one-line summary on the
+clipboard, or selects it in the box to copy by hand; paste it back to update
+the defaults in `TUNING_DEFAULTS` in `index.html`. **Reset** restores the
+starting values. **New roll** starts a fresh roll. The sheet also leads to
+What's new (to confirm which version a device is running) and Backup & data.
+
+`?tune` is not a grown-up setting and never appears in ordinary play. It must
+be removed, or moved behind a parent gate, before any child-facing release.
+
+## Verify
 
 ```bash
 npm run verify
 ```
 
-That is the one command to remember. It runs the contract suite, checks that
-the static PWA files still match `APP_CONFIG`, and scans for domain residue.
-Run it before every commit and every deploy.
+This runs the contract suite, checks that the generated PWA files still
+match `APP_CONFIG`, and runs the residue scan. It must be green before every
+commit. It needs no install: the project has no dependencies.
 
 ```bash
 npm test              # contracts only
 npm run config:verify # identity drift only
 npm run contamination # residue scan only
-npm run config:sync   # write derived values into the static files
+npm run config:sync   # write APP_CONFIG into the generated files
 ```
 
-## Start a new product
+The contracts run the real game in Node with a virtual clock and dispatched
+pointer events. They cannot see a real browser's hit-testing or a real
+finger, and they cannot judge how slicing *feels*: see
+[docs/DEVICE-QA.md](docs/DEVICE-QA.md).
 
-Read [NEW-PROJECT.md](NEW-PROJECT.md). The short version: set `APP_ID`, run
-`npm run config:sync`, replace the demo domain.
+## What it is made of
 
-## The rest of the documentation
+One HTML file (`index.html`) holds the whole app: design tokens, the stage,
+and one script. The game draws on a single Canvas 2D element with no
+dependencies. Canvas 2D is a prototype choice; the permanent renderer is still
+to be decided. The app was generated from the private app-starter template,
+and its foundation (storage, overlays, config sync, PWA, tests) is described
+in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- [PRODUCT-DESIGN.md](PRODUCT-DESIGN.md) — the UX and visual rules this
-  foundation encodes, and the anti-patterns it refuses.
-- [STARTER-ARCHITECTURE.md](STARTER-ARCHITECTURE.md) — how the pieces fit and
-  where new domain code goes.
-- [NEW-PROJECT.md](NEW-PROJECT.md) — turning this into a real product.
-- [CLAUDE.md](CLAUDE.md) — development method for AI coding sessions.
+```
+index.html              the app: tokens, stage, foundation, the slicing game
+sw.js                   offline shell, cache name derived from APP_CONFIG
+manifest.webmanifest    install metadata, derived from APP_CONFIG
+icon-192/512.png        placeholder icons, not final
+scripts/config.js       sync / verify generated files against APP_CONFIG
+scripts/contamination.js residue guard
+test/harness.js         the app in a Node vm: DOM stub, canvas, virtual clock
+test/contracts.js       the contract suite
+test/run.js             the runner
+```
+
+## Documentation
+
+- [docs/PRODUCT.md](docs/PRODUCT.md): the product, its permanent rules, the
+  roadmap and this phase.
+- [docs/DEVICE-QA.md](docs/DEVICE-QA.md): how to judge the slicing by hand,
+  and what only a real device can check.
+- [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md): onboarding and release
+  work that is not done yet.
+- [ARCHITECTURE.md](ARCHITECTURE.md): how the pieces fit.
+- [PRODUCT-DESIGN.md](PRODUCT-DESIGN.md): the UI rules the foundation
+  encodes.
+- [CLAUDE.md](CLAUDE.md): the development method, and Capybara Sushi's own
+  rules.

@@ -40,6 +40,11 @@ function stripComments(s){
 function stripStrings(s){
   return s.replace(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g, "''");
 }
+/* Code with every comment and string removed, trailing // comments
+   included (but not the // inside a URL). */
+function codeOnly(s){
+  return stripStrings(s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1'));
+}
 
 /* =========================================================
    CONTRACT 1 — BOOT
@@ -1060,14 +1065,19 @@ function testPortability(){
   const gameStart = src.indexOf('GAME DOMAIN — Slicing');
   const gameEnd = src.indexOf('SETTINGS — data ownership');
   T('the game section is delimited', gameStart > 0 && gameEnd > gameStart);
-  const gameCode = stripComments(src.slice(gameStart, gameEnd));
+  /* Top-level declarations only: they start at column 0. A function's own
+     locals (g, i, x...) are not the game's names and would match anything. */
+  const gameCode = codeOnly(src.slice(gameStart, gameEnd));
   const declared = [...gameCode.matchAll(
-    /(?:^|\n)\s*(?:async\s+)?(?:function\s+([A-Za-z_$][\w$]*)|(?:const|let|var|class)\s+([A-Za-z_$][\w$]*))/g)]
+    /(?:^|\n)(?:async\s+)?(?:function\s+([A-Za-z_$][\w$]*)|(?:const|let|var|class)\s+([A-Za-z_$][\w$]*))/g)]
     .map(m => m[1] || m[2]);
-  const foundationCode = stripStrings(stripComments(src.slice(0, gameStart) + src.slice(gameEnd)));
+  const foundationCode = codeOnly(src.slice(0, gameStart) + src.slice(gameEnd));
   const leaks = declared.filter(n =>
     new RegExp('(^|[^\\w$.])' + n.replace(/\$/g, '\\$') + '(?![\\w$])').test(foundationCode));
   T('the foundation names nothing the game declares', leaks.length === 0, leaks.join(', '));
+  T('and the check sees the game\'s own names',
+    ['planCut', 'pieceRects', 'commitCut', 'TUNING', 'game', 'roll'].every(n => declared.indexOf(n) !== -1),
+    declared.slice(0, 12).join(', '));
 
   sub('backup import is domain-agnostic');
   T('merge iterates the backup, not a hard-coded key list',
@@ -1118,7 +1128,7 @@ function testPortability(){
       ? 'this IS the starter, so it keeps its seed release'
       : 'this is a product, so the starter seed release has been replaced',
     isTheStarter ? carriesSeed : !carriesSeed,
-    isTheStarter ? '' : 'still shipping ' + STARTER_SEED_RELEASE + ' — see NEW-PROJECT.md step 10');
+    isTheStarter ? '' : 'still shipping ' + STARTER_SEED_RELEASE + ' — replace the seed entry in APP_UPDATES');
 
   sub('nothing hard-codes the starter identity');
   /* Contracts must follow the config, so that copying the repo and changing
@@ -1143,10 +1153,894 @@ function testPortability(){
   })());
 }
 
+/* =========================================================
+   CAPYBARA SUSHI — THE GAME'S OWN CONTRACTS
+   ---------------------------------------------------------
+   Everything below drives the real stage: pointer events are
+   dispatched at the canvas, and time moves only when a contract
+   advances the virtual clock. What these cannot see is hit-testing
+   by a real browser, or a real finger — the browser QA and the
+   device checklist cover those (docs/DEVICE-QA.md).
+   ========================================================= */
+
+/* ---------- shared helpers ---------- */
+const TABLET = { width: 1024, height: 768, dpr: 2 };
+function play(opts){ return H.loadApp(Object.assign({ viewport: TABLET }, opts || {})); }
+function stageOf(app){ return app.dom.document.getElementById('stage'); }
+/* A pointer event at the stage. Contracts name what matters; the rest is
+   a plain primary touch. */
+function pe(app, type, x, y, o){
+  const ev = Object.assign({
+    pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0,
+    buttons: (type === 'pointerup' || type === 'pointercancel' || type === 'lostpointercapture') ? 0 : 1,
+    clientX: x, clientY: y, defaultPrevented: false,
+    preventDefault(){ this.defaultPrevented = true; }
+  }, o || {});
+  stageOf(app).dispatch(type, ev);
+  return ev;
+}
+/* Heights in roll thicknesses: 0 is the roll's top edge, 1 its bottom. */
+function yAt(app, f){ const L = app.ctx.layout; return L.top + L.T * f; }
+/* A straight stroke at x, from `from` to `to` (in thicknesses), in `steps`
+   moves. Returns how many cuts the roll had just before release. */
+function stroke(app, x, o){
+  const s = Object.assign({ from: -0.8, to: 1.8, steps: 12, dx: 0, id: 1, type: 'touch', release: 'pointerup' }, o || {});
+  const who = { pointerId: s.id, pointerType: s.type };
+  pe(app, 'pointerdown', x, yAt(app, s.from), who);
+  for(let i = 1; i <= s.steps; i++){
+    pe(app, 'pointermove', x + s.dx * i / s.steps, yAt(app, s.from + (s.to - s.from) * i / s.steps), who);
+  }
+  const before = app.ctx.roll.cuts.length;
+  if(s.release) pe(app, s.release, x + s.dx, yAt(app, s.to), who);
+  return before;
+}
+/* Where on screen the roll's point u is drawn right now. */
+function screenX(app, u){
+  const c = app.ctx;
+  const r = c.pieceRects().find(q => u > q.u0 && u < q.u1);
+  return r ? c.xAt(r, u) : NaN;
+}
+function guideX(app, k){ return screenX(app, k / app.ctx.roll.n); }
+function advance(app, ms){ app.ctx.__advance(ms); }
+function settleAll(app){ advance(app, 1500); }
+function finishRollByKeys(app){
+  for(let i = 0; i < 12 && app.ctx.game.phase === 'ready'; i++) app.ctx.keyboardCut();
+}
+function listeners(app){
+  const c = app.ctx;
+  const sum = o => Object.keys(o._listeners || {}).reduce((n, k) => n + o._listeners[k].length, 0);
+  return sum(stageOf(app)) + sum(app.dom.document) + sum(c.window) +
+         c.__motion.listenerCount() + c.__resizeObservers.length;
+}
+function key(app, k, o){
+  const ev = Object.assign({ key: k, target: app.dom.document.body, repeat: false, defaultPrevented: false,
+                             preventDefault(){ this.defaultPrevented = true; } }, o || {});
+  app.dom.document.dispatch('keydown', ev);
+  return ev;
+}
+function hide(app){ app.dom.document.visibilityState = 'hidden'; app.dom.document.dispatch('visibilitychange', {}); }
+function show(app){ app.dom.document.visibilityState = 'visible'; app.dom.document.dispatch('visibilitychange', {}); }
+const near = (a, b, eps) => Math.abs(a - b) <= (eps === undefined ? 1e-6 : eps);
+
+/* =========================================================
+   CONTRACT 20 — THE CUT MODEL
+   A roll is its cut positions. A cut stays where the knife went,
+   and no sequence of legal cuts can leave a roll unfinishable.
+   ========================================================= */
+function testCutModel(){
+  section('CONTRACT 20 — a roll is its cuts, and every roll can be finished');
+  const c = play().ctx;
+
+  sub('a fresh roll');
+  const r = c.newRoll(6);
+  const whole = c.piecesOf(r);
+  T('is one piece, the whole roll', whole.length === 1 && whole[0].u0 === 0 && whole[0].u1 === 1);
+  T('offers a guide for every cut it needs', c.freeGuides(r).length === 5);
+  T('is unfinished until its fifth cut', !c.rollComplete(r));
+
+  sub('a cut stays where the knife went, pulled only part of the way');
+  const g1 = 1 / 6, off = g1 + 0.05;
+  T('a stroke on a guide cuts on the guide', near(c.planCut(r, 0, g1, 0.6), g1));
+  const pulled = c.planCut(r, 0, off, 0.6);
+  T('an off-guide stroke is pulled toward it', pulled < off && pulled > g1, String(pulled));
+  T('by exactly the configured share', near(off - pulled, 0.05 * 0.6));
+  T('even at full pull it never lands on the guide, so imperfection stays visible',
+    c.planCut(r, 0, off, 1) >= g1 + 0.05 * (1 - c.SLICE.maxPull) - 1e-12);
+  T('with no pull it stays exactly where the knife went', c.planCut(r, 0, off, 0) === off);
+  T('beyond a guide\'s reach nothing pulls it', c.planCut(r, 0, 0.07, 0.6) === 0.07);
+
+  sub('usable food on both sides of every cut');
+  T('a stroke too close to an end is refused, leaving no sliver', c.planCut(r, 0, 0.03, 0.6) === null);
+  const r2 = c.newRoll(6); c.addCut(r2, 0.3);
+  T('a stroke too close to an existing cut is refused', c.planCut(r2, 1, 0.32, 0.6) === null &&
+    c.planCut(r2, 0, 0.28, 0.6) === null);
+  T('a stroke outside the piece it names is refused', c.planCut(r2, 0, 0.5, 0.6) === null);
+  T('a finished roll takes no more cuts', (() => {
+    const done = c.newRoll(4); [0.25, 0.5, 0.75].forEach(u => c.addCut(done, u));
+    return c.rollComplete(done) && c.planCut(done, 0, 0.12, 0) === null && c.cutTarget(done) === null;
+  })());
+
+  sub('the premise that keeps every roll finishable');
+  T('a new piece may be at most half an ideal piece', c.SLICE.minShare <= 0.5, String(c.SLICE.minShare));
+  const counts = c.TUNING_SPEC.find(s => s.key === 'pieces');
+  T('for every piece count the tuning allows', (() => {
+    for(let n = counts.min; n <= counts.max; n++) if(2 * c.minPiece(n) > 1 / n + 1e-12) return false;
+    return true;
+  })());
+
+  /* Random play, including cuts packed as tightly as the rules allow: every
+     unfinished roll still has a legal cut, and that cut really is accepted. */
+  sub('no roll gets stuck: 2,500 randomised games');
+  const rand = H.mulberry32(20260927);
+  let games = 0, stuck = 0, badPiece = 0, badOrder = 0, maxAttempts = 0;
+  for(let n = counts.min; n <= counts.max; n++){
+    for(let game = 0; game < 500; game++){
+      games++;
+      const roll = c.newRoll(n);
+      let attempts = 0;
+      while(!c.rollComplete(roll) && attempts < 400){
+        attempts++;
+        const target = c.cutTarget(roll);
+        if(!target || c.planCut(roll, target.index, target.u, 0) === null){ stuck++; break; }
+        const pcs = c.piecesOf(roll);
+        const i = Math.floor(rand() * pcs.length);
+        const p = pcs[i];
+        const tight = c.legalRange(p, n);
+        const u = rand() < 0.3 && tight ? tight.lo : p.u0 + (p.u1 - p.u0) * rand();
+        const planned = c.planCut(roll, i, u, rand() * c.SLICE.maxPull);
+        if(planned !== null) c.addCut(roll, planned);
+        const after = c.piecesOf(roll);
+        if(after.some(q => q.u1 - q.u0 < c.minPiece(n) - 1e-9)) badPiece++;
+        if(roll.cuts.some((v, k) => k > 0 && v <= roll.cuts[k - 1])) badOrder++;
+      }
+      if(!c.rollComplete(roll)) stuck++;
+      maxAttempts = Math.max(maxAttempts, attempts);
+    }
+  }
+  T('every game finished', stuck === 0, stuck + ' stuck of ' + games);
+  T('no piece was ever smaller than the minimum', badPiece === 0, String(badPiece));
+  T('cuts stay ordered and distinct', badOrder === 0, String(badOrder));
+
+  sub('the tightest possible play still finishes, in exactly n − 1 cuts');
+  T('always cutting at the first legal spot', (() => {
+    for(let n = counts.min; n <= counts.max; n++){
+      const roll = c.newRoll(n);
+      for(let k = 0; k < n - 1; k++){
+        const pcs = c.piecesOf(roll);
+        const i = pcs.findIndex(p => c.legalRange(p, n));
+        if(i === -1) return false;
+        c.addCut(roll, c.planCut(roll, i, c.legalRange(pcs[i], n).lo, 0));
+      }
+      if(!c.rollComplete(roll) || roll.cuts.length !== n - 1) return false;
+    }
+    return true;
+  })());
+}
+
+/* =========================================================
+   CONTRACT 21 — STROKES
+   A swipe cuts while it crosses, before release; slow or fast;
+   once per gesture; and nothing that is not a swipe cuts.
+   ========================================================= */
+function testStrokes(){
+  section('CONTRACT 21 — a swipe cuts while it crosses, once, and nothing else cuts');
+  let app = play(), c = app.ctx;
+  c.TUNING.pull = 0;                               // exact positions for this contract
+  T('the stage boots wired and quiet', c.wired && app.errors.length === 0, app.errors.join(' | '));
+
+  sub('slow drags and fast flicks');
+  T('a slow 40-sample drag cuts before the finger lifts', stroke(app, guideX(app, 1), { steps: 40 }) === 1);
+  T('exactly one cut, where it was drawn', c.roll.cuts.length === 1 && near(c.roll.cuts[0], 1 / 6));
+  settleAll(app);
+  T('a flick seen as just two samples cuts before release', stroke(app, guideX(app, 2), { steps: 1 }) === 2);
+  settleAll(app);
+  const x3 = guideX(app, 3);
+  pe(app, 'pointerdown', x3, yAt(app, -0.8));
+  pe(app, 'pointerup', x3, yAt(app, 1.8));
+  T('a flick seen only at press and release still cuts, once', c.roll.cuts.length === 3);
+  settleAll(app);
+
+  sub('diagonal and slanted strokes');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  const L = c.layout, x0 = c.layout.cx - 150;
+  /* 45 degrees: equal travel across and down. */
+  pe(app, 'pointerdown', x0, yAt(app, -0.6));
+  for(let i = 1; i <= 16; i++) pe(app, 'pointermove', x0 + L.T * 2.2 * i / 16, yAt(app, -0.6 + 2.2 * i / 16));
+  pe(app, 'pointerup', x0 + L.T * 2.2, yAt(app, 1.6));
+  const expectU = c.uAt(c.pieceRects()[0], x0 + L.T * (0.5 + 0.6));
+  T('a 45-degree stroke cuts, where it crosses the middle', c.roll.cuts.length === 1 && near(c.roll.cuts[0], expectU, 1e-3),
+    c.roll.cuts.join(',') + ' vs ' + expectU);
+  settleAll(app);
+  const before = c.roll.cuts.length;
+  /* 70 degrees, aimed so it crosses the middle of the roll on uncut food:
+     only the slant can stop it. */
+  const steep = play(); steep.ctx.TUNING.pull = 0;
+  const run = steep.ctx.layout.T * 2.6 * 2.75;
+  stroke(steep, steep.ctx.layout.cx - run / 2, { dx: run });
+  T('a 70-degree stroke across the middle of the roll cuts nothing', steep.ctx.roll.cuts.length === 0);
+  stroke(steep, steep.ctx.layout.cx - run / 4, { dx: run / 2 });   // about 54 degrees: still too slanted
+  T('nor does one just past the allowed slant', steep.ctx.roll.cuts.length === 0);
+  stroke(steep, steep.ctx.layout.cx - run / 8, { dx: run / 4 });   // about 34 degrees: allowed
+  T('a stroke within the allowed slant cuts', steep.ctx.roll.cuts.length === 1);
+  pe(app, 'pointerdown', c.layout.cx - 200, yAt(app, 0.5));
+  for(let i = 1; i <= 10; i++) pe(app, 'pointermove', c.layout.cx - 200 + 40 * i, yAt(app, 0.5 + 0.02 * i));
+  pe(app, 'pointerup', c.layout.cx + 200, yAt(app, 0.7));
+  T('a swipe along the roll cuts nothing', c.roll.cuts.length === before);
+
+  sub('incomplete strokes and taps cut nothing and cost nothing');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  const xm = guideX(app, 2);
+  pe(app, 'pointerdown', xm, yAt(app, 0.5)); pe(app, 'pointerup', xm, yAt(app, 0.5));
+  T('a tap cuts nothing', c.roll.cuts.length === 0);
+  T('it is still noticed: the tapped piece jiggles', c.pieces[0].vel !== 0);
+  settleAll(app);
+  stroke(app, xm, { from: -0.8, to: 0.4 });
+  T('a stroke that stops 40% of the way in cuts nothing', c.roll.cuts.length === 0);
+  T('and its incision heals', c.healing.length === 1);
+  advance(app, 400);
+  T('closed within the heal time', c.healing.length === 0);
+  pe(app, 'pointerdown', xm, yAt(app, -0.8));
+  [-0.2, 0.2, 0.45, 0.2, -0.2, -0.8].forEach(f => pe(app, 'pointermove', xm, yAt(app, f)));
+  pe(app, 'pointerup', xm, yAt(app, -0.8));
+  T('a stroke that goes in and backs out cuts nothing', c.roll.cuts.length === 0);
+  stroke(app, xm, { from: 0.5, to: 1.8 });
+  T('starting halfway down the roll is not deep enough', c.roll.cuts.length === 0);
+  stroke(app, xm, { from: 0.3, to: 1.8 });
+  T('starting on the roll near its top still cuts', c.roll.cuts.length === 1);
+  T('no penalty state exists to record any of it',
+    Object.keys(c.game).sort().join(',') === 'gathered,phase,phaseT,rolls', Object.keys(c.game).join(','));
+
+  sub('one gesture, one result');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  const xa = guideX(app, 1), xb = guideX(app, 3), xc = guideX(app, 5);
+  pe(app, 'pointerdown', xa, yAt(app, -0.8));
+  [[xa, 1.8], [xb, -0.8], [xb, 1.8], [xc, -0.8], [xc, 1.8]].forEach(p => pe(app, 'pointermove', p[0], yAt(app, p[1])));
+  pe(app, 'pointerup', xc, yAt(app, 1.8));
+  T('a zigzag crossing the roll again and again makes one cut', c.roll.cuts.length === 1);
+  settleAll(app);
+  const x2 = guideX(app, 2);
+  pe(app, 'pointerdown', x2, yAt(app, -0.8));
+  pe(app, 'pointerdown', x2, yAt(app, -0.8));                   // the same press, reported twice
+  pe(app, 'pointermove', x2, yAt(app, 0.5));
+  pe(app, 'pointermove', x2, yAt(app, 0.5));                    // the same move, reported twice
+  pe(app, 'pointermove', x2, yAt(app, 1.8));
+  pe(app, 'pointermove', x2, yAt(app, 1.8));
+  T('duplicated events still make one cut', c.roll.cuts.length === 2);
+  pe(app, 'pointerup', x2, yAt(app, 1.8));
+  pe(app, 'pointerup', x2, yAt(app, 1.8));
+  T('a duplicated release neither undoes it nor adds another', c.roll.cuts.length === 2);
+  settleAll(app);
+  ['pointercancel', 'lostpointercapture'].forEach((ending, k) => {
+    const xe = guideX(app, 3 + k);
+    const n0 = c.roll.cuts.length;
+    stroke(app, xe, { release: ending });
+    T('a cut stays cut when ' + ending + ' follows it', c.roll.cuts.length === n0 + 1);
+    T('and ' + ending + ' adds nothing more', (() => { pe(app, 'pointerup', xe, yAt(app, 1.8)); return c.roll.cuts.length === n0 + 1; })());
+    settleAll(app);
+  });
+  T('no errors through any of it', app.errors.length === 0, app.errors.join(' | '));
+
+  sub('mouse: only a pressed left button cuts');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  const mx = guideX(app, 1), mouse = { pointerType: 'mouse' };
+  for(let i = 0; i <= 12; i++) pe(app, 'pointermove', mx, yAt(app, -0.8 + 2.6 * i / 12), Object.assign({ buttons: 0 }, mouse));
+  T('hovering across the roll cuts nothing', c.roll.cuts.length === 0);
+  pe(app, 'pointerdown', mx, yAt(app, -0.8), Object.assign({ button: 2, buttons: 2 }, mouse));
+  for(let i = 1; i <= 12; i++) pe(app, 'pointermove', mx, yAt(app, -0.8 + 2.6 * i / 12), Object.assign({ buttons: 2 }, mouse));
+  pe(app, 'pointerup', mx, yAt(app, 1.8), Object.assign({ button: 2 }, mouse));
+  T('a right-button drag cuts nothing', c.roll.cuts.length === 0);
+  pe(app, 'pointerdown', mx, yAt(app, -0.8), Object.assign({ button: 2, buttons: 2 }, mouse));
+  pe(app, 'pointerup', mx, yAt(app, 1.8), Object.assign({ button: 2 }, mouse));
+  T('nor a right-button press released on the far side', c.roll.cuts.length === 0);
+  const menu = { defaultPrevented: false, preventDefault(){ this.defaultPrevented = true; } };
+  stageOf(app).dispatch('contextmenu', menu);
+  T('and no context menu opens over the stage', menu.defaultPrevented === true);
+  T('a left-button drag cuts', stroke(app, mx, { type: 'mouse' }) >= 0 && c.roll.cuts.length === 1);
+  settleAll(app);
+  const mx2 = guideX(app, 2);
+  pe(app, 'pointerdown', mx2, yAt(app, -0.8), mouse);
+  pe(app, 'pointermove', mx2, yAt(app, 0.3), mouse);
+  pe(app, 'pointermove', mx2, yAt(app, 1.8), Object.assign({ buttons: 0 }, mouse));
+  T('a button released out of sight ends the stroke instead of cutting', c.roll.cuts.length === 1 && c.gesture === null);
+  settleAll(app);
+  stroke(app, guideX(app, 3), { type: 'pen' });
+  T('a pen cuts like a finger', c.roll.cuts.length === 2);
+
+  sub('one finger owns the knife until it truly lets go');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  const own = guideX(app, 2), other = guideX(app, 4);
+  pe(app, 'pointerdown', own, yAt(app, -0.8));
+  advance(app, 3000);
+  T('holding still for three seconds keeps the knife', c.gesture && c.gesture.id === 1);
+  advance(app, 6000);
+  T('and no hint interrupts a held finger', c.hint.showing === false);
+  const extra = { pointerId: 2, isPrimary: false };
+  pe(app, 'pointerdown', other, yAt(app, -0.8), extra);
+  pe(app, 'pointermove', other, yAt(app, 1.8), extra);
+  T('a second finger crossing the roll cuts nothing', c.roll.cuts.length === 0);
+  T('and takes nothing from the first', c.gesture && c.gesture.id === 1);
+  pe(app, 'pointerup', other, yAt(app, 1.8), extra);
+  T('its release does not end the first finger\'s stroke', c.gesture && c.gesture.id === 1);
+  pe(app, 'pointermove', own, yAt(app, 0.4));
+  pe(app, 'pointermove', own, yAt(app, 1.8));
+  T('after the long pause, the first finger carries on and cuts', c.roll.cuts.length === 1);
+  pe(app, 'pointerup', own, yAt(app, 1.8));
+  settleAll(app);
+  pe(app, 'pointerdown', own, yAt(app, -0.8), { pointerId: 7 });
+  pe(app, 'pointerdown', other, yAt(app, -0.8), { pointerId: 8, isPrimary: true });
+  T('a new primary touch means the browser saw the old one lift', c.gesture && c.gesture.id === 8);
+  pe(app, 'pointerup', other, yAt(app, -0.8), { pointerId: 8 });
+
+  sub('cancellation ends a stroke and never cuts');
+  [['pointercancel', () => pe(app, 'pointercancel', 0, 0)],
+   ['lostpointercapture', () => pe(app, 'lostpointercapture', 0, 0)],
+   ['window blur', () => c.window.dispatch('blur', {})]].forEach(([label, interrupt]) => {
+    const n0 = c.roll.cuts.length, x = screenX(app, c.cutTarget(c.roll).u);
+    pe(app, 'pointerdown', x, yAt(app, -0.8));
+    pe(app, 'pointermove', x, yAt(app, 0.4));
+    interrupt();
+    T(label + ' mid-stroke leaves no cut', c.roll.cuts.length === n0 && c.gesture === null);
+    T(label + ' gives the pointer back', !stageOf(app).hasPointerCapture(1));
+    pe(app, 'pointermove', x, yAt(app, 1.8));
+    pe(app, 'pointerup', x, yAt(app, 1.8));
+    T('the same finger moving on afterwards cuts nothing', c.roll.cuts.length === n0);
+  });
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
+/* =========================================================
+   CONTRACT 22 — ONE GEOMETRY
+   The renderer and the knife use the same rectangles, so food is
+   cut where it appears — even while it moves — and a gap cuts
+   nothing, because there is no food in it.
+   ========================================================= */
+function testGeometry(){
+  section('CONTRACT 22 — food is cut where it is drawn, and a gap cuts nothing');
+  let app = play(), c = app.ctx;
+  c.TUNING.pull = 0;
+
+  sub('the renderer paints exactly what the knife is tested against');
+  stroke(app, guideX(app, 1));
+  advance(app, 17);
+  T('pieces are moving after the cut', c.pieces.some(p => p.off !== 0 || p.vel !== 0));
+  const painted = JSON.stringify(c.paint.rects), live = JSON.stringify(c.pieceRects());
+  T('the last frame painted the rectangles hit testing uses', painted === live);
+  const ctx = stageOf(app).getContext('2d');
+  ctx.recording = true; ctx.log.length = 0;
+  c.requestFrame(); advance(app, 17);
+  ctx.recording = false;
+  const rects = c.paint.rects;
+  T('each piece is painted from its own rectangle', rects.every(r => {
+    const rr = Math.max(0, Math.min(Math.min(10, r.w / 3, r.h / 4), r.w / 2, r.h / 2));
+    return ctx.log.some(e => e.m === 'moveTo' && near(e.args[0], r.x + rr) && near(e.args[1], r.y));
+  }));
+  T('in the roll\'s own colour token', ctx.log.some(e => e.m === 'fill' && e.fillStyle === c.colors.roll) &&
+    /^#|^rgb/.test(c.colors.roll), String(c.colors.roll));
+  /* Hard rule 2: no colour typed into code. The canvas cannot use var(), so
+     it reads the tokens instead, and nothing in the game names a colour. */
+  const gameText = stripComments(js().slice(js().indexOf('GAME DOMAIN — Slicing'), js().indexOf('SETTINGS — data ownership')));
+  T('the game types no colour of its own: every one comes from a token',
+    !/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(gameText),
+    (gameText.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/) || [''])[0]);
+  T('every colour the canvas uses is a declared layer-4 or semantic token',
+    ['--bg', '--stage-counter', '--stage-plate', '--roll-body', '--roll-cut', '--roll-flash', '--guide-mark',
+     '--blade-trail', '--incision', '--hint-ghost', '--done-mark'].every(t => new RegExp(t + ':').test(css())));
+
+  sub('a moving piece is cut where it appears');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  stroke(app, guideX(app, 3));
+  advance(app, 34);
+  const moving = c.pieceRects();
+  T('the pieces are still in motion', c.pieces.some(p => Math.abs(p.vel) > 1));
+  const target = moving[1], aimX = target.x + target.w * 0.4;
+  const expected = c.uAt(target, aimX);
+  stroke(app, aimX, { steps: 1 });
+  T('the cut lands at the point under the knife on the piece as drawn',
+    c.roll.cuts.some(u => near(u, expected, 1e-9)), c.roll.cuts.join(',') + ' vs ' + expected);
+
+  sub('gaps and ends hold no food');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  stroke(app, guideX(app, 2));
+  settleAll(app);
+  const [left, right] = c.pieceRects();
+  const gapX = (left.x + left.w + right.x) / 2;
+  T('there is a visible gap to aim at', right.x - (left.x + left.w) >= 4);
+  stroke(app, gapX);
+  T('a swipe down the gap cuts nothing', c.roll.cuts.length === 1);
+  stroke(app, right.x + right.w + 6);
+  T('a swipe just past the end cuts nothing', c.roll.cuts.length === 1);
+  stroke(app, left.x - 6);
+  T('nor just before the start', c.roll.cuts.length === 1);
+  stroke(app, screenX(app, c.roll.cuts[0] + c.minPiece(c.roll.n) * 0.5));
+  T('a swipe right beside a cut is refused rather than leaving a sliver', c.roll.cuts.length === 1);
+  stroke(app, left.x + left.w - 1);
+  T('nor on the very edge of a piece', c.roll.cuts.length === 1);
+  stroke(app, 0, { steps: 1, from: -0.8, to: 1.8 });
+  T('nor at the stage\'s edge', c.roll.cuts.length === 1);
+
+  /* Strokes anywhere, at any moment, while pieces fly: whatever is accepted
+     is inside real food and leaves usable pieces on both sides. */
+  sub('300 strokes anywhere, at any moment');
+  app = play(); c = app.ctx;
+  const rand = H.mulberry32(7);
+  let bad = 0, cuts = 0;
+  for(let i = 0; i < 300; i++){
+    const n0 = c.roll.cuts.length, roll0 = c.roll.id;
+    const x = c.layout.area.x + rand() * c.layout.area.w;
+    const drawn = c.pieceRects();
+    stroke(app, x, { steps: 1 + Math.floor(rand() * 20), dx: (rand() - 0.5) * c.layout.T * 0.8 });
+    if(c.roll.id === roll0 && c.roll.cuts.length === n0 + 1){
+      cuts++;
+      const u = c.roll.cuts.find(v => drawn.every(r => !(near(v, r.u0, 1e-12) || near(v, r.u1, 1e-12))));
+      const home = drawn.find(r => u > r.u0 && u < r.u1);
+      if(!home || u - home.u0 < c.minPiece(c.roll.n) - 1e-9 || home.u1 - u < c.minPiece(c.roll.n) - 1e-9) bad++;
+    }
+    advance(app, rand() < 0.5 ? 16 : 250 + rand() * 900);
+  }
+  T('strokes did cut', cuts > 20, String(cuts));
+  T('every accepted cut is inside a real piece, with usable food either side', bad === 0, String(bad));
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
+/* =========================================================
+   CONTRACT 23 — THE ROLL'S RHYTHM, REPEATED
+   Cut, show the finished roll, clear it, bring the next one; a
+   held finger never reaches the new roll; and a hundred rolls
+   later nothing has piled up — no listener, timer or frame.
+   ========================================================= */
+function testRhythm(){
+  section('CONTRACT 23 — finish, show, clear, next — a hundred times, leaking nothing');
+  let app = play(), c = app.ctx;
+  c.TUNING.pull = 0;
+
+  sub('the finished roll');
+  for(let k = 1; k <= 4; k++){ stroke(app, guideX(app, k)); settleAll(app); }
+  const last = guideX(app, 5);
+  pe(app, 'pointerdown', last, yAt(app, -0.8));
+  pe(app, 'pointermove', last, yAt(app, 1.8));
+  T('the fifth cut finishes the roll at once', c.game.phase === 'done' && c.roll.cuts.length === 5);
+  T('the knife is lifted before anything else happens', c.gesture === null);
+  T('and the finger is let go', !stageOf(app).hasPointerCapture(1));
+  advance(app, c.TUNING.holdMs * 0.6);
+  T('the pieces are shown together on a plate', c.game.gathered === true);
+  settleAll(app);
+  T('then the next roll is ready', c.game.phase === 'ready' && c.game.rolls === 1 && c.roll.cuts.length === 0);
+  pe(app, 'pointermove', last, yAt(app, -0.8));
+  pe(app, 'pointermove', last, yAt(app, 1.8));
+  T('the finger still held from the last cut cannot cut the new roll', c.roll.cuts.length === 0);
+  pe(app, 'pointerup', last, yAt(app, 1.8));
+  stroke(app, guideX(app, 1));
+  T('lifting and swiping again cuts it', c.roll.cuts.length === 1);
+
+  sub('between rolls, input is set aside, not punished');
+  app = play(); c = app.ctx;
+  finishRollByKeys(app);
+  T('a finished roll is on show', c.game.phase === 'done');
+  const shown = c.roll.id;
+  stroke(app, c.layout.cx);
+  c.keyboardCut();
+  T('swipes and keys during the show do nothing', c.roll.id === shown && c.roll.cuts.length === 5);
+  advance(app, c.TUNING.holdMs + 50);
+  T('the roll leaves', c.game.phase === 'clear' && c.gx > 0, c.game.phase + ' ' + c.gx);
+  stroke(app, c.layout.cx);
+  advance(app, c.TUNING.clearMs);
+  T('the next arrives from the other side', c.game.phase === 'enter' && c.gx < 0, c.game.phase + ' ' + c.gx);
+  stroke(app, c.layout.cx);
+  settleAll(app);
+  T('and is untouched by what happened in between', c.game.phase === 'ready' && c.roll.cuts.length === 0);
+  T('with no errors', app.errors.length === 0, app.errors.join(' | '));
+
+  sub('a roll never runs out of time');
+  const waiting = c.roll.id;
+  advance(app, 2 * 60 * 1000);
+  T('two idle minutes change nothing but the hint', c.roll.id === waiting && c.roll.cuts.length === 0 &&
+    c.game.phase === 'ready' && c.hint.showing === true);
+
+  /* Mixed speeds, perfect and imperfect aims, and keys: the whole loop. */
+  sub('100 complete rolls');
+  app = play(); c = app.ctx;
+  settleAll(app);
+  const base = listeners(app);
+  const rand = H.mulberry32(99);
+  let maxFrames = 0, maxTimers = 0, strokes = 0;
+  const watch = () => {
+    maxFrames = Math.max(maxFrames, c.__clock.pendingFrames());
+    maxTimers = Math.max(maxTimers, c.__clock.liveTimers());
+  };
+  for(let n = 0; n < 100; n++){
+    let guard = 0;
+    while(c.game.phase === 'ready' && guard++ < 40){
+      const t = c.cutTarget(c.roll);
+      if(rand() < 0.15){ c.keyboardCut(); watch(); continue; }
+      const spacing = c.layout.L / c.roll.n;
+      stroke(app, screenX(app, t.u) + (rand() - 0.5) * spacing * 0.5,
+             { steps: [1, 2, 4, 12, 40][Math.floor(rand() * 5)], dx: (rand() - 0.5) * c.layout.T * 0.5 });
+      strokes++;
+      watch();
+      advance(app, rand() < 0.5 ? 16 : 300);
+      watch();
+    }
+    for(let t = 0; t < 30 && c.game.phase !== 'ready'; t++){ advance(app, 100); watch(); }
+  }
+  T('a hundred rolls were finished', c.game.rolls === 100, String(c.game.rolls));
+  T('by real strokes, mostly', strokes > 300, String(strokes));
+  T('no listener was added on the way', listeners(app) === base, listeners(app) + ' vs ' + base);
+  T('never more than one frame waiting', maxFrames <= 1, String(maxFrames));
+  T('never more than one timer waiting', maxTimers <= 1, String(maxTimers));
+  T('the trail and incisions stay small', c.trail.length <= c.SLICE.trailMax && c.healing.length <= 8);
+  T('pieces match the roll exactly', c.pieces.length === c.roll.cuts.length + 1);
+  advance(app, 1000);
+  T('at rest, no frame is waiting at all', c.__clock.pendingFrames() === 0, String(c.__clock.pendingFrames()));
+  T('and nothing was saved', app.storage._map.size === 1);
+  T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+
+  sub('100 resets');
+  for(let i = 0; i < 100; i++){
+    c.keyboardCut();
+    c.newRollFromTuning();
+    hide(app); show(app);
+    c.window.dispatch('pagehide', {}); c.window.dispatch('pageshow', {});
+    c.window.dispatch('blur', {});
+    watch();
+  }
+  T('no listener was added', listeners(app) === base, listeners(app) + ' vs ' + base);
+  T('still at most one frame and one timer', maxFrames <= 1 && maxTimers <= 1, maxFrames + ' / ' + maxTimers);
+  c.armHint(); c.armHint(); c.armHint();
+  T('arming the hint again replaces its timer rather than adding one', c.__clock.liveTimers() === 1,
+    String(c.__clock.liveTimers()));
+  T('play is not left paused', c.pauses.size === 0);
+  T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+}
+
+/* =========================================================
+   CONTRACT 24 — EVERY SCREEN, EITHER WAY UP
+   The roll fits the safe area fully cut, on tablets and phones
+   in both orientations, and survives a rotation mid-roll.
+   ========================================================= */
+function testLayout(){
+  section('CONTRACT 24 — the roll fits every screen, either way up, clear of notches');
+  const screens = [
+    ['iPad landscape', 1024, 768, { top: 24, bottom: 20 }],
+    ['iPad portrait', 768, 1024, { top: 24, bottom: 20 }],
+    ['iPad Pro landscape', 1366, 1024, { top: 24, bottom: 20 }],
+    ['iPad Pro portrait', 1024, 1366, { top: 24, bottom: 20 }],
+    ['phone portrait', 390, 844, { top: 47, bottom: 34 }],
+    ['phone landscape', 844, 390, { left: 47, right: 47, bottom: 21 }],
+    ['small phone portrait', 375, 667, {}],
+    ['small phone landscape', 667, 375, {}],
+    ['tiny portrait', 320, 568, {}],
+    ['tiny landscape', 568, 320, {}]
+  ];
+  screens.forEach(([name, w, h, insets]) => {
+    const app = play({ viewport: { width: w, height: h, dpr: 3, insets } });
+    const c = app.ctx, L = c.layout;
+    const ins = Object.assign({ top: 0, right: 0, bottom: 0, left: 0 }, insets);
+    const n = c.roll.n;
+    const widest = L.L + (n - 1) * L.gap;
+    const safe = { x0: ins.left, x1: w - ins.right, y0: ins.top, y1: h - ins.bottom };
+    /* The tallest things drawn: the hint's ghost finger above and below the
+       roll (its path ends plus its radius), which also covers the counter,
+       the plate and the finished-roll mark. */
+    const dot = Math.max(12, L.T * 0.15);
+    const top = L.top - L.T * 0.75 - dot, bottom = L.bot + L.T * 0.45 + dot;
+    T(name + ': fully cut, the roll fits inside the safe area',
+      L.cx - widest / 2 >= safe.x0 && L.cx + widest / 2 <= safe.x1,
+      Math.round(L.cx - widest / 2) + '..' + Math.round(L.cx + widest / 2) + ' in ' + safe.x0 + '..' + safe.x1);
+    T(name + ': so do the hint, the plate and the finished mark',
+      top >= safe.y0 && bottom <= safe.y1, Math.round(top) + '..' + Math.round(bottom));
+    T(name + ': the roll is thick enough to aim at with a finger', L.T >= 44, String(Math.round(L.T)));
+    T(name + ': the canvas is sharp but never over 2x', stageOf(app).width === Math.round(w * 2));
+  });
+
+  sub('rotating mid-roll');
+  const app = play({ viewport: { width: 1024, height: 768, dpr: 2 } }), c = app.ctx;
+  c.TUNING.pull = 0;
+  stroke(app, guideX(app, 1)); stroke(app, guideX(app, 3));
+  advance(app, 30);
+  const cuts = c.roll.cuts.slice();
+  pe(app, 'pointerdown', guideX(app, 5), yAt(app, -0.8));
+  pe(app, 'pointermove', guideX(app, 5), yAt(app, 0.4));
+  c.__resize(768, 1024, { top: 24, bottom: 20 });
+  T('the cuts are the same cuts', JSON.stringify(c.roll.cuts) === JSON.stringify(cuts));
+  T('every piece keeps its share of the roll',
+    c.pieceRects().every(r => near(r.w / c.layout.L, r.u1 - r.u0, 1e-9)));
+  T('everything in motion comes to rest in the new geometry', c.pieces.every(p => p.off === 0 && p.vel === 0));
+  T('the stroke in progress ends', c.gesture === null);
+  pe(app, 'pointermove', 400, yAt(app, 1.8));
+  pe(app, 'pointerup', 400, yAt(app, 1.8));
+  T('and cannot cut afterwards', c.roll.cuts.length === 2);
+  const x = guideX(app, 5);
+  pe(app, 'pointerdown', x, yAt(app, -0.8));
+  c.__resize(768, 1024, { top: 24, bottom: 20 });
+  T('a resize that changes nothing does not end a stroke', c.gesture !== null);
+  pe(app, 'pointermove', x, yAt(app, 1.8)); pe(app, 'pointerup', x, yAt(app, 1.8));
+  T('which then cuts normally', c.roll.cuts.length === 3);
+  c.__resize(844, 390, { left: 47, right: 47, bottom: 21 });
+  T('a notch moving to the side moves the roll clear of it',
+    c.layout.area.x >= 47 && c.layout.area.x + c.layout.area.w <= 844 - 47);
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
+/* =========================================================
+   CONTRACT 25 — MOTION, AND LESS OF IT
+   Decoration moves; essentials do not need to. With reduced
+   motion every cut and every finished roll still reads clearly,
+   and a change made mid-play takes effect at once.
+   ========================================================= */
+function testMotion(){
+  section('CONTRACT 25 — reduced motion keeps what matters and drops the rest, live');
+  let app = play(), c = app.ctx;
+  c.TUNING.pull = 0;
+
+  sub('with motion');
+  stroke(app, guideX(app, 3));
+  advance(app, 17);
+  T('the halves spring apart', c.pieces.some(p => p.vel !== 0));
+  let widest = 0;
+  for(let i = 0; i < 60; i++){
+    advance(app, 16);
+    const [l, r] = c.pieceRects();
+    widest = Math.max(widest, r.x - (l.x + l.w));
+  }
+  T('with a small overshoot past the resting gap', widest > c.layout.gap + 0.5, widest.toFixed(1) + ' vs ' + c.layout.gap);
+  T('and settle exactly', c.pieces.every(p => p.off === 0 && p.vel === 0));
+  advance(app, c.TUNING.hintS * 1000 + 50);
+  T('the hint moves, so it asks for frames', c.hint.showing && c.__clock.pendingFrames() === 1);
+
+  sub('reduced motion from the start');
+  app = play({ reducedMotion: true }); c = app.ctx; c.TUNING.pull = 0;
+  stroke(app, guideX(app, 2));
+  T('a cut puts the pieces straight at rest', c.pieces.every(p => p.off === 0 && p.vel === 0));
+  const [l2, r2] = c.pieceRects();
+  T('the gap is there at once, so the cut still reads', near(r2.x - (l2.x + l2.w), c.layout.gap));
+  T('and the new faces are lit', c.pieces[0].flashR > 0 && c.pieces[1].flashL > 0);
+  T('the trail went with the finger', c.trail.length === 0);
+  pe(app, 'pointerdown', r2.x + r2.w * 0.5, yAt(app, 0.5)); pe(app, 'pointerup', r2.x + r2.w * 0.5, yAt(app, 0.5));
+  T('a tap does not jiggle anything', c.pieces.every(p => p.vel === 0));
+  finishRollByKeys(app);
+  advance(app, 17);
+  T('a finished roll is still shown, marked on its plate', c.game.phase === 'done');
+  advance(app, c.TUNING.holdMs);
+  T('the plate appeared without sliding', c.gx === 0);
+  T('the next roll arrives without sliding either', c.game.phase === 'ready' && c.gx === 0);
+  advance(app, c.TUNING.hintS * 1000 + 50);
+  T('the hint is a still picture that needs no frames', c.hint.showing && c.__clock.pendingFrames() === 0);
+
+  sub('switched on mid-play');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  stroke(app, guideX(app, 1));
+  advance(app, 17);
+  T('pieces are in motion', c.pieces.some(p => p.off !== 0 || p.vel !== 0));
+  c.__setReducedMotion(true);
+  T('they stop where they would have come to rest, at once', c.pieces.every(p => p.off === 0 && p.vel === 0));
+  finishRollByKeys(app);
+  c.__setReducedMotion(false);
+  advance(app, c.TUNING.holdMs + 20);
+  T('with motion back, a roll slides away', c.game.phase === 'clear');
+  advance(app, c.TUNING.clearMs * 0.5);
+  T('and is caught mid-slide', c.gx > 0);
+  c.__setReducedMotion(true);
+  T('switching mid-slide puts it where it was going', c.gx === 0);
+  advance(app, 17);
+  T('and the next roll is simply there', c.game.phase === 'ready');
+  c.__setReducedMotion(false);
+  stroke(app, guideX(app, 2));
+  advance(app, 17);
+  T('switched off again, cuts spring as before', c.pieces.some(p => p.vel !== 0));
+  T('the setting is listened to once, not once per roll', c.__motion.listenerCount() === 1);
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
+/* =========================================================
+   CONTRACT 26 — PAUSE, RESUME AND THE TUNING SHEET
+   Backgrounding, hiding and the developer sheet pause play in
+   place. No stroke survives a pause, no time passes during one,
+   and closing the sheet resumes safely.
+   ========================================================= */
+function testLifecycle(){
+  section('CONTRACT 26 — pausing keeps play in place, and the ?tune sheet is safe');
+  let app = play(), c = app.ctx;
+  c.TUNING.pull = 0;
+
+  sub('backgrounded mid-stroke');
+  const x = guideX(app, 2);
+  pe(app, 'pointerdown', x, yAt(app, -0.8));
+  pe(app, 'pointermove', x, yAt(app, 0.4));
+  hide(app);
+  T('the stroke ends without a cut', c.gesture === null && c.roll.cuts.length === 0);
+  T('no frame waits and no timer runs', c.__clock.pendingFrames() === 0 && c.__clock.liveTimers() === 0);
+  pe(app, 'pointermove', x, yAt(app, 1.8));
+  T('the finger moving on while hidden cuts nothing', c.roll.cuts.length === 0);
+  show(app);
+  T('coming back re-arms the hint and draws', c.__clock.liveTimers() === 1 && c.__clock.pendingFrames() === 1);
+  pe(app, 'pointerup', x, yAt(app, 1.8));
+  T('the old stroke does not resume', c.roll.cuts.length === 0);
+
+  sub('backgrounded during the finished-roll show');
+  app = play(); c = app.ctx;
+  finishRollByKeys(app);
+  advance(app, 200);
+  const shownAt = c.game.phaseT;
+  c.window.dispatch('pagehide', {});
+  advance(app, 10 * 60 * 1000);
+  T('no time passes while hidden', c.game.phase === 'done' && c.game.phaseT === shownAt);
+  c.window.dispatch('pageshow', {});
+  const offBefore = c.pieces.map(p => p.off).join(',');
+  c.__frame();
+  T('the first frame back does not jump', c.pieces.map(p => p.off).join(',') === offBefore);
+  settleAll(app);
+  T('the show then finishes on schedule', c.game.phase === 'ready' && c.game.rolls === 1);
+
+  sub('the ?tune sheet is for developers only');
+  app = play(); c = app.ctx;
+  const btn = app.dom.document.getElementById('tuneBtn');
+  T('without ?tune its button stays hidden', btn.hidden === true);
+  c.openTuning();
+  T('and the sheet cannot be opened', !app.dom.document.getElementById('tuneOverlay').classList.contains('open'));
+  app = play({ search: '?tune' }); c = app.ctx;
+  T('with ?tune the button shows', app.dom.document.getElementById('tuneBtn').hidden === false);
+
+  sub('opening it mid-stroke pauses play');
+  c.TUNING.pull = 0;
+  const base = listeners(app);
+  const tx = guideX(app, 2);
+  pe(app, 'pointerdown', tx, yAt(app, -0.8));
+  pe(app, 'pointermove', tx, yAt(app, 0.45));
+  c.openTuning(); c.__flush();
+  T('the sheet opens', app.dom.document.getElementById('tuneOverlay').classList.contains('open'));
+  T('the stroke is cancelled without a cut', c.gesture === null && c.roll.cuts.length === 0);
+  T('play is paused: no frame, no hint timer', c.pauses.has('tuning') && c.__clock.pendingFrames() === 0 &&
+    c.__clock.liveTimers() === 0);
+  T('Space on the page does not cut', (key(app, ' '), c.roll.cuts.length === 0));
+  T('nor while a slider has focus', (key(app, ' ', { target: { tagName: 'INPUT', type: 'range' } }), c.roll.cuts.length === 0));
+  T('nor does any direct attempt', c.keyboardCut() === false);
+
+  sub('changing values');
+  T('a value applies at once', c.setTuning('gap', 16) && c.TUNING.gap === 16 && c.layout.gap === 16);
+  T('out-of-range values are clamped to the slider', c.setTuning('depth', 5) && c.TUNING.depth === 0.9);
+  T('and land on its steps', c.setTuning('depth', 0.62) && c.TUNING.depth === 0.6);
+  T('unknown or junk values are refused', !c.setTuning('nope', 1) && !c.setTuning('depth', 'abc') &&
+    !c.setTuning('depth', '') && c.TUNING.depth === 0.6);
+  c.setTuning('pieces', 8);
+  const summary = app.dom.document.getElementById('tuneSummary').value;
+  T('the summary lists the current values', (() => {
+    try{ return JSON.parse(summary.slice(summary.indexOf('{'))).gap === 16; }catch(e){ return false; }
+  })(), summary);
+  c.copyTuning();
+  T('copying works even without a clipboard', app.errors.length === 0);
+  advance(app, 4000);                              // let its note leave; play stays paused meanwhile
+  T('time passing with the sheet open changes nothing', c.pauses.has('tuning') && c.roll.cuts.length === 0);
+
+  sub('closing resumes safely');
+  c.closeTuning(); c.__flush();
+  T('the sheet closes and play resumes', !app.dom.document.getElementById('tuneOverlay').classList.contains('open') &&
+    c.pauses.size === 0 && c.__clock.pendingFrames() === 1 && c.__clock.liveTimers() === 1);
+  T('a new piece count starts a fresh roll', c.roll.n === 8 && c.roll.cuts.length === 0);
+  stroke(app, guideX(app, 1));
+  T('and play goes on', c.roll.cuts.length === 1);
+
+  /* The keyboard equivalent: the stage or the page may cut; a focused control
+     keeps its own keys; a held key is one press. */
+  sub('the keyboard, with no sheet open');
+  const onButton = key(app, ' ', { target: app.dom.document.getElementById('tuneBtn') });
+  T('Space on a focused button presses the button, never the knife',
+    c.roll.cuts.length === 1 && onButton.defaultPrevented === false);
+  key(app, ' ', { target: stageOf(app) });
+  T('Space on the stage cuts at the next guide', c.roll.cuts.length === 2);
+  key(app, 'Enter', { target: stageOf(app), repeat: true });
+  T('a key held down does not keep cutting', c.roll.cuts.length === 2);
+  key(app, ' ', { target: stageOf(app), ctrlKey: true });
+  T('nor does a shortcut with a modifier', c.roll.cuts.length === 2);
+  key(app, 'ArrowDown');
+  T('the down arrow cuts too', c.roll.cuts.length === 3);
+  settleAll(app);
+  c.openTuning(); c.__flush();
+  c.resetTuning();
+  T('reset restores every starting value', Object.keys(c.TUNING_DEFAULTS).every(k => c.TUNING[k] === c.TUNING_DEFAULTS[k]));
+  const closer = c.sheetCloser(app.dom.document.getElementById('tuneOverlay'));
+  T('Escape and the back gesture find the sheet\'s own way out', typeof closer === 'function');
+  closer(); c.__flush();
+  T('and use it, resuming play', c.pauses.size === 0);
+
+  sub('opening it during the finished-roll show');
+  settleAll(app);
+  finishRollByKeys(app);
+  advance(app, 200);
+  const at = c.game.phaseT;
+  c.openTuning(); c.__flush();
+  advance(app, 5000);
+  T('the show waits', c.game.phase === 'done' && c.game.phaseT === at);
+  c.closeTuning(); c.__flush();
+  settleAll(app);
+  T('and carries on after', c.game.phase === 'ready');
+
+  sub('100 open and close cycles');
+  let maxFrames = 0, maxTimers = 0;
+  for(let i = 0; i < 100; i++){
+    c.openTuning(); c.__flush();
+    c.setTuning('pop', 200 + i);
+    c.closeTuning(); c.__flush();
+    maxFrames = Math.max(maxFrames, c.__clock.pendingFrames());
+    maxTimers = Math.max(maxTimers, c.__clock.liveTimers());
+  }
+  T('no listener was added', listeners(app) === base, listeners(app) + ' vs ' + base);
+  T('at most one frame and one timer ever waited', maxFrames <= 1 && maxTimers <= 1, maxFrames + ' / ' + maxTimers);
+  T('the overlay stack is empty', c._openSheetStack.length === 0);
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
+/* =========================================================
+   CONTRACT 27 — THE PERMANENT RULES
+   No analytics, tracking or transmission; nothing about the child
+   is recorded; no fail state; nothing to read in play; and the
+   grown-up screens are out of a child's reach.
+   ========================================================= */
+function testPermanentRules(){
+  section('CONTRACT 27 — privacy, kindness, and play without reading');
+  const app = play({ search: '?tune' }), c = app.ctx;
+
+  sub('play sends nothing anywhere');
+  for(let n = 0; n < 20; n++){
+    for(let guard = 0; guard < 20 && c.game.phase === 'ready'; guard++){
+      stroke(app, screenX(app, c.cutTarget(c.roll).u), { steps: 3 });
+    }
+    settleAll(app);
+  }
+  T('twenty rolls were played', c.game.rolls === 20, String(c.game.rolls));
+  c.openTuning(); c.__flush(); c.setTuning('gap', 12); c.copyTuning(); c.closeTuning(); c.__flush();
+  hide(app); show(app); c.__resize(768, 1024); c.__setReducedMotion(true);
+  advance(app, 20000);
+  T('twenty rolls, tuning and lifecycle events made no network call', app.net.length === 0,
+    app.net.map(n => n.kind + ' ' + n.target).join(', '));
+  T('and recorded nothing about the player', app.storage._map.size === 1,
+    [...app.storage._map.keys()].join(','));
+
+  sub('no network, tracker or way out in the code');
+  const script = codeOnly(js()), html = H.readApp();
+  ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource', 'importScripts', 'new Image'].forEach(api =>
+    T('the app never uses ' + api, script.indexOf(api) === -1));
+  T('the only request it starts is its own service worker, same folder',
+    /navigator\.serviceWorker\.register\('sw\.js'\)/.test(js()));
+  T('no analytics or tracking identifier appears anywhere',
+    !/analytics|gtag|dataLayer|mixpanel|segment\.io|firebase|sentry|amplitude|hotjar|fbq\(|clarity\.ms/i.test(html + H.readSW()));
+  T('the service worker only answers this app\'s own GET requests',
+    /req\.method !== 'GET'/.test(H.readSW()) && /origin !== location\.origin/.test(H.readSW()) &&
+    !/POST|sendBeacon|fetch\([^)]*method/.test(H.readSW()));
+  T('there is no link, form or frame leading away', !/<a\s[^>]*href=|<form|<iframe/i.test(html) &&
+    script.indexOf('window.open') === -1);
+  const markup = html.replace(/<script>[\s\S]*?<\/script>/g, '');
+  T('nothing asks for a name, email or anything typed',
+    (markup.match(/<input/g) || []).length === 1 && /<input type="file" id="importInput"/.test(markup));
+  T('the only inputs the script builds are the developer sliders',
+    (js().match(/<input[^']*/g) || []).every(s => /type="range"/.test(s)));
+
+  sub('no fail state, no score, nothing to read');
+  const game = codeOnly(js().slice(js().indexOf('GAME DOMAIN — Slicing'), js().indexOf('SETTINGS — data ownership')));
+  T('the game keeps no score, lives, misses or penalties',
+    !/\b(score|lives|penalty|penalt|mistake|miss(es|ed)?|gameOver|fail(ed|ure)?)\b/i.test(game));
+  T('the canvas never draws text', (stageOf(app).getContext('2d').counts.fillText || 0) === 0 &&
+    (stageOf(app).getContext('2d').counts.strokeText || 0) === 0);
+  const playView = (html.match(/<main[\s\S]*?<\/main>/) || [''])[0];
+  T('the play screen shows no words: its only text is for assistive technology',
+    playView.replace(/<[^>]+>/g, '').trim() === '');
+
+  sub('grown-up screens are out of a child\'s reach');
+  const outside = html.slice(html.indexOf('<body>'), html.indexOf('<!-- FEEL TUNING'));
+  T('in play, the only control is the developer button, hidden without ?tune',
+    (outside.match(/<button/g) || []).length === 1 && /id="tuneBtn"[\s\S]{0,160}hidden><\/button>/.test(outside));
+  T('Backup & data and What\'s new open only from inside the tuning sheet',
+    (html.match(/onclick="openDataSettings\(\)"/g) || []).length === 1 &&
+    (html.match(/onclick="openUpdates\(\)"/g) || []).length === 1 &&
+    html.indexOf('onclick="openDataSettings()"') > html.indexOf('id="tuneOverlay"'));
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
 module.exports = {
   T, section, sub, results, reset, testPortability,
   testBoot, testConfig, testStorage, testCollision, testMigration,
   testNavigation, testOverlays, testToast, testConfirmation, testErase,
   testMobile, testDesignSystem, testPWA, testRelease, testStress,
-  testAccessibility, testContamination, testSourcesOfTruth
+  testAccessibility, testContamination, testSourcesOfTruth,
+  testCutModel, testStrokes, testGeometry, testRhythm, testLayout, testMotion,
+  testLifecycle, testPermanentRules
 };

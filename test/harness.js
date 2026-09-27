@@ -564,8 +564,8 @@ const BRIDGE = [
   '_historyDepth', '_pendingSelfPops', '_confirmResolve',
   /* product: the slicing game */
   'TUNING_DEFAULTS', 'TUNING', 'TUNING_SPEC', 'SLICE', 'TUNE_ENABLED',
-  'game', 'roll', 'pieces', 'gesture', 'layout', 'hint', 'trail', 'healing', 'paint',
-  'pauses', 'frameId', 'reducedMotion', 'gx', 'stageEl', 'wired'
+  'game', 'roll', 'pieces', 'gesture', 'layout', 'colors', 'hint', 'trail', 'healing', 'paint',
+  'pauses', 'frameId', 'lastFrameAt', 'reducedMotion', 'gx', 'stageEl', 'ctx2d', 'wired'
 ];
 
 const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -653,7 +653,10 @@ function loadApp(opts){
     parseInt, parseFloat, isNaN, isFinite, Promise, Set, Map, Symbol,
     __errors: errors, __logs: logs, __timers: timers
   };
-  sandbox.window = {
+  /* In a browser `window` IS the global object, so `window[name]` finds the
+     app's own functions: the overlay engine looks a sheet's close function up
+     that way. A plain object here would make that lookup always miss. */
+  const win = {
     localStorage: storage,
     scrollY: 0, pageYOffset: 0,
     innerWidth: screen.width, innerHeight: screen.height, devicePixelRatio: screen.dpr,
@@ -672,6 +675,10 @@ function loadApp(opts){
     getComputedStyle: sandbox.getComputedStyle,
     MutationObserver: undefined
   };
+  sandbox.window = new Proxy(win, {
+    get: (t, k) => (k in t ? t[k] : sandbox[k]),
+    has: (t, k) => (k in t || k in sandbox)
+  });
   if(o.windowExtras) Object.assign(sandbox.window, o.windowExtras);
   sandbox.globalThis = sandbox;
   sandbox.localStorage = storage;

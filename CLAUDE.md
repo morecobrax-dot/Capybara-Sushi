@@ -3,22 +3,23 @@
 Instructions for AI coding sessions in this repository. These override default
 behaviour.
 
-Read [STARTER-ARCHITECTURE.md](STARTER-ARCHITECTURE.md) before changing
-architecture, and [PRODUCT-DESIGN.md](PRODUCT-DESIGN.md) before changing
-anything a user sees.
+Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing architecture,
+[PRODUCT-DESIGN.md](PRODUCT-DESIGN.md) before changing anything a user sees,
+and [docs/PRODUCT.md](docs/PRODUCT.md) for what Capybara Sushi is and is not.
+Capybara Sushi's own rules are at the end of this file.
 
 ---
 
-## Before implementing a new product
+## Before implementing a feature
 
-If you are starting a product from this foundation, in this order:
+In this order:
 
-1. Read [PRODUCT-DESIGN.md](PRODUCT-DESIGN.md) — the rules the UI must obey.
-2. Read [STARTER-ARCHITECTURE.md](STARTER-ARCHITECTURE.md) — what already
-   exists, so you do not rebuild it.
-3. Read the product's own requirements. If there aren't any written down, ask
-   for them before writing code.
-4. Follow [NEW-PROJECT.md](NEW-PROJECT.md) step by step.
+1. Read [docs/PRODUCT.md](docs/PRODUCT.md) — the product, its permanent rules
+   and the current phase.
+2. Read [PRODUCT-DESIGN.md](PRODUCT-DESIGN.md) — the rules the UI must obey.
+3. Read [ARCHITECTURE.md](ARCHITECTURE.md) — what already exists, so you do
+   not rebuild it.
+4. If the phase brief leaves a requirement open, ask before writing code.
 5. **Separate foundation from domain before you type.** Name which parts of the
    change are product-specific and which are genuinely reusable.
 
@@ -100,7 +101,8 @@ AUDIT → UNDERSTAND → IMPLEMENT → ADVERSARIAL VERIFY → DIFF AUDIT → SHI
 
 ## Product rules
 
-9. **Mobile first.** Design for a phone, then let it widen.
+9. **Tablets first, phones usable, either way up.** Design for a tablet in a
+   child's hands, and keep a phone playable in portrait and landscape.
 10. **≥44px actionable touch targets.** The visible mark may be smaller.
 11. **≥16px editable inputs**, or iOS Safari zooms and does not zoom back.
 12. **Respect safe areas** on all four edges, through the `--inset-*` tokens.
@@ -145,4 +147,84 @@ AUDIT → UNDERSTAND → IMPLEMENT → ADVERSARIAL VERIFY → DIFF AUDIT → SHI
     foundation-modification rule above. Do not generalise on the first use.
 28. **Stop at the requested phase.** Finish it completely, report, and wait.
     Do not start the next phase, do not "while I'm here", do not polish the
-    demo into a product.
+    prototype into a product.
+
+---
+
+# Capybara Sushi's own rules
+
+These come from the product brief and from building the Phase 0B slicing
+prototype. Each carries its reason; keep the reason with the rule.
+
+## Permanent rules (from the brief)
+
+29. **No ads, in-app purchases, chat, accounts, analytics or data collection.**
+    Loading the app and its own service-worker files is the only network
+    traffic. Contract 27 fails on any other request, tracker name or outbound
+    link.
+30. **No fail states, punishing timers, or punishment for imperfect cuts.** A
+    stroke either cuts or does nothing. A roll never expires. The game keeps
+    no score, lives or misses (contract 27).
+31. **Core play works without reading.** The stage draws no text. The gesture
+    is taught by a hint that shows it; words exist only for assistive
+    technology.
+32. **Grown-up settings belong behind a parent gate.** There is no gate yet
+    because there are no grown-up settings. The developer `?tune` sheet is not
+    one (rule 42). Backup & data and What's new open only from `?tune` until
+    the gate exists.
+33. **Respect reduced motion, and let sound and haptics be turned off.**
+    Reduced motion is honoured live. There is no sound or haptics yet; when
+    they arrive, each gets an off switch behind the gate.
+
+## The slicing interaction
+
+34. **The stage owns its pointer, and only the stage.** `touch-action: none` is
+    set on the canvas and nowhere else. One pointer owns the knife from its
+    press until it lifts, is cancelled, loses capture, or play is interrupted
+    (hidden, resized, paused, the roll finished). Holding still never loses
+    it: a child pauses mid-stroke. Extra fingers are ignored. Only a new
+    *primary* pointer of the same type (the browser saying the old one lifted
+    unseen) takes the knife back.
+35. **A stroke cuts during the crossing, once.** A pass through the roll cuts
+    the moment it is deep enough (`depth`), steep enough (`angle`) and lands in
+    food. Release, cancel and lost capture never undo a cut and never add one.
+    The release point can complete a crossing only if the stroke has not cut.
+36. **One geometry.** `pieceRects()` is the only answer to "where is the food".
+    The renderer paints it and the knife is tested against it, so a moving
+    piece is cut where it appears. A gap holds no food. A cut is refused rather
+    than leave a piece under `SLICE.minShare` of an ideal piece.
+37. **Every roll can be finished.** `SLICE.minShare` stays at or below 0.5. The
+    proof is in `cutTarget()`'s comment, and contract 20 plays thousands of
+    random rolls against it. Changing the cutting rules means keeping this
+    true, not adding a recovery system.
+38. **Imperfect stays imperfect.** A cut moves at most `SLICE.maxPull` of the
+    way to a guide, and only toward a guide in the same piece.
+39. **Essential feedback survives reduced motion; decoration does not.** A cut
+    always shows its gap and lit faces. A finished roll always shows its plate
+    and mark. Springs, overshoot, the tap jiggle, sliding and the moving hint
+    are decoration, and stop, live, when motion is reduced.
+40. **Frames only while something moves.** `requestFrame()` keeps at most one
+    frame waiting, and none at rest. One clock drives everything, capped at
+    50 ms a frame and restarted after any pause, so coming back from the
+    background never makes anything jump. A pause (hidden, or the tuning sheet)
+    keeps play in place and lets no time pass.
+41. **Feel values live in `TUNING`, rules in `SLICE`.** A new feel value is a
+    `TUNING_DEFAULTS` entry and a `TUNING_SPEC` line. Nothing else types a
+    number that sets how slicing feels.
+
+## Development
+
+42. **`?tune` is a developer route, not a setting.** It must be removed, or
+    moved behind the parent gate, before any child-facing release. Its values
+    live in memory only.
+43. **Test touch with real input.** The contracts dispatch pointer events
+    straight at the stage and cannot see CSS hit-testing. Browser QA drives
+    headless Edge with CDP touch, mouse and pen input. Pace scripted drags at
+    about 16 ms a move, and let a stroke come to rest before tapping: Chromium
+    swallows a tap that follows a fling.
+44. **Nothing on this machine is a tablet or a phone.** Say what was not
+    physically tested, every time. How slicing *feels* is a human judgment
+    made on a device ([docs/DEVICE-QA.md](docs/DEVICE-QA.md)).
+45. **The residue scan rejects the word loop in capitals, and cool down written
+    as one word.** Both come naturally in game code. Call them a frame
+    scheduler and a settle.

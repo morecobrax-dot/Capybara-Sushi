@@ -700,6 +700,28 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
   padding: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left);
 }
 
+/* ?tune only: the developer's way into the feel values. Never shown in
+   ordinary play, so a child cannot reach it. */
+.tune-btn{
+  position: absolute; z-index: 2;
+  top: calc(var(--inset-top) + var(--space-sm));
+  right: calc(var(--inset-right) + var(--space-sm));
+  background: var(--surface); border: 1px solid var(--border);
+}
+/* .icon-btn sets a display, which would otherwise override [hidden]. */
+.tune-btn[hidden]{ display: none; }
+.tune-row{
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md);
+  margin-top: var(--space-md);
+}
+.tune-label{ font-size: var(--fs-support); color: var(--text); }
+.tune-value{
+  font-family: var(--font-mono); font-size: var(--fs-meta); color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.tune-range{ display: block; width: 100%; min-height: var(--touch-min); margin: 0; accent-color: var(--accent); }
+.tune-summary{ font-family: var(--font-mono); }
+
 /* =========================================================
    RESPONSIVE
    ========================================================= */
@@ -729,9 +751,56 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
   <main class="view active play-view" id="view-play" aria-label="Sushi counter">
     <canvas class="stage" id="stage" tabindex="0" role="application"
             aria-label="A sushi roll. Swipe down across it to cut a piece, or press Space."></canvas>
+    <!-- Developer only: shown when the address carries ?tune, never in ordinary play -->
+    <button class="icon-btn tune-btn" id="tuneBtn" aria-label="Feel tuning (developer)"
+            onclick="openTuning()" hidden></button>
     <div class="sr-only" id="playStatus" role="status" aria-live="polite"></div>
     <div class="safe-probe" id="safeProbe" aria-hidden="true"></div>
   </main>
+</div>
+
+<!-- FEEL TUNING — developer only, reached through ?tune. Play pauses while it is open. -->
+<div class="overlay" id="tuneOverlay" onclick="backdropDismiss(event, closeTuning)">
+  <div class="sheet" aria-labelledby="tuneTitle">
+    <div class="sheet-scroll">
+      <h2 id="tuneTitle">Feel tuning</h2>
+      <p class="sheet-sub">Developer only. Play is paused while this is open, and changes last until the page reloads.</p>
+      <div id="tuneControls"></div>
+      <div class="section-label">Current values</div>
+      <textarea class="tune-summary" id="tuneSummary" rows="4" readonly
+                aria-label="Current tuning values, to copy"></textarea>
+      <div class="section-label">Developer</div>
+      <div class="list">
+        <button class="list-row" onclick="newRollFromTuning()">
+          <span class="list-row-main">
+            <span class="list-row-title">New roll</span>
+            <span class="list-row-desc">Start again on a fresh, uncut roll</span>
+          </span>
+        </button>
+        <button class="list-row" onclick="openUpdates()">
+          <span class="list-row-main">
+            <span class="list-row-title">What's new</span>
+            <span class="list-row-desc">The version on this device, and what is in it</span>
+          </span>
+          <span class="list-row-arrow" aria-hidden="true"></span>
+        </button>
+        <button class="list-row" onclick="openDataSettings()">
+          <span class="list-row-main">
+            <span class="list-row-title">Backup &amp; data</span>
+            <span class="list-row-desc">What this app keeps on this device</span>
+          </span>
+          <span class="list-row-arrow" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="section-label">Identity</div>
+      <div class="panel" id="identityPanel"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" onclick="resetTuning()">Reset</button>
+      <button class="btn-secondary" onclick="copyTuning()">Copy</button>
+      <button class="btn-primary" onclick="closeTuning()">Done</button>
+    </div>
+  </div>
 </div>
 
 <!-- CONFIRMATION — one sheet, every destructive decision -->
@@ -861,7 +930,7 @@ function validateAppId(id){
    5. Every entry should answer: what changed, why it matters, and
       what someone can do now that they could not before.
 
-   New products replace this array wholesale. See NEW-PROJECT.md.
+   New products replace this array wholesale; this one did at 0.1.0.
    ========================================================= */
 const APP_UPDATES = [
   {
@@ -1470,11 +1539,1030 @@ function renderAll(){
 /* =========================================================
    GAME DOMAIN — Slicing
    ---------------------------------------------------------
-   The product: one plain roll to cut. It reaches the
-   foundation only through the Domain seams above, and nothing
-   outside this section names anything declared inside it — a
-   contract enforces that.
+   One plain roll on one canvas. A swipe down across it cuts a
+   piece; slow drags and quick flicks both count. Nothing here is
+   saved: the roll, the tuning and every gesture live in memory.
+
+   In the order a touch travels through it:
+     TUNING     every feel value in one place, adjustable from ?tune
+     MODEL      a roll is its cut positions; pieces are derived
+     LAYOUT     where the roll sits on this screen, inside the safe area
+     GEOMETRY   pieceRects(): the one answer to "where is the food?",
+                used by the renderer and by hit testing alike
+     GESTURE    one pointer owns the knife; a qualifying crossing cuts
+     MOTION     springs and the finished-roll beat, on one clock
+     FRAMES     drawn only while something is moving
+     LIFECYCLE  pause, resume, resize, reduced motion
+     TUNING UI  the developer sheet, ?tune only
+
+   It reaches the foundation only through the Domain seams at the
+   end, and nothing outside this section names anything inside it
+   — a contract enforces that.
    ========================================================= */
+
+/* ---------- TUNING ---------- */
+/* Starting values are hypotheses for a hands-on playtest, not product
+   requirements. ?tune changes them in memory; a reload restores these. */
+const TUNING_DEFAULTS = Object.freeze({
+  pieces: 6,       // pieces per roll; a roll takes pieces − 1 cuts
+  depth: 0.6,      // share of the roll's thickness a stroke must cross to cut
+  angle: 50,       // the most degrees off vertical that still cuts
+  pull: 0.6,       // how far a cut moves toward a nearby guide (0 = not at all)
+  gap: 10,         // px between pieces after a cut, before the screen limits it
+  pop: 220,        // px/s each side of a new cut leaves with
+  bounce: 0.35,    // 0 settles with no overshoot; 1 overshoots most
+  holdMs: 650,     // a finished roll stays in view this long
+  clearMs: 300,    // the plate leaving, and the next roll arriving, each
+  hintS: 5         // idle seconds before the hint shows the swipe
+});
+const TUNING = Object.assign({}, TUNING_DEFAULTS);
+
+/* What ?tune offers, and the only values it accepts. */
+const TUNING_SPEC = [
+  { key: 'depth',   group: 'Cut forgiveness',  label: 'Depth needed to cut',      min: 0.3, max: 0.9,  step: 0.05 },
+  { key: 'angle',   group: 'Cut forgiveness',  label: 'Slant allowed (degrees)',  min: 20,  max: 75,   step: 5 },
+  { key: 'pull',    group: 'Guide attraction', label: 'Pull toward guides',       min: 0,   max: 0.8,  step: 0.05 },
+  { key: 'gap',     group: 'Separation',       label: 'Gap after a cut (px)',     min: 4,   max: 24,   step: 1 },
+  { key: 'pop',     group: 'Separation',       label: 'Pop (px/s)',               min: 0,   max: 600,  step: 20 },
+  { key: 'bounce',  group: 'Separation',       label: 'Bounce',                   min: 0,   max: 1,    step: 0.05 },
+  { key: 'holdMs',  group: 'Transitions',      label: 'Finished roll shown (ms)', min: 200, max: 2000, step: 50 },
+  { key: 'clearMs', group: 'Transitions',      label: 'Clear and next roll (ms)', min: 100, max: 800,  step: 25 },
+  { key: 'hintS',   group: 'Transitions',      label: 'Hint after (s)',           min: 1,   max: 10,   step: 0.5 },
+  { key: 'pieces',  group: 'Roll',             label: 'Pieces per roll',          min: 4,   max: 8,    step: 1 }
+];
+
+/* Rules, not feel. Changing one of these changes what the game promises. */
+const SLICE = Object.freeze({
+  minShare: 0.35,    // a new piece is at least this share of an ideal piece.
+                     // At or below 0.5 no roll can get stuck: see cutTarget()
+  maxPull: 0.8,      // a cut never snaps all the way, so an imperfect cut stays imperfect
+  reach: 0.5,        // a guide attracts cuts within this share of the guide spacing
+  slop: 0.25,        // the knife counts from this share of the thickness above and below
+  omega: 22,         // spring frequency, rad/s
+  plateGap: 3,       // px between pieces once gathered on the plate
+  gatherAt: 0.4,     // how far into the finished-roll hold the pieces gather
+  flashMs: 320,      // a cut's two new faces stay lit this long, reduced motion or not
+  trailMs: 180,      // the blade trail fades over this
+  trailMax: 32,      // points kept in the trail
+  healMs: 160,       // an unfinished incision closes over this
+  tapKick: 70,       // px/s a tapped piece jiggles with
+  tapSlop: 12,       // px a press may travel and still be a tap
+  hintMoveMs: 1000,  // the hint's ghost swipe
+  hintRestMs: 1200,  // the pause before it swipes again
+  maxStepMs: 50      // one frame never moves the game further than this
+});
+
+/* ---------- MODEL ---------- */
+let rollSeq = 0;
+function newRoll(n){ return { id: ++rollSeq, n: n, cuts: [] }; }
+
+/* The pieces are whatever lies between the cuts: derived, never stored. */
+function piecesOf(r){
+  const edges = [0].concat(r.cuts, [1]);
+  const out = [];
+  for(let i = 1; i < edges.length; i++) out.push({ u0: edges[i - 1], u1: edges[i] });
+  return out;
+}
+function rollComplete(r){ return r.cuts.length >= r.n - 1; }
+function minPiece(n){ return SLICE.minShare / n; }
+function guidesOf(n){ const g = []; for(let k = 1; k < n; k++) g.push(k / n); return g; }
+
+/* A guide is taken once the cut nearest to it has been made. */
+function freeGuides(r){
+  const g = guidesOf(r.n);
+  const taken = new Set();
+  r.cuts.forEach(c => {
+    let best = 0;
+    g.forEach((v, i) => { if(Math.abs(v - c) < Math.abs(g[best] - c)) best = i; });
+    taken.add(best);
+  });
+  return g.filter((v, i) => !taken.has(i));
+}
+
+/* Where inside a piece a cut may land and still leave usable food on both sides. */
+function legalRange(p, n){
+  const m = minPiece(n);
+  const lo = p.u0 + m, hi = p.u1 - m;
+  return lo <= hi ? { lo: lo, hi: hi } : null;
+}
+
+/* Where a stroke at `u` inside piece `index` actually cuts, or null.
+   The cut stays where the knife went, pulled only part of the way toward a
+   free guide in the same piece. So an imperfect cut is kept, and a guide
+   can never draw a cut across a gap into a different piece. */
+function planCut(r, index, u, pull){
+  if(rollComplete(r)) return null;
+  const p = piecesOf(r)[index];
+  if(!p || !(u > p.u0 && u < p.u1)) return null;
+  const range = legalRange(p, r.n);
+  if(!range || u < range.lo || u > range.hi) return null;
+  const reach = SLICE.reach / r.n;
+  let guide = null;
+  freeGuides(r).forEach(g => {
+    if(g < range.lo || g > range.hi || Math.abs(g - u) > reach) return;
+    if(guide === null || Math.abs(g - u) < Math.abs(guide - u)) guide = g;
+  });
+  if(guide === null) return u;
+  return u + (guide - u) * Math.max(0, Math.min(SLICE.maxPull, pull));
+}
+
+function addCut(r, u){ r.cuts.push(u); r.cuts.sort((a, b) => a - b); }
+
+/* A legal place to cut while the roll is unfinished: the leftmost free guide
+   that is legal, or else the middle of the longest piece. Keyboard cuts and
+   the hint both aim here.
+
+   It is never null while the roll is unfinished, which is why no roll can
+   get stuck. With fewer than n − 1 cuts there are at most n − 1 pieces, so
+   the longest is at least 1/(n − 1) long. Two usable halves need
+   2 · minShare / n, and with minShare ≤ 0.5 that is at most 1/n. */
+function cutTarget(r){
+  if(rollComplete(r)) return null;
+  const pcs = piecesOf(r);
+  const free = freeGuides(r);
+  for(let j = 0; j < free.length; j++){
+    const i = pcs.findIndex(p => free[j] > p.u0 && free[j] < p.u1);
+    const range = i === -1 ? null : legalRange(pcs[i], r.n);
+    if(range && free[j] >= range.lo && free[j] <= range.hi) return { index: i, u: free[j] };
+  }
+  let best = 0;
+  pcs.forEach((p, i) => { if(p.u1 - p.u0 > pcs[best].u1 - pcs[best].u0) best = i; });
+  return legalRange(pcs[best], r.n) ? { index: best, u: (pcs[best].u0 + pcs[best].u1) / 2 } : null;
+}
+
+/* ---------- STATE ---------- */
+/* The roll on the counter, and how it looks right now. `pieces` runs
+   parallel to piecesOf(roll): one entry of presentation state per piece.
+   phase: ready (cuttable), done (the finished roll on show), clear (it
+   leaves), enter (the next one arrives). */
+function newPieceState(){ return { off: 0, vel: 0, flashL: 0, flashR: 0 }; }
+let roll = newRoll(TUNING.pieces);
+let pieces = [newPieceState()];
+const game = { phase: 'ready', phaseT: 0, rolls: 0, gathered: false };
+let gx = 0;                   // the whole roll's offset while it leaves or arrives
+
+/* ---------- LAYOUT ---------- */
+let layout = null;            // this screen's geometry; null until the stage has a size
+let colors = {};              // the layer-4 tokens, read from CSS
+let stageLeft = 0, stageTop = 0;
+
+/* The roll is sized so that, fully cut, gaps and all, it still fits in the
+   safe area — on a tablet or a phone held either way. */
+function computeLayout(W, H, ins, n, gapWanted, dpr){
+  const margin = Math.max(16, Math.min(W, H) * 0.04);
+  const area = { x: ins.left + margin, y: ins.top + margin,
+                 w: W - ins.left - ins.right - margin * 2,
+                 h: H - ins.top - ins.bottom - margin * 2 };
+  if(!(area.w > 40 && area.h > 40)) return null;
+  const gap = Math.min(gapWanted, area.w * 0.14 / Math.max(1, n - 1));
+  const L = Math.min(area.w * 0.86, 760);
+  const T = Math.min(Math.max(L * 0.24, 44), 160, area.h * 0.34);
+  const mid = area.y + area.h * 0.55;
+  return { W: W, H: H, dpr: dpr, ins: ins, area: area, L: L, T: T, gap: gap,
+           top: mid - T / 2, bot: mid + T / 2, mid: mid, cx: area.x + area.w / 2 };
+}
+
+/* The canvas cannot read env(). The probe carries the insets as padding. */
+function readInsets(){
+  const probe = document.getElementById('safeProbe');
+  const cs = probe && typeof getComputedStyle === 'function' ? getComputedStyle(probe) : null;
+  const px = v => { const n = parseFloat(v); return n > 0 ? n : 0; };
+  if(!cs) return { top: 0, right: 0, bottom: 0, left: 0 };
+  return { top: px(cs.paddingTop), right: px(cs.paddingRight),
+           bottom: px(cs.paddingBottom), left: px(cs.paddingLeft) };
+}
+
+function readColors(){
+  const cs = typeof getComputedStyle === 'function' ? getComputedStyle(document.documentElement) : null;
+  const token = name => cs ? String(cs.getPropertyValue(name) || '').trim() : '';
+  return {
+    ground: token('--bg'), counter: token('--stage-counter'), plate: token('--stage-plate'),
+    roll: token('--roll-body'), cut: token('--roll-cut'), flash: token('--roll-flash'),
+    guide: token('--guide-mark'), blade: token('--blade-trail'), incision: token('--incision'),
+    hint: token('--hint-ghost'), done: token('--done-mark')
+  };
+}
+
+/* Measure the stage and size the canvas for this screen. True when the
+   geometry changed. */
+function relayout(){
+  if(!stageEl) return false;
+  const box = typeof stageEl.getBoundingClientRect === 'function' ? stageEl.getBoundingClientRect() : null;
+  const W = box && box.width ? box.width : (window.innerWidth || 0);
+  const H = box && box.height ? box.height : (window.innerHeight || 0);
+  stageLeft = box ? (box.left || 0) : 0;
+  stageTop = box ? (box.top || 0) : 0;
+  const dpr = Math.min(2, Math.max(1, Number(window.devicePixelRatio) || 1));
+  const before = layout;
+  layout = computeLayout(W, H, readInsets(), roll.n, TUNING.gap, dpr);
+  if(!layout) return !!before;
+  const bw = Math.round(W * dpr), bh = Math.round(H * dpr);
+  if(stageEl.width !== bw) stageEl.width = bw;
+  if(stageEl.height !== bh) stageEl.height = bh;
+  colors = readColors();
+  return !before || ['W', 'H', 'dpr', 'L', 'T', 'gap', 'top', 'cx'].some(k => before[k] !== layout[k]);
+}
+
+/* ---------- GEOMETRY ---------- */
+/* One function says where every piece is on screen. The renderer paints
+   exactly these rectangles and the knife is tested against exactly these,
+   so a piece is always cut where it appears, moving or not. */
+function playGap(){ return game.gathered ? SLICE.plateGap : (layout ? layout.gap : 0); }
+
+function restLefts(){
+  const pcs = piecesOf(roll), g = playGap();
+  const left = layout.cx - (layout.L + (pcs.length - 1) * g) / 2;
+  return pcs.map((p, i) => left + p.u0 * layout.L + i * g);
+}
+
+function pieceRects(){
+  if(!layout) return [];
+  const pcs = piecesOf(roll), lefts = restLefts();
+  return pcs.map((p, i) => ({
+    index: i, u0: p.u0, u1: p.u1,
+    x: lefts[i] + (pieces[i] ? pieces[i].off : 0) + gx,
+    y: layout.top, w: (p.u1 - p.u0) * layout.L, h: layout.T
+  }));
+}
+
+function pieceAt(x){
+  const rects = pieceRects();
+  for(let i = 0; i < rects.length; i++){
+    if(x > rects[i].x && x < rects[i].x + rects[i].w) return rects[i];
+  }
+  return null;
+}
+function uAt(rect, x){ return rect.u0 + (x - rect.x) / rect.w * (rect.u1 - rect.u0); }
+function xAt(rect, u){ return rect.x + (u - rect.u0) / (rect.u1 - rect.u0) * rect.w; }
+
+/* Keep every piece exactly where it is drawn while its resting place moves;
+   the springs then carry it there, or reduced motion puts it there at once. */
+function holdInPlace(drawnLefts){
+  const lefts = restLefts();
+  pieces.forEach((p, i) => { p.off = drawnLefts[i] - lefts[i]; });
+  if(motionReduced()) settleSprings();
+}
+function settleSprings(){ pieces.forEach(p => { p.off = 0; p.vel = 0; }); }
+
+/* ---------- GESTURE ---------- */
+/* One pointer owns the knife from its press until it lifts, is cancelled,
+   loses capture, or play is interrupted. Holding still never loses it, since
+   a child may pause mid-stroke. Other fingers are ignored while it is held.
+   A stroke makes at most one cut. */
+let gesture = null;
+let strokeSeq = 0;
+let healing = [];             // unfinished incisions closing: { ax, ay, bx, by, left }
+let trail = [];               // recent blade points: { x, y, age, s }
+
+function bandTop(){ return layout.top - layout.T * SLICE.slop; }
+function bandBot(){ return layout.bot + layout.T * SLICE.slop; }
+function clampToRoll(y){ return Math.max(layout.top, Math.min(layout.bot, y)); }
+function stagePoint(ev){
+  return { x: (Number(ev.clientX) || 0) - stageLeft, y: (Number(ev.clientY) || 0) - stageTop };
+}
+function lerpPoint(a, b, t){ return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
+
+/* The part of segment a→b inside the band from y0 to y1, or null. A flick can
+   jump clean over the roll between two samples; the segment still crosses it. */
+function clipToBand(a, b, y0, y1){
+  const dy = b.y - a.y;
+  if(dy === 0) return (a.y >= y0 && a.y <= y1) ? { a: a, b: b } : null;
+  let t0 = (y0 - a.y) / dy, t1 = (y1 - a.y) / dy;
+  if(t0 > t1){ const s = t0; t0 = t1; t1 = s; }
+  t0 = Math.max(0, t0); t1 = Math.min(1, t1);
+  return t0 <= t1 ? { a: lerpPoint(a, b, t0), b: lerpPoint(a, b, t1) } : null;
+}
+function xAtY(a, b, y){
+  if(a.y === b.y || (a.y - y) * (b.y - y) > 0) return null;
+  return a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y);
+}
+
+/* A visit is one pass of the knife through the roll's band. */
+function openVisit(p){
+  const y = clampToRoll(p.y);
+  return { ax: p.x, ay: p.y, bx: p.x, by: p.y, minY: y, maxY: y, crossX: null, dead: false };
+}
+function healVisit(v){
+  if(!v || v.maxY - v.minY < 1 || motionReduced()) return;
+  healing.push({ ax: v.ax, ay: v.ay, bx: v.bx, by: v.by, left: SLICE.healMs });
+  if(healing.length > 8) healing.shift();
+}
+function closeVisit(g){
+  const v = g.visit;
+  g.visit = null;
+  if(v && !v.dead && !g.spent) healVisit(v);
+}
+
+function addTrail(p, s){
+  trail.push({ x: p.x, y: p.y, age: 0, s: s });
+  if(trail.length > SLICE.trailMax) trail.shift();
+}
+
+/* One sample from the pointer that owns the knife. */
+function feed(g, p){
+  const a = g.last;
+  g.last = p;
+  g.travel += Math.hypot(p.x - a.x, p.y - a.y);
+  addTrail(p, g.seq);
+  if(g.spent || !layout || game.phase !== 'ready' || g.rollId !== roll.id) return;
+  const part = clipToBand(a, p, bandTop(), bandBot());
+  if(!part){ if(g.visit) closeVisit(g); return; }
+  if(!g.visit) g.visit = openVisit(part.a);
+  const v = g.visit;
+  [part.a, part.b].forEach(q => {
+    const y = clampToRoll(q.y);
+    if(y < v.minY) v.minY = y;
+    if(y > v.maxY) v.maxY = y;
+  });
+  if(v.crossX === null) v.crossX = xAtY(part.a, part.b, layout.mid);
+  v.bx = part.b.x;
+  v.by = part.b.y;
+  tryCut(g);
+  if(!g.spent && g.visit && (p.y < bandTop() || p.y > bandBot())) closeVisit(g);
+}
+
+/* Cut the moment a pass qualifies, not when the finger lifts. */
+function tryCut(g){
+  const v = g.visit;
+  if(!v || v.dead || v.maxY - v.minY < TUNING.depth * layout.T) return;
+  const slant = Math.atan2(Math.abs(v.bx - v.ax), Math.abs(v.by - v.ay)) * 180 / Math.PI;
+  const x = v.crossX !== null ? v.crossX : v.bx;
+  const rect = slant <= TUNING.angle ? pieceAt(x) : null;
+  const u = rect ? planCut(roll, rect.index, uAt(rect, x), TUNING.pull) : null;
+  if(u === null){
+    /* Too slanted, through a gap, past an end, or too close to a cut: this
+       pass cuts nothing, and it costs nothing. */
+    v.dead = true;
+    healVisit(v);
+    return;
+  }
+  commitCut(rect.index, u, g);
+}
+
+function commitCut(index, u, g){
+  const rects = pieceRects();
+  const drawn = rects.map(r => r.x - gx);
+  const splitAt = drawn[index] + (u - rects[index].u0) * layout.L;
+  const parent = pieces[index] || newPieceState();
+  addCut(roll, u);
+  if(g){ g.spent = true; g.visit = null; }
+  const left = { off: 0, vel: parent.vel, flashL: parent.flashL, flashR: SLICE.flashMs };
+  const right = { off: 0, vel: parent.vel, flashL: SLICE.flashMs, flashR: parent.flashR };
+  pieces.splice(index, 1, left, right);
+  drawn.splice(index + 1, 0, splitAt);
+  holdInPlace(drawn);
+  /* The roll parts at the knife: everything on each side moves together,
+     so pieces already cut never bump into each other. */
+  if(!motionReduced()) pieces.forEach((p, i) => { p.vel += (i <= index ? -1 : 1) * TUNING.pop; });
+  const remaining = roll.n - 1 - roll.cuts.length;
+  announce(remaining > 0 ? 'Cut. ' + remaining + ' to go.' : 'Roll finished. Here comes another.');
+  if(rollComplete(roll)) finishRoll();
+  requestFrame();
+}
+
+/* The last cut. The knife lifts at once, so nothing a finger still does can
+   reach the next roll, and the pieces are shown together. */
+function finishRoll(){
+  game.phase = 'done';
+  game.phaseT = 0;
+  game.gathered = false;
+  endGesture();
+  hideHint();
+}
+
+function endGesture(){
+  const g = gesture;
+  if(!g) return;
+  gesture = null;
+  closeVisit(g);
+  if(motionReduced()) trail = [];
+  try{ if(stageEl && stageEl.releasePointerCapture) stageEl.releasePointerCapture(g.id); }catch(e){}
+  armHint();
+  requestFrame();
+}
+
+function onStageDown(ev){
+  if(!ev) return;
+  const type = ev.pointerType || 'touch';
+  if(gesture){
+    /* A new primary pointer of the same kind means the browser saw the owner
+       lift without telling us, so the knife moves to it. Anything else — a
+       second finger, a palm — is ignored while the owner is held. */
+    if(!(ev.isPrimary === true && type === gesture.type && ev.pointerId !== gesture.id)) return;
+    endGesture();
+  }
+  if(type === 'mouse' && ev.button !== 0) return;
+  if(isPaused() || !layout || game.phase !== 'ready') return;
+  const p = stagePoint(ev);
+  gesture = { id: ev.pointerId, type: type, seq: ++strokeSeq, rollId: roll.id,
+              last: p, travel: 0, visit: null, spent: false };
+  try{ if(stageEl.setPointerCapture) stageEl.setPointerCapture(ev.pointerId); }catch(e){}
+  if(typeof ev.preventDefault === 'function') ev.preventDefault();
+  hideHint();
+  addTrail(p, gesture.seq);
+  if(p.y >= bandTop() && p.y <= bandBot()) gesture.visit = openVisit(p);
+  requestFrame();
+}
+
+function onStageMove(ev){
+  const g = gesture;
+  if(!g || !ev || ev.pointerId !== g.id) return;
+  if(g.type === 'mouse' && !(ev.buttons & 1)){ endGesture(); return; }
+  const list = typeof ev.getCoalescedEvents === 'function' ? ev.getCoalescedEvents() : null;
+  const samples = list && list.length ? list : [ev];
+  for(let i = 0; i < samples.length && gesture === g; i++) feed(g, stagePoint(samples[i]));
+  requestFrame();
+}
+
+function onStageUp(ev){
+  const g = gesture;
+  if(!g || !ev || ev.pointerId !== g.id) return;
+  const p = stagePoint(ev);
+  /* The release point can still complete a crossing. It can never add a
+     second cut, because a spent stroke cuts nothing more. */
+  if(p.x !== g.last.x || p.y !== g.last.y) feed(g, p);
+  if(gesture === g && !g.spent && g.travel < SLICE.tapSlop) tapWobble(p);
+  endGesture();
+}
+
+function onStageCancel(ev){
+  if(gesture && ev && ev.pointerId === gesture.id) endGesture();
+}
+
+/* A tap is noticed, never punished: the piece under it jiggles. */
+function tapWobble(p){
+  if(motionReduced() || !layout || p.y < layout.top || p.y > layout.bot) return;
+  const rect = pieceAt(p.x);
+  if(!rect || !pieces[rect.index]) return;
+  pieces[rect.index].vel += (p.x < rect.x + rect.w / 2 ? 1 : -1) * SLICE.tapKick;
+}
+
+/* Space, Enter or the down arrow cut at the next guide. Never while a sheet
+   or page is open, never from a control, and a held key is one press. */
+function onPlayKey(ev){
+  if(!ev || ev.defaultPrevented) return;
+  const key = ev.key;
+  if(key !== ' ' && key !== 'Spacebar' && key !== 'Enter' && key !== 'ArrowDown') return;
+  if(ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if(document.querySelector('.overlay.open')) return;
+  const t = ev.target;
+  const tag = t && t.tagName ? String(t.tagName).toUpperCase() : '';
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' ||
+     (t && t.isContentEditable)) return;
+  if(typeof ev.preventDefault === 'function') ev.preventDefault();
+  if(ev.repeat) return;
+  keyboardCut();
+}
+
+function keyboardCut(){
+  if(gesture || isPaused() || game.phase !== 'ready' || !layout) return false;
+  const target = cutTarget(roll);
+  if(!target) return false;
+  hideHint();
+  commitCut(target.index, target.u, null);
+  if(game.phase === 'ready') armHint();
+  return true;
+}
+
+/* ---------- MOTION ---------- */
+let reducedMotion = false;    // a live mirror of the system setting
+function motionReduced(){ return reducedMotion; }
+function zeta(){ return 1 - 0.55 * Math.max(0, Math.min(1, TUNING.bounce)); }
+
+function stepMotion(ms){
+  if(ms > 0){
+    if(motionReduced()) settleSprings();
+    else {
+      const w = SLICE.omega, z = zeta();
+      const steps = Math.max(1, Math.ceil(ms / 4));
+      const h = ms / 1000 / steps;
+      for(let s = 0; s < steps; s++){
+        pieces.forEach(p => {
+          if(p.off === 0 && p.vel === 0) return;
+          p.vel += (-w * w * p.off - 2 * z * w * p.vel) * h;
+          p.off += p.vel * h;
+        });
+      }
+      pieces.forEach(p => { if(Math.abs(p.off) < 0.05 && Math.abs(p.vel) < 2){ p.off = 0; p.vel = 0; } });
+    }
+    pieces.forEach(p => { p.flashL = Math.max(0, p.flashL - ms); p.flashR = Math.max(0, p.flashR - ms); });
+    if(motionReduced()){ if(!gesture) trail = []; }
+    else {
+      trail.forEach(t => { t.age += ms; });
+      trail = trail.filter(t => t.age < SLICE.trailMs);
+    }
+    healing.forEach(h => { h.left -= ms; });
+    healing = healing.filter(h => h.left > 0);
+    if(hint.showing) hint.t += ms;
+  }
+  stepPhase(ms);
+}
+
+function phaseLength(){
+  if(game.phase === 'done') return TUNING.holdMs;
+  if(game.phase === 'clear' || game.phase === 'enter') return motionReduced() ? 0 : TUNING.clearMs;
+  return Infinity;
+}
+
+function stepPhase(ms){
+  if(game.phase !== 'ready'){
+    game.phaseT += ms;
+    if(game.phase === 'done' && !game.gathered && game.phaseT >= TUNING.holdMs * SLICE.gatherAt) gather();
+    for(let guard = 0; guard < 4 && game.phase !== 'ready' && game.phaseT >= phaseLength(); guard++){
+      game.phaseT -= phaseLength();
+      if(game.phase === 'done') game.phase = 'clear';
+      else if(game.phase === 'clear'){ game.rolls++; startRoll(); game.phase = 'enter'; }
+      else { game.phase = 'ready'; game.phaseT = 0; armHint(); }
+    }
+  }
+  gx = groupOffset();
+}
+
+/* The finished roll is shown together: the pieces close up on a plate,
+   imperfect sizes and all. */
+function gather(){
+  const drawn = pieceRects().map(r => r.x - gx);
+  game.gathered = true;
+  holdInPlace(drawn);
+}
+
+function groupOffset(){
+  if(!layout || motionReduced()) return 0;
+  const len = phaseLength();
+  const t = len > 0 && isFinite(len) ? Math.min(1, game.phaseT / len) : 1;
+  if(game.phase === 'clear') return t * t * t * layout.W;
+  if(game.phase === 'enter'){ const k = 1 - t; return -k * k * k * (layout.cx + layout.L); }
+  return 0;
+}
+
+function startRoll(){
+  roll = newRoll(TUNING.pieces);
+  pieces = [newPieceState()];
+  game.gathered = false;
+  trail = [];
+  healing = [];
+  relayout();
+}
+
+/* ---------- FRAMES ---------- */
+let frameId = 0;              // the one pending animation frame, or 0
+let lastFrameAt = null;       // null restarts the clock: a pause never counts as time
+const paint = { rects: [], frames: 0 };   // what the last frame painted
+
+function requestFrame(){
+  if(frameId || !wired || isPaused() || typeof requestAnimationFrame !== 'function') return;
+  frameId = requestAnimationFrame(onFrame);
+}
+function cancelFrame(){
+  if(frameId && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frameId);
+  frameId = 0;
+  lastFrameAt = null;
+}
+function onFrame(t){
+  frameId = 0;
+  const ms = lastFrameAt === null ? 0 : Math.max(0, Math.min(SLICE.maxStepMs, t - lastFrameAt));
+  lastFrameAt = t;
+  stepMotion(ms);
+  draw();
+  if(needsFrames()) requestFrame();
+  else lastFrameAt = null;
+}
+function needsFrames(){
+  if(isPaused() || !layout) return false;
+  if(game.phase !== 'ready' || healing.length) return true;
+  if(!motionReduced() && (trail.length || hint.showing)) return true;
+  return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.flashL > 0 || p.flashR > 0);
+}
+
+/* ---------- HINT ---------- */
+/* After a quiet spell, a ghost finger swipes where the next cut can go, so
+   the gesture is shown, never written. With reduced motion it is a still
+   picture of the same swipe. */
+const hint = { showing: false, t: 0, timer: 0 };
+function hideHint(){
+  if(hint.timer){ clearTimeout(hint.timer); hint.timer = 0; }
+  if(hint.showing){ hint.showing = false; requestFrame(); }
+}
+function armHint(){
+  hideHint();
+  if(!wired || isPaused() || gesture || game.phase !== 'ready' || !layout) return;
+  hint.timer = setTimeout(showHint, TUNING.hintS * 1000);
+}
+function showHint(){
+  hint.timer = 0;
+  if(isPaused() || gesture || game.phase !== 'ready') return;
+  hint.showing = true;
+  hint.t = 0;
+  requestFrame();
+}
+
+/* ---------- LIFECYCLE ---------- */
+const pauses = new Set();     // why play is paused: 'hidden', 'tuning'
+function isPaused(){ return pauses.size > 0; }
+
+/* Paused play keeps its place (a finished roll resumes its beat where it
+   was), but no stroke survives a pause and no time passes during one. */
+function pausePlay(why){
+  pauses.add(why);
+  endGesture();
+  hideHint();
+  cancelFrame();
+  draw();
+}
+function resumePlay(why){
+  if(!pauses.delete(why) || pauses.size) return;
+  armHint();
+  requestFrame();                // cancelFrame() restarted the clock when play paused
+}
+
+function onStageResize(){
+  const had = !!layout;
+  if(relayout() && had){
+    /* The roll moved under the finger: a stroke in progress ends, and
+       everything in motion comes to rest in the new geometry. */
+    endGesture();
+    settleSprings();
+    healing = [];
+    trail = [];
+  }
+  if(isPaused()) draw(); else requestFrame();
+}
+
+function setReducedMotion(on){
+  reducedMotion = !!on;
+  if(reducedMotion){
+    /* Everything decorative stops where it would have come to rest. */
+    settleSprings();
+    healing = [];
+    if(!gesture) trail = [];
+    gx = groupOffset();
+  }
+  if(isPaused()) draw(); else requestFrame();
+}
+
+function announce(text){
+  const el = document.getElementById('playStatus');
+  if(el) el.textContent = text;
+}
+
+/* ---------- DRAWING ---------- */
+let stageEl = null;
+let ctx2d = null;
+
+function roundRectPath(c, x, y, w, h, r){
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  c.beginPath();
+  c.moveTo(x + rr, y);
+  c.arcTo(x + w, y, x + w, y + h, rr);
+  c.arcTo(x + w, y + h, x, y + h, rr);
+  c.arcTo(x, y + h, x, y, rr);
+  c.arcTo(x, y, x + w, y, rr);
+  c.closePath();
+}
+
+function draw(){
+  if(!ctx2d || !layout) return;
+  const c = ctx2d, L = layout, C = colors;
+  paint.frames++;
+  c.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+  c.globalAlpha = 1;
+  c.fillStyle = C.ground;
+  c.fillRect(0, 0, L.W, L.H);
+  c.fillStyle = C.counter;
+  roundRectPath(c, L.area.x, L.mid - L.T * 0.95, L.area.w, L.T * 1.9, 18);
+  c.fill();
+  const rects = pieceRects();
+  paint.rects = rects;
+  if(game.gathered) drawPlate(c, rects);
+  rects.forEach((r, i) => drawPiece(c, r, pieces[i] || newPieceState()));
+  if(game.phase === 'ready') drawGuides(c, rects);
+  drawIncisions(c, rects);
+  drawTrail(c);
+  if(game.gathered) drawDoneMark(c, rects);
+  if(hint.showing && game.phase === 'ready' && !gesture) drawHint(c, rects);
+}
+
+function drawPiece(c, r, s){
+  const C = colors;
+  c.globalAlpha = 1;
+  c.fillStyle = C.roll;
+  roundRectPath(c, r.x, r.y, r.w, r.h, Math.min(10, r.w / 3, r.h / 4));
+  c.fill();
+  /* A cut face shows the inside of the roll. A fresh one is lit briefly, so
+     a cut reads as done even with no motion at all. */
+  c.save();
+  c.clip();
+  const face = Math.max(2, Math.min(6, r.w * 0.18));
+  if(r.u0 > 0) drawFace(c, r.x, r.y, face, r.h, s.flashL);
+  if(r.u1 < 1) drawFace(c, r.x + r.w - face, r.y, face, r.h, s.flashR);
+  c.restore();
+}
+function drawFace(c, x, y, w, h, flash){
+  const C = colors;
+  c.globalAlpha = 1;
+  c.fillStyle = C.cut;
+  c.fillRect(x, y, w, h);
+  if(flash > 0){
+    c.globalAlpha = motionReduced() ? 1 : Math.min(1, flash / SLICE.flashMs);
+    c.fillStyle = C.flash;
+    c.fillRect(x, y, w, h);
+    c.globalAlpha = 1;
+  }
+}
+
+/* Subtle ticks above and below the roll, only where a cut can still go. */
+function drawGuides(c, rects){
+  const C = colors, L = layout;
+  const tick = Math.max(6, L.T * 0.14);
+  c.globalAlpha = 1;
+  c.strokeStyle = C.guide;
+  c.lineWidth = 2;
+  c.lineCap = 'round';
+  freeGuides(roll).forEach(g => {
+    const r = rects.find(q => g > q.u0 && g < q.u1);
+    const range = r ? legalRange(r, roll.n) : null;
+    if(!range || g < range.lo || g > range.hi) return;
+    const x = xAt(r, g);
+    c.beginPath();
+    c.moveTo(x, L.top - tick - 4); c.lineTo(x, L.top - 4);
+    c.moveTo(x, L.bot + 4); c.lineTo(x, L.bot + tick + 4);
+    c.stroke();
+  });
+}
+
+/* The knife's line through the food: live while it is in, closing when a
+   pass ends without a cut. Drawn only inside pieces, never in a gap. */
+function drawIncisions(c, rects){
+  const g = gesture;
+  const live = g && !g.spent && g.visit && !g.visit.dead ? g.visit : null;
+  if(!live && !healing.length) return;
+  const C = colors;
+  c.save();
+  c.beginPath();
+  rects.forEach(r => c.rect(r.x, r.y, r.w, r.h));
+  c.clip();
+  c.strokeStyle = C.incision;
+  c.lineWidth = 3;
+  c.lineCap = 'round';
+  const line = (s, alpha) => {
+    c.globalAlpha = alpha;
+    c.beginPath();
+    c.moveTo(s.ax, clampToRoll(s.ay));
+    c.lineTo(s.bx, clampToRoll(s.by));
+    c.stroke();
+  };
+  if(live) line(live, 1);
+  healing.forEach(h => line(h, Math.max(0, h.left / SLICE.healMs)));
+  c.restore();
+  c.globalAlpha = 1;
+}
+
+function drawTrail(c){
+  if(trail.length < 2) return;
+  const C = colors;
+  c.strokeStyle = C.blade;
+  c.lineCap = 'round';
+  for(let i = 1; i < trail.length; i++){
+    const a = trail[i - 1], b = trail[i];
+    if(a.s !== b.s) continue;
+    const life = motionReduced() ? 1 : Math.max(0, 1 - b.age / SLICE.trailMs);
+    if(life <= 0) continue;
+    c.globalAlpha = life;
+    c.lineWidth = 2 + 5 * life;
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+  }
+  c.globalAlpha = 1;
+}
+
+function drawPlate(c, rects){
+  if(!rects.length) return;
+  const L = layout, C = colors;
+  const x0 = rects[0].x, x1 = rects[rects.length - 1].x + rects[rects.length - 1].w;
+  const pad = Math.min(L.T * 0.3, Math.max(0, (L.area.w - (x1 - x0)) / 2));
+  c.globalAlpha = 1;
+  c.fillStyle = C.plate;
+  c.beginPath();
+  c.ellipse((x0 + x1) / 2, L.bot - L.T * 0.02, (x1 - x0) / 2 + pad, L.T * 0.26, 0, 0, Math.PI * 2);
+  c.fill();
+}
+
+/* The finished roll is marked with a shape as well as a colour. */
+function drawDoneMark(c, rects){
+  if(!rects.length) return;
+  const L = layout, C = colors;
+  const x0 = rects[0].x, x1 = rects[rects.length - 1].x + rects[rects.length - 1].w;
+  const cx = (x0 + x1) / 2, cy = L.top - L.T * 0.55, r = L.T * 0.2;
+  c.globalAlpha = 1;
+  c.strokeStyle = C.done;
+  c.lineWidth = Math.max(3, L.T * 0.05);
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
+  c.beginPath();
+  c.moveTo(cx - r * 0.45, cy + r * 0.02);
+  c.lineTo(cx - r * 0.1, cy + r * 0.38);
+  c.lineTo(cx + r * 0.5, cy - r * 0.35);
+  c.stroke();
+}
+
+function drawHint(c, rects){
+  const target = cutTarget(roll);
+  const r = target ? rects[target.index] : null;
+  if(!r) return;
+  const L = layout, C = colors;
+  const x = xAt(r, target.u);
+  const y0 = L.top - L.T * 0.75, y1 = L.bot + L.T * 0.45;
+  const dot = Math.max(12, L.T * 0.15);
+  c.strokeStyle = C.hint;
+  c.fillStyle = C.hint;
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  if(motionReduced()){
+    /* A still picture of the same swipe: where to start, the path, the way. */
+    c.globalAlpha = 1;
+    c.lineWidth = 3;
+    c.setLineDash([6, 8]);
+    c.beginPath(); c.moveTo(x, y0 + dot); c.lineTo(x, y1 - dot * 0.6); c.stroke();
+    c.setLineDash([]);
+    c.beginPath(); c.arc(x, y0, dot, 0, Math.PI * 2); c.stroke();
+    c.beginPath();
+    c.moveTo(x - dot * 0.7, y1 - dot * 0.9); c.lineTo(x, y1); c.lineTo(x + dot * 0.7, y1 - dot * 0.9);
+    c.stroke();
+    return;
+  }
+  const t = (hint.t % (SLICE.hintMoveMs + SLICE.hintRestMs)) / SLICE.hintMoveMs;
+  if(t > 1) return;                                     // resting between demonstrations
+  const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(2 - 2 * t, 2) / 2;
+  const y = y0 + (y1 - y0) * e;
+  const fade = Math.min(1, t * 6, (1 - t) * 6);
+  c.globalAlpha = 0.55 * fade;
+  c.lineWidth = 4;
+  c.beginPath(); c.moveTo(x, y0); c.lineTo(x, y); c.stroke();
+  c.globalAlpha = fade;
+  c.beginPath(); c.arc(x, y, dot, 0, Math.PI * 2); c.fill();
+  c.globalAlpha = 1;
+}
+
+/* ---------- TUNING UI (developer only) ---------- */
+/* Reached only by adding ?tune to the address. The installed app has no
+   address bar, and ordinary play shows no way in. */
+const TUNE_ENABLED = /[?&]tune(=|&|$)/.test(String((typeof location !== 'undefined' && location.search) || ''));
+
+function tuneIcon(s){
+  return svg('<path d="M2.6 4.6h10.8M2.6 11.4h10.8"/><circle cx="5.8" cy="4.6" r="1.7"/>' +
+             '<circle cx="10.2" cy="11.4" r="1.7"/>', s);
+}
+
+function openTuning(){
+  if(!TUNE_ENABLED) return;
+  pausePlay('tuning');
+  renderTuning();
+  renderIdentity();
+  pushOverlayHistory();
+  openOverlay('tuneOverlay');
+}
+function closeTuning(){
+  const ov = document.getElementById('tuneOverlay');
+  if(!ov || !ov.classList.contains('open')) return;
+  closeOverlay('tuneOverlay');
+  releaseOverlayHistory();
+  /* A new piece count starts a fresh roll rather than changing the rules of
+     the one on the counter. */
+  if(TUNING.pieces !== roll.n && game.phase === 'ready') startRoll();
+  resumePlay('tuning');
+}
+
+function setTuning(key, value){
+  const spec = TUNING_SPEC.find(s => s.key === key);
+  const n = Number(value);
+  if(!spec || value === '' || value === null || !isFinite(n)) return false;
+  const clamped = Math.min(spec.max, Math.max(spec.min, n));
+  TUNING[key] = Number((Math.round((clamped - spec.min) / spec.step) * spec.step + spec.min).toFixed(4));
+  if(key === 'gap'){ relayout(); settleSprings(); draw(); }
+  refreshTuning(key);
+  return true;
+}
+function resetTuning(){
+  Object.keys(TUNING_DEFAULTS).forEach(k => { TUNING[k] = TUNING_DEFAULTS[k]; });
+  relayout();
+  settleSprings();
+  draw();
+  renderTuning();
+}
+function newRollFromTuning(){
+  game.phase = 'ready';
+  game.phaseT = 0;
+  gx = 0;
+  startRoll();
+  draw();
+}
+
+function renderTuning(){
+  const host = document.getElementById('tuneControls');
+  if(host){
+    let group = '';
+    host.innerHTML = TUNING_SPEC.map(s => {
+      const head = s.group !== group ? '<div class="section-label">' + escapeHtml(s.group) + '</div>' : '';
+      group = s.group;
+      return head +
+        '<label class="tune-row" for="tune-' + s.key + '">' +
+          '<span class="tune-label">' + escapeHtml(s.label) + '</span>' +
+          '<span class="tune-value" id="tune-' + s.key + '-value">' + escapeHtml(String(TUNING[s.key])) + '</span>' +
+        '</label>' +
+        '<input class="tune-range" type="range" id="tune-' + s.key + '" data-tune="' + s.key + '"' +
+          ' min="' + s.min + '" max="' + s.max + '" step="' + s.step + '" value="' + TUNING[s.key] + '"' +
+          ' oninput="onTuneInput(this)">';
+    }).join('');
+  }
+  refreshTuning();
+}
+function onTuneInput(el){ if(el) setTuning(el.getAttribute('data-tune'), el.value); }
+function refreshTuning(key){
+  if(key){
+    const out = document.getElementById('tune-' + key + '-value');
+    if(out) out.textContent = String(TUNING[key]);
+  }
+  const box = document.getElementById('tuneSummary');
+  if(box) box.value = tuningSummary();
+}
+function tuningSummary(){ return APP_CONFIG.name + ' ' + APP_VERSION + ' tuning ' + JSON.stringify(TUNING); }
+
+function copyTuning(){
+  const text = tuningSummary();
+  const box = document.getElementById('tuneSummary');
+  if(box) box.value = text;
+  const clip = typeof navigator !== 'undefined' ? navigator.clipboard : null;
+  if(clip && typeof clip.writeText === 'function'){
+    clip.writeText(text).then(() => toast('Tuning values copied', 'success'), () => selectTuning(box));
+  } else selectTuning(box);
+}
+function selectTuning(box){
+  if(box){ try{ box.focus(); box.select(); }catch(e){} }
+  toast('The values are selected. Copy them from the box.', 'neutral');
+}
+
+/* ---------- WIRING ---------- */
+let wired = false;
+
+function wirePlay(){
+  if(wired) return;
+  stageEl = document.getElementById('stage');
+  if(!stageEl) return;
+  wired = true;
+  try{ ctx2d = typeof stageEl.getContext === 'function' ? stageEl.getContext('2d') : null; }
+  catch(e){ ctx2d = null; }
+
+  const mq = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  reducedMotion = !!(mq && mq.matches);
+  if(mq){
+    const onChange = e => setReducedMotion(e && typeof e.matches === 'boolean' ? e.matches : mq.matches);
+    if(typeof mq.addEventListener === 'function') mq.addEventListener('change', onChange);
+    else if(typeof mq.addListener === 'function') mq.addListener(onChange);
+  }
+
+  stageEl.addEventListener('pointerdown', onStageDown);
+  stageEl.addEventListener('pointermove', onStageMove);
+  stageEl.addEventListener('pointerup', onStageUp);
+  stageEl.addEventListener('pointercancel', onStageCancel);
+  stageEl.addEventListener('lostpointercapture', onStageCancel);
+  stageEl.addEventListener('contextmenu', ev => { if(ev && typeof ev.preventDefault === 'function') ev.preventDefault(); });
+  document.addEventListener('keydown', onPlayKey);
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'hidden') pausePlay('hidden'); else resumePlay('hidden');
+  });
+  window.addEventListener('pagehide', () => pausePlay('hidden'));
+  window.addEventListener('pageshow', () => { if(document.visibilityState !== 'hidden') resumePlay('hidden'); });
+  window.addEventListener('blur', () => endGesture());
+  window.addEventListener('resize', onStageResize);
+  window.addEventListener('orientationchange', onStageResize);
+  if(typeof ResizeObserver === 'function'){
+    try{ new ResizeObserver(onStageResize).observe(stageEl); }catch(e){}
+  }
+
+  const btn = document.getElementById('tuneBtn');
+  if(btn){
+    btn.hidden = !TUNE_ENABLED;
+    if(TUNE_ENABLED) btn.innerHTML = tuneIcon(20);
+  }
+
+  relayout();
+  if(document.visibilityState === 'hidden') pausePlay('hidden');
+  armHint();
+  requestFrame();
+}
+
+function hydratePlay(){ /* nothing is saved: the roll and the tuning live in memory */ }
+function renderPlay(){
+  if(!wired) return;
+  relayout();
+  if(isPaused()) draw(); else requestFrame();
+}
+
+/* ---------- the game claims the foundation's four seams ---------- */
+Domain.tabIcons = {};
+Domain.hydrate = hydratePlay;
+Domain.render = renderPlay;
+Domain.wire = wirePlay;
 
 /* =========================================================
    SETTINGS — data ownership
@@ -1488,7 +2576,8 @@ function closeDataSettings(){ closeOverlay('dataOverlay'); releaseOverlayHistory
 
 /* Counts records from what is actually stored, not from any one product's
    collection. Reading the demo's own list here made this page throw the
-   moment the demo was deleted, as NEW-PROJECT.md told every product to do. */
+   moment the demo was deleted, which the starter's own instructions told
+   every product to do. */
 function renderDataStats(){
   const el = document.getElementById('dataStats');
   if(!el) return;

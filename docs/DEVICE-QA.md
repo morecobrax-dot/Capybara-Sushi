@@ -13,8 +13,11 @@ the device, OS and browser version, and the date, next to every result.
   ask to allow Node through the firewall. A plain-http address is not a
   secure context, so the service worker, offline play and a proper
   home-screen install cannot be tested this way.
-- **GitHub Pages, for install and offline.** Not enabled. Enabling it and
-  pushing both need the user's approval.
+- **GitHub Pages, for install and offline.** Published as a development
+  preview in Phase 0C: <https://morecobrax-dot.github.io/Capybara-Sushi/>,
+  and `?tune` on the end for tuning. It uses HTTPS, so the service worker,
+  offline play and home-screen install can all be tested there. Pages can take
+  up to 10 minutes to show a new push.
 
 ## Judging the slicing feel (hands-on)
 

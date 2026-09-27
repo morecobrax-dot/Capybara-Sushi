@@ -86,5 +86,7 @@ neighbourhood, sound, haptics, saved progress, final branding and final icons.
   mouse and pen through Pointer Events.
 - Gameplay and tuning are kept in memory; nothing is saved.
 - Gray-box visuals and the placeholder icons.
-- Local commits only. Nothing is pushed or deployed until the user approves
-  it, and GitHub Pages is not enabled.
+- Phase 0C, with the user's approval: pushed to `main` and published on GitHub
+  Pages as a development preview for real-device playtesting
+  (<https://morecobrax-dot.github.io/Capybara-Sushi/>). It is not a release
+  for children. Every later push still needs the user's approval.

@@ -4,11 +4,21 @@ A cozy children's game set in a tiny Tokyo neighbourhood, where a calm
 capybara chef runs a sushi counter. At its heart is satisfying sushi slicing:
 order, slice, the pieces separate, the chef reacts, plate, serve, next roll.
 
-**Status: Phase 0B, a gray-box slicing prototype (v0.1.0).** One plain roll on
-one screen. There is no chef, artwork, sound, saving or final branding yet.
-It exists to prove the slicing feels good before any art is made. See
-[docs/PRODUCT.md](docs/PRODUCT.md) for the product and roadmap, and
-[docs/REMAINING-WORK.md](docs/REMAINING-WORK.md) for what is not done.
+**Status: a gray-box development prototype (v0.1.0), not a release for
+children.** One plain roll on one screen, with placeholder icons. There is no
+final art, no chef, and no sound, saving or final branding yet. It exists to
+prove the slicing feels good before any art is made. **Real-device testing is
+pending:** the prototype has not yet been tried on a phone or tablet
+([docs/DEVICE-QA.md](docs/DEVICE-QA.md)). See [docs/PRODUCT.md](docs/PRODUCT.md)
+for the product and roadmap, and [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)
+for what is not done.
+
+**Development preview, for real-device playtesting:**
+
+- Play: <https://morecobrax-dot.github.io/Capybara-Sushi/>
+- Tune (developer): <https://morecobrax-dot.github.io/Capybara-Sushi/?tune>
+
+GitHub Pages may take up to 10 minutes to show a new push on a device.
 
 ## Play it locally
 

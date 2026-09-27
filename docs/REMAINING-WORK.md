@@ -8,8 +8,9 @@ None of this is done. It is listed so nothing here reads as finished.
   neutral placeholders. The residue scan checks filenames only, not pixels.
 - **Real-device QA.** See [DEVICE-QA.md](DEVICE-QA.md): none of it has been
   run.
-- **Deployment.** GitHub Pages is not enabled and nothing has been pushed.
-  Both need the user's approval.
+- **Release.** The prototype is published only as a development preview on
+  GitHub Pages (Phase 0C), so it can be tested on real devices. It is not a
+  release for children: see the list below.
 
 ## Before any release to children
 

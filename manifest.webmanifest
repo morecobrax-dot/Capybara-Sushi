@@ -1,14 +1,14 @@
 {
-  "name": "App Starter",
-  "short_name": "Starter",
-  "description": "An opinionated, offline-capable mobile app foundation.",
+  "name": "Capybara Sushi",
+  "short_name": "Capy Sushi",
+  "description": "A cozy sushi-slicing game. Gray-box prototype.",
   "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0B0F16",
-  "theme_color": "#0B0F16",
+  "orientation": "any",
+  "background_color": "#1B1A18",
+  "theme_color": "#1B1A18",
   "icons": [
     {
       "src": "icon-192.png",

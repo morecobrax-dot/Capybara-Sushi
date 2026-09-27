@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<!-- APP-META-BEGIN — derived from APP_CONFIG by `npm run config:sync`. Do not hand-edit. -->
-<title>App Starter</title>
-<meta name="description" content="An opinionated, offline-capable mobile app foundation.">
-<meta name="apple-mobile-web-app-title" content="Starter">
-<meta name="theme-color" content="#0B0F16">
+<!-- APP-META-BEGIN
+ — derived from APP_CONFIG by `npm run config:sync`. Do not hand-edit. -->
+<title>Capybara Sushi</title>
+<meta name="description" content="A cozy sushi-slicing game. Gray-box prototype.">
+<meta name="apple-mobile-web-app-title" content="Capy Sushi">
+<meta name="theme-color" content="#1B1A18">
 <!-- APP-META-END -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -48,11 +49,11 @@
      chosen for contrast rather than for arithmetic. Retheming means editing
      this ramp — five values, all here. Changing only the ground and leaving
      the ramp behind is what makes a rebrand look half-finished. */
-  --brand-ground: #0B0F16;
-  --brand-surface: #121824;
-  --brand-surface-raised: #1A2230;
-  --brand-surface-sunken: #0A0E14;
-  --brand-border: #2A3547;
+  --brand-ground: #1B1A18;
+  --brand-surface: #24221F;
+  --brand-surface-raised: #2D2B27;
+  --brand-surface-sunken: #151412;
+  --brand-border: #3B3833;
 
   /* ---- 2 · SEMANTIC --------------------------------------------
      Roles, not colours. Components only ever reference these, so a
@@ -62,7 +63,7 @@
   --surface-raised: var(--brand-surface-raised);
   --surface-sunken: var(--brand-surface-sunken);
   --border: var(--brand-border);
-  --border-quiet: rgba(42,53,71,0.55);
+  --border-quiet: rgba(59,56,51,0.55);
   --edge-hi: rgba(238,241,245,0.05);
 
   --text: #EEF1F5;
@@ -142,8 +143,19 @@
   --bp-lg: 900px;
 
   /* ---- 4 · DOMAIN ----------------------------------------------
-     Empty by design. A product defines its own category colours
-     here — status hues, chart series, whatever it actually needs. */
+     Capybara Sushi's gray box. Plain values on purpose: they exist to
+     prove the slicing, and final art replaces them. The canvas reads
+     these at runtime, so no colour is typed into the drawing code. */
+  --stage-counter: #2A2825;
+  --stage-plate: #3A3733;
+  --roll-body: #8D8984;
+  --roll-cut: #C9C4BC;
+  --roll-flash: #F3E6C0;
+  --guide-mark: rgba(238,241,245,0.34);
+  --blade-trail: rgba(238,241,245,0.62);
+  --incision: #3B3833;
+  --hint-ghost: rgba(238,241,245,0.55);
+  --done-mark: #9FD3B8;
 }
 
 /* =========================================================
@@ -659,6 +671,36 @@ body.scroll-locked{
 }
 
 /* =========================================================
+   GAME STAGE
+   ---------------------------------------------------------
+   One canvas fills the screen and owns every touch on it. The
+   page never scrolls, so a swipe cannot bounce it, pull it to
+   refresh, or be claimed by the browser as a scroll.
+   ========================================================= */
+html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
+
+.play-view{
+  position: fixed; inset: 0;
+  max-width: none; margin: 0; padding: 0;
+}
+/* touch-action: none here and nowhere else. Anything looser lets the
+   browser take a slow vertical drag for a scroll and cancel the stroke
+   halfway through the roll. */
+.stage{
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  background: var(--bg);
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+}
+/* The canvas cannot read env() itself. This invisible box carries the
+   safe-area insets as padding, which the game reads back in pixels. */
+.safe-probe{
+  position: fixed; inset: 0; visibility: hidden; pointer-events: none;
+  padding: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left);
+}
+
+/* =========================================================
    RESPONSIVE
    ========================================================= */
 @media (min-width: 560px){
@@ -675,135 +717,21 @@ body.scroll-locked{
 </head>
 <body>
 
-<div class="top-scrim" aria-hidden="true"></div>
-
 <div id="app" style="display:none">
 
-  <header class="app-header">
-    <div class="header-row">
-      <h1 class="app-title" id="appTitle">App Starter</h1>
-      <div class="header-actions">
-        <button class="icon-btn" id="updatesBtn" aria-label="What's new" onclick="openUpdates()"></button>
-      </div>
-    </div>
+  <!-- The name, for assistive technology and for config:sync, which writes
+       it into this exact tag. The game itself is drawn, not written. -->
+  <header class="app-header sr-only">
+    <h1 class="app-title" id="appTitle">Capybara Sushi</h1>
   </header>
 
-  <!-- HOME — hierarchy, summary, one obvious primary action -->
-  <main class="view active" id="view-home">
-    <div id="storageNotice"></div>
-    <div class="section-label">Overview</div>
-    <div class="stat-grid" id="homeStats"></div>
-    <div class="section-label">Recent</div>
-    <div id="homeRecent"></div>
+  <!-- PLAY — one uncluttered stage: the roll, and nothing a child has to read -->
+  <main class="view active play-view" id="view-play" aria-label="Sushi counter">
+    <canvas class="stage" id="stage" tabindex="0" role="application"
+            aria-label="A sushi roll. Swipe down across it to cut a piece, or press Space."></canvas>
+    <div class="sr-only" id="playStatus" role="status" aria-live="polite"></div>
+    <div class="safe-probe" id="safeProbe" aria-hidden="true"></div>
   </main>
-
-  <!-- ITEMS — list, filter, empty state -->
-  <main class="view" id="view-items">
-    <div class="segmented" role="tablist" aria-label="Filter items" id="itemFilter">
-      <button role="tab" aria-selected="true" data-filter="all" onclick="setItemFilter('all')">All</button>
-      <button role="tab" aria-selected="false" data-filter="active" onclick="setItemFilter('active')">Active</button>
-      <button role="tab" aria-selected="false" data-filter="done" onclick="setItemFilter('done')">Done</button>
-    </div>
-    <div id="itemList"></div>
-  </main>
-
-  <!-- SETTINGS — nested pages, data ownership, honest danger zone -->
-  <main class="view" id="view-settings">
-    <div class="section-label">Data</div>
-    <div class="list">
-      <button class="list-row" onclick="openDataSettings()">
-        <span class="list-row-main">
-          <span class="list-row-title">Backup &amp; data</span>
-          <span class="list-row-desc">Export, import, or reset what this app has stored</span>
-        </span>
-        <span class="list-row-arrow" aria-hidden="true"></span>
-      </button>
-    </div>
-    <div class="section-label">About</div>
-    <div class="list">
-      <button class="list-row" onclick="openUpdates()">
-        <span class="list-row-main">
-          <span class="list-row-title">What's new</span>
-          <span class="list-row-desc">Every release, most recent first</span>
-        </span>
-        <span class="list-row-arrow" aria-hidden="true"></span>
-      </button>
-      <button class="list-row" onclick="openComponents()">
-        <span class="list-row-main">
-          <span class="list-row-title">Components</span>
-          <span class="list-row-desc">Every primitive this app ships</span>
-        </span>
-        <span class="list-row-arrow" aria-hidden="true"></span>
-      </button>
-    </div>
-    <div class="section-label">Identity</div>
-    <div class="panel" id="identityPanel"></div>
-  </main>
-
-  <nav class="tabbar" aria-label="Main">
-    <button class="tab-btn active" data-tab="home" onclick="switchTab('home')">
-      <span class="glyph" aria-hidden="true"></span>Home
-    </button>
-    <button class="tab-btn" data-tab="items" onclick="switchTab('items')">
-      <span class="glyph" aria-hidden="true"></span>Items
-    </button>
-    <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">
-      <span class="glyph" aria-hidden="true"></span>Settings
-    </button>
-  </nav>
-</div>
-
-<!-- ITEM DETAIL — a destination, so it is a page -->
-<div class="overlay overlay-page" id="itemDetailOverlay">
-  <div class="sheet">
-    <div class="page-topbar">
-      <button class="icon-btn" onclick="closeItemDetail()" aria-label="Back"></button>
-      <div class="page-topbar-title">Item</div>
-      <span class="topbar-spacer"></span>
-    </div>
-    <div class="sheet-scroll" id="itemDetailBody"></div>
-    <div class="sheet-actions">
-      <button class="btn-secondary btn-danger" onclick="deleteItemFromDetail()">Delete</button>
-      <button class="btn-primary" onclick="editItemFromDetail()">Edit item</button>
-    </div>
-  </div>
-</div>
-
-<!-- ITEM FORM — create and edit are the same page -->
-<div class="overlay overlay-page" id="itemFormOverlay">
-  <div class="sheet">
-    <div class="page-topbar">
-      <button class="icon-btn" onclick="closeItemForm()" aria-label="Back"></button>
-      <div class="page-topbar-title" id="itemFormTitle">New item</div>
-      <span class="topbar-spacer"></span>
-    </div>
-    <div class="sheet-scroll">
-      <div class="field">
-        <label for="itemTitle">Title</label>
-        <input type="text" id="itemTitle" maxlength="80" placeholder="What is this?" autocomplete="off"
-               aria-describedby="itemTitleError">
-        <div class="field-message" id="itemTitleError" role="alert"></div>
-      </div>
-      <div class="field">
-        <label for="itemNote">Note</label>
-        <textarea id="itemNote" maxlength="500" placeholder="Anything worth remembering."></textarea>
-        <div class="field-hint">Optional. Up to 500 characters.</div>
-      </div>
-      <div class="field">
-        <span class="form-label" id="itemStatusLabel">Status</span>
-        <div class="segmented" role="radiogroup" aria-labelledby="itemStatusLabel" id="itemStatusSeg">
-          <button role="radio" aria-checked="true" aria-selected="true" data-status="active"
-                  onclick="setFormStatus('active')">Active</button>
-          <button role="radio" aria-checked="false" aria-selected="false" data-status="done"
-                  onclick="setFormStatus('done')">Done</button>
-        </div>
-      </div>
-    </div>
-    <div class="sheet-actions">
-      <button class="btn-secondary" onclick="closeItemForm()">Cancel</button>
-      <button class="btn-primary" id="itemSaveBtn" onclick="saveItemForm()">Save item</button>
-    </div>
-  </div>
 </div>
 
 <!-- CONFIRMATION — one sheet, every destructive decision -->
@@ -869,18 +797,6 @@ body.scroll-locked{
   </div>
 </div>
 
-<!-- COMPONENTS — the primitives, rendered from the same code the app uses -->
-<div class="overlay overlay-page" id="componentsOverlay">
-  <div class="sheet">
-    <div class="page-topbar">
-      <button class="icon-btn" onclick="closeComponents()" aria-label="Back"></button>
-      <div class="page-topbar-title">Components</div>
-      <span class="topbar-spacer"></span>
-    </div>
-    <div class="sheet-scroll" id="componentsBody"></div>
-  </div>
-</div>
-
 <div class="toast-host" id="toastHost" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <script>
@@ -898,12 +814,15 @@ body.scroll-locked{
    `npm run config:sync`. Nothing else.
    ========================================================= */
 const APP_CONFIG = {
-  id: 'app-starter',
-  name: 'App Starter',
-  shortName: 'Starter',
-  description: 'An opinionated, offline-capable mobile app foundation.',
-  themeColor: '#0B0F16',
-  backgroundColor: '#0B0F16'
+  id: 'capybara-sushi',
+  name: 'Capybara Sushi',
+  shortName: 'Capy Sushi',
+  description: 'A cozy sushi-slicing game. Gray-box prototype.',
+  themeColor: '#1B1A18',
+  backgroundColor: '#1B1A18',
+  /* Tablets first, phones too, either way up. config:sync writes this
+     into the manifest and refuses a value the manifest spec does not allow. */
+  orientation: 'any'
 };
 
 /* APP_ID has to be safe as a storage key prefix, a Cache Storage name and a
@@ -948,15 +867,17 @@ const APP_UPDATES = [
   {
     id: 'v0-1-0',
     version: '0.1.0',
-    title: 'Foundation',
-    date: '2026-08-31',
-    summary: 'The starter foundation: shell, overlays, storage, feedback and a demo domain.',
+    title: 'Slicing prototype',
+    date: '2026-09-27',
+    summary: 'A gray-box prototype for trying the slicing by hand: one plain roll to cut, ' +
+             'with no artwork, sound or saving yet.',
     newFeatures: [
-      'Mobile app shell with safe-area handling, bottom navigation and full-page detail flows',
-      'One overlay engine driving scroll lock, focus, stacking and accessibility for every sheet and page',
-      'Namespaced local storage with honest failure reporting and versioned migrations',
-      'Toast and confirmation primitives, replacing native browser dialogs',
-      'Installable as a progressive web app, and usable offline'
+      'Swipe down across the roll to cut it; slow drags and quick flicks both work',
+      'A cut lands where you swiped, drawn only part of the way toward the guide marks',
+      'Pieces spring apart, a finished roll gathers on a plate, and the next roll arrives',
+      'A moving hint shows the swipe, so no reading is needed',
+      'Space, Enter or the down arrow also cut',
+      'Reduce Motion is respected, including when it changes during play'
     ],
     improvements: [],
     fixes: []
@@ -972,12 +893,11 @@ const APP_VERSION = APP_UPDATES[0].version;
 const STORAGE_NAMESPACE = APP_CONFIG.id + '.';
 const CACHE_NAMESPACE = APP_CONFIG.id + '-v' + APP_VERSION;
 
+/* The game saves nothing yet: the roll and the tuning live in memory. */
 const KEYS = {
   schemaVersion: 'sys.schemaVersion',
   backupPrefix:  'sys.backup.',
-  lastSeenUpdate:'ui.lastSeenUpdate',
-  items:         'data.items',
-  itemDraft:     'draft.item'
+  lastSeenUpdate:'ui.lastSeenUpdate'
 };
 
 /* =========================================================
@@ -1473,7 +1393,7 @@ function tabIcon(name){ return svg((Domain.tabIcons && Domain.tabIcons[name]) ||
 /* =========================================================
    NAVIGATION
    ========================================================= */
-let currentTab = 'home';
+let currentTab = 'play';
 
 function switchTab(tab){
   /* Validate before touching anything. Clearing every view and then throwing
@@ -1525,10 +1445,10 @@ window.addEventListener('popstate', () => {
    product's own code. Everything above this line is the
    foundation; everything below it is one replaceable product.
 
-   The defaults are no-ops on purpose: delete the demo section
+   The defaults are no-ops on purpose: delete the game section
    below and the app still boots, into a working but empty
    shell. That is the property that keeps a product replaceable:
-   the demo is a consumer of the foundation, not part of it.
+   the game is a consumer of the foundation, not part of it.
 
    A product assigns its own four, and changes nothing else.
    ========================================================= */
@@ -1548,322 +1468,13 @@ function renderAll(){
 }
 
 /* =========================================================
-   DEMO DOMAIN — Item
+   GAME DOMAIN — Slicing
    ---------------------------------------------------------
-   Deliberately close to nothing. It exists to prove the
-   infrastructure works and to show the intended patterns:
-   list, detail, create, edit, delete, validate, persist,
-   confirm, empty state, feedback.
-
-   A new product replaces this whole section, down to the
-   SETTINGS banner, and reassigns the three Domain hooks above.
-   Nothing above this line reads anything below it.
+   The product: one plain roll to cut. It reaches the
+   foundation only through the Domain seams above, and nothing
+   outside this section names anything declared inside it — a
+   contract enforces that.
    ========================================================= */
-const ITEM_STATUSES = ['active', 'done'];
-const STATUS_LABEL = { active: 'Active', done: 'Done' };
-
-let items = [];
-let itemFilter = 'all';
-let editingItemId = null;
-let formStatus = 'active';
-let _draftTimer = null;
-
-function loadItems(){
-  const raw = Store.getJSON(KEYS.items, []);
-  items = Array.isArray(raw) ? raw.filter(isValidItem) : [];
-}
-function isValidItem(it){
-  return it && typeof it === 'object' && typeof it.id === 'string' && typeof it.title === 'string';
-}
-function persistItems(){
-  const ok = Store.setJSON(KEYS.items, items);
-  if(!ok) toast('Could not save — this browser is not storing data.', 'error');
-  return ok;
-}
-function newId(){
-  return 'i_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
-}
-function findItem(id){ return items.find(i => i.id === id) || null; }
-
-function visibleItems(){
-  const sorted = items.slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-  if(itemFilter === 'all') return sorted;
-  return sorted.filter(i => i.status === itemFilter);
-}
-
-function setItemFilter(f){
-  if(ITEM_STATUSES.indexOf(f) === -1 && f !== 'all') return;
-  itemFilter = f;
-  document.querySelectorAll('#itemFilter button').forEach(b =>
-    b.setAttribute('aria-selected', String(b.dataset.filter === f)));
-  renderItems();
-}
-
-function renderHome(){
-  const stats = document.getElementById('homeStats');
-  if(stats){
-    const done = items.filter(i => i.status === 'done').length;
-    stats.innerHTML =
-      statHtml(items.length, 'Items') +
-      statHtml(items.length - done, 'Active') +
-      statHtml(done, 'Done');
-  }
-
-  const recent = document.getElementById('homeRecent');
-  if(!recent) return;
-  if(!items.length){
-    recent.innerHTML = emptyStateHtml({
-      mark: inboxIcon(30),
-      title: 'Nothing here yet',
-      body: 'Items you create show up here, newest first. This demo exists to prove the ' +
-            'shell, storage and forms actually work.',
-      action: 'Create your first item'
-    });
-    return;
-  }
-  const rows = visibleItemsFor(items).slice(0, 3).map(itemRowHtml).join('');
-  recent.innerHTML = '<div class="list">' + rows + '</div>' +
-    '<button class="btn-primary btn-block" style="margin-top:var(--space-lg)" onclick="openItemForm()">' +
-    plusIcon(15) + ' New item</button>';
-}
-function visibleItemsFor(list){
-  return list.slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-}
-
-function renderItems(){
-  const host = document.getElementById('itemList');
-  if(!host) return;
-  const list = visibleItems();
-
-  if(!list.length){
-    host.innerHTML = emptyStateHtml({
-      mark: inboxIcon(30),
-      title: itemFilter === 'all' ? 'No items yet' : 'Nothing ' + STATUS_LABEL[itemFilter].toLowerCase(),
-      body: itemFilter === 'all'
-        ? 'Create one to see the list, detail page and form working together.'
-        : 'Change the filter above, or create an item.',
-      action: 'New item'
-    });
-    return;
-  }
-  host.innerHTML = '<div class="list">' + list.map(itemRowHtml).join('') + '</div>' +
-    '<button class="btn-primary btn-block" style="margin-top:var(--space-lg)" onclick="openItemForm()">' +
-    plusIcon(15) + ' New item</button>';
-}
-
-function itemRowHtml(it){
-  const badge = '<span class="badge badge-' + it.status + '">' + STATUS_LABEL[it.status] + '</span>';
-  return '<button class="list-row" onclick="openItemDetail(\'' + escapeAttr(it.id) + '\')">' +
-    '<span class="list-row-main">' +
-      '<span class="list-row-title">' + escapeHtml(it.title) + '</span>' +
-      '<span class="list-row-desc">' + escapeHtml(it.note || 'No note') + '</span>' +
-    '</span>' + badge +
-    '<span class="list-row-arrow" aria-hidden="true">' + chevronRight(15) + '</span>' +
-  '</button>';
-}
-
-function statHtml(value, label){
-  return '<div class="stat"><span class="stat-value">' + value + '</span>' +
-         '<span class="stat-label">' + escapeHtml(label) + '</span></div>';
-}
-
-function emptyStateHtml(o){
-  return '<div class="empty-state">' +
-    (o.mark ? '<span class="empty-mark" aria-hidden="true">' + o.mark + '</span>' : '') +
-    '<span class="empty-title">' + escapeHtml(o.title) + '</span>' +
-    '<span class="empty-body">' + escapeHtml(o.body) + '</span>' +
-    (o.action ? '<button class="btn-primary" onclick="openItemForm()">' + escapeHtml(o.action) + '</button>' : '') +
-  '</div>';
-}
-
-/* ---------- detail ---------- */
-let detailItemId = null;
-
-function openItemDetail(id){
-  const it = findItem(id);
-  if(!it) return;
-  detailItemId = id;
-  const body = document.getElementById('itemDetailBody');
-  body.innerHTML =
-    '<h2>' + escapeHtml(it.title) + '</h2>' +
-    '<div class="sheet-sub"><span class="badge badge-' + it.status + '">' +
-      STATUS_LABEL[it.status] + '</span></div>' +
-    '<div class="detail-row"><span class="detail-label">Note</span></div>' +
-    '<div class="detail-value block" style="margin-bottom:var(--space-lg)">' +
-      escapeHtml(it.note || '—') + '</div>' +
-    '<div class="detail-row"><span class="detail-label">Created</span>' +
-      '<span class="detail-value">' + formatDate(it.createdAt) + '</span></div>' +
-    '<div class="detail-row"><span class="detail-label">Updated</span>' +
-      '<span class="detail-value">' + formatDate(it.updatedAt) + '</span></div>' +
-    '<div class="detail-row"><span class="detail-label">Id</span>' +
-      '<span class="detail-value" style="font-family:var(--font-mono)">' + escapeHtml(it.id) + '</span></div>';
-  pushOverlayHistory();
-  openOverlay('itemDetailOverlay');
-}
-function closeItemDetail(){
-  closeOverlay('itemDetailOverlay');
-  releaseOverlayHistory();
-  detailItemId = null;
-}
-function editItemFromDetail(){
-  const id = detailItemId;
-  closeItemDetail();
-  openItemForm(id);
-}
-async function deleteItemFromDetail(){
-  const it = findItem(detailItemId);
-  if(!it) return;
-  const ok = await confirmAction({
-    title: 'Delete this item?',
-    message: '"' + it.title + '" will be removed from this device. This cannot be undone.',
-    confirmLabel: 'Delete',
-    destructive: true
-  });
-  if(!ok) return;
-  items = items.filter(i => i.id !== it.id);
-  persistItems();
-  closeItemDetail();
-  renderAll();
-  toast('Item deleted', 'success');
-}
-
-/* ---------- form ---------- */
-function openItemForm(id){
-  editingItemId = id || null;
-  const it = id ? findItem(id) : null;
-  document.getElementById('itemFormTitle').textContent = it ? 'Edit item' : 'New item';
-  document.getElementById('itemSaveBtn').textContent = it ? 'Save changes' : 'Create item';
-
-  const draft = !it ? Store.getJSON(KEYS.itemDraft, null) : null;
-  const source = it || draft || { title: '', note: '', status: 'active' };
-
-  document.getElementById('itemTitle').value = source.title || '';
-  document.getElementById('itemNote').value = source.note || '';
-  setFormStatus(source.status === 'done' ? 'done' : 'active');
-  clearFieldError('itemTitle');
-
-  if(draft && !it) toast('Restored your unsaved draft', 'neutral');
-
-  pushOverlayHistory();
-  openOverlay('itemFormOverlay');
-}
-
-/* Leaving without saving keeps the draft; saving discards it. Flushing on the
-   way out of a SAVED form would write the still-populated fields straight back
-   into the draft key that save had just cleared, and the next new item would
-   open pre-filled with the last one. */
-function closeItemForm(){
-  flushDraft();
-  finishItemForm();
-}
-function finishItemForm(){
-  if(_draftTimer){ clearTimeout(_draftTimer); _draftTimer = null; }
-  closeOverlay('itemFormOverlay');
-  releaseOverlayHistory();
-  editingItemId = null;
-}
-function discardDraft(){
-  if(_draftTimer){ clearTimeout(_draftTimer); _draftTimer = null; }
-  Store.remove(KEYS.itemDraft);
-}
-
-function setFormStatus(s){
-  if(ITEM_STATUSES.indexOf(s) === -1) return;
-  formStatus = s;
-  document.querySelectorAll('#itemStatusSeg button').forEach(b => {
-    const on = b.dataset.status === s;
-    b.setAttribute('aria-checked', String(on));
-    b.setAttribute('aria-selected', String(on));
-  });
-}
-
-function readItemForm(){
-  return {
-    title: document.getElementById('itemTitle').value.trim(),
-    note: document.getElementById('itemNote').value.trim(),
-    status: formStatus
-  };
-}
-
-function saveItemForm(){
-  const data = readItemForm();
-  if(!data.title){
-    showFieldError('itemTitle', 'Give this item a title so you can find it again.');
-    return;
-  }
-  const now = new Date().toISOString();
-  if(editingItemId){
-    const it = findItem(editingItemId);
-    if(it){ it.title = data.title; it.note = data.note; it.status = data.status; it.updatedAt = now; }
-  } else {
-    items.push({ id: newId(), title: data.title, note: data.note, status: data.status,
-                 createdAt: now, updatedAt: now });
-  }
-  const saved = persistItems();
-  discardDraft();
-  const wasEdit = !!editingItemId;
-  finishItemForm();
-  renderAll();
-  if(saved) toast(wasEdit ? 'Item updated' : 'Item created', 'success');
-}
-
-/* Drafts live under their own key, never inside the committed collection.
-   That separation is what makes a half-typed item structurally incapable of
-   showing up in the list or a count. */
-function scheduleDraftSave(){
-  if(editingItemId) return;                 // an edit in progress is not a draft
-  if(_draftTimer) clearTimeout(_draftTimer);
-  _draftTimer = setTimeout(flushDraft, 250);
-}
-function flushDraft(){
-  if(_draftTimer){ clearTimeout(_draftTimer); _draftTimer = null; }
-  if(editingItemId) return;
-  const ov = document.getElementById('itemFormOverlay');
-  if(!ov || !ov.classList.contains('open')) return;
-  const data = readItemForm();
-  if(!data.title && !data.note){ Store.remove(KEYS.itemDraft); return; }
-  Store.setJSON(KEYS.itemDraft, data);
-}
-
-function showFieldError(inputId, message){
-  const el = document.getElementById(inputId);
-  const msg = document.getElementById(inputId + 'Error');
-  if(!el) return;
-  el.classList.add('field-error');
-  el.setAttribute('aria-invalid', 'true');
-  if(msg){ msg.textContent = message; msg.classList.add('show'); }
-  try{ el.focus({ preventScroll: false }); }catch(e){}
-  el.addEventListener('input', function clear(){
-    clearFieldError(inputId);
-    el.removeEventListener('input', clear);
-  }, { once: true });
-}
-function clearFieldError(inputId){
-  const el = document.getElementById(inputId);
-  const msg = document.getElementById(inputId + 'Error');
-  if(el){ el.classList.remove('field-error'); el.removeAttribute('aria-invalid'); }
-  if(msg){ msg.textContent = ''; msg.classList.remove('show'); }
-}
-
-/* ---------- this demo claims the foundation's three seams ---------- */
-Domain.tabIcons = {
-  home:     '<path d=\"M2.6 7.2 8 2.6l5.4 4.6\"/><path d=\"M4 7.6v5.2a.8.8 0 0 0 .8.8h6.4a.8.8 0 0 0 .8-.8V7.6\"/>',
-  items:    '<path d=\"M2.6 4.4h10.8M2.6 8h10.8M2.6 11.6h10.8\"/>',
-  settings: '<circle cx=\"8\" cy=\"8\" r=\"2.2\"/><path d=\"M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6\"/>'
-};
-Domain.hydrate = loadItems;
-Domain.render  = () => { renderHome(); renderItems(); };
-Domain.wire    = () => {
-  const form = document.getElementById('itemFormOverlay');
-  if(!form) return;
-  form.addEventListener('input', scheduleDraftSave);
-  form.addEventListener('change', scheduleDraftSave);
-  /* Last-chance flush if the page is torn down mid-edit. */
-  window.addEventListener('visibilitychange', () => {
-    if(document.visibilityState === 'hidden') flushDraft();
-  });
-  window.addEventListener('pagehide', flushDraft);
-};
 
 /* =========================================================
    SETTINGS — data ownership
@@ -1875,13 +1486,22 @@ function openDataSettings(){
 }
 function closeDataSettings(){ closeOverlay('dataOverlay'); releaseOverlayHistory(); }
 
+/* Counts records from what is actually stored, not from any one product's
+   collection. Reading the demo's own list here made this page throw the
+   moment the demo was deleted, as NEW-PROJECT.md told every product to do. */
 function renderDataStats(){
   const el = document.getElementById('dataStats');
   if(!el) return;
   const keys = Store.listKeys();
-  let bytes = 0;
-  keys.forEach(k => { const v = Store.get(k); if(v) bytes += v.length; });
-  el.innerHTML = statHtml(items.length, 'Records') +
+  let bytes = 0, records = 0;
+  keys.forEach(k => {
+    const v = Store.get(k);
+    if(v) bytes += v.length;
+    if(!v || k.indexOf('data.') !== 0) return;
+    try{ const parsed = JSON.parse(v); records += Array.isArray(parsed) ? parsed.length : 1; }
+    catch(e){ records += 1; }
+  });
+  el.innerHTML = statHtml(records, 'Records') +
                  statHtml(keys.length, 'Keys') +
                  statHtml(bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB', 'Stored');
 }
@@ -1998,8 +1618,11 @@ async function resetAllData(){
   });
   if(!ok) return;
   Store.listKeys().forEach(k => Store.remove(k));
-  items = [];
   Store.set(KEYS.schemaVersion, String(DATA_SCHEMA_VERSION));
+  /* The product re-reads its own, now empty, state through its seam. This
+     used to assign the demo's list directly, which silently created a stray
+     global once the demo was gone. */
+  Domain.hydrate();
   renderAll();
   renderDataStats();
   toast('All data erased', 'success');
@@ -2052,95 +1675,6 @@ function renderUpdates(){
 }
 
 /* =========================================================
-   COMPONENTS — every primitive, rendered by the app's own code
-   ========================================================= */
-function openComponents(){
-  renderComponents();
-  pushOverlayHistory();
-  openOverlay('componentsOverlay');
-}
-function closeComponents(){ closeOverlay('componentsOverlay'); releaseOverlayHistory(); }
-
-function renderComponents(){
-  const host = document.getElementById('componentsBody');
-  if(!host) return;
-  host.innerHTML =
-    '<p class="page-intro">Every primitive this app ships. If one is not used here or ' +
-      'by the demo, it should not exist.</p>' +
-
-    '<div class="section-label">Buttons</div>' +
-    '<div style="display:flex;gap:var(--space-sm);flex-wrap:wrap">' +
-      '<button class="btn-primary">Primary</button>' +
-      '<button class="btn-secondary">Secondary</button>' +
-      '<button class="btn-secondary btn-danger">Destructive</button>' +
-      '<button class="icon-btn" aria-label="Edit">' + pencilIcon(17) + '</button>' +
-    '</div>' +
-
-    '<div class="section-label">Feedback</div>' +
-    '<div style="display:flex;gap:var(--space-sm);flex-wrap:wrap">' +
-      TOAST_VARIANTS.map(v =>
-        '<button class="btn-secondary" onclick="toast(\'A ' + v + ' message\',\'' + v + '\')">' +
-        v.charAt(0).toUpperCase() + v.slice(1) + '</button>').join('') +
-    '</div>' +
-    '<button class="btn-secondary btn-block" style="margin-top:var(--space-sm)" ' +
-      'onclick="demoConfirm()">Open a confirmation</button>' +
-
-    '<div class="section-label">Status</div>' +
-    '<div style="display:flex;gap:var(--space-sm);flex-wrap:wrap;align-items:center">' +
-      '<span class="badge">Neutral</span>' +
-      '<span class="badge badge-active">Active</span>' +
-      '<span class="badge badge-done">Done</span>' +
-    '</div>' +
-
-    '<div class="section-label">Progress</div>' +
-    '<div class="progress-bar" style="margin-bottom:var(--space-lg)"><span style="width:62%"></span></div>' +
-    '<div style="display:flex;align-items:center;gap:var(--space-lg)">' +
-      progressRing(62, 56) +
-      '<span class="detail-value">62% complete</span>' +
-    '</div>' +
-
-    '<div class="section-label">Notices</div>' +
-    '<div class="notice"><span aria-hidden="true">' + infoIcon(17) + '</span>' +
-      '<span><strong>Neutral</strong>Something worth knowing.</span></div>' +
-    '<div class="notice notice-warning"><span aria-hidden="true">' + warnIcon(17) + '</span>' +
-      '<span><strong>Warning</strong>Something needs attention.</span></div>' +
-    '<div class="notice notice-error"><span aria-hidden="true">' + warnIcon(17) + '</span>' +
-      '<span><strong>Error</strong>Something failed, and here is what to do.</span></div>' +
-
-    '<div class="section-label">Loading</div>' +
-    '<div class="loading"><span class="spinner" aria-hidden="true"></span>Loading</div>' +
-
-    '<div class="section-label">Stats</div>' +
-    '<div class="stat-grid">' + statHtml(12, 'Records') + statHtml('4.2 KB', 'Stored') + '</div>' +
-
-    '<div class="section-label">Empty state</div>' +
-    '<div class="panel">' + emptyStateHtml({
-      mark: inboxIcon(30), title: 'Nothing here yet',
-      body: 'What this area is, why it is empty, and one obvious action.'
-    }) + '</div>';
-}
-
-async function demoConfirm(){
-  const ok = await confirmAction({
-    title: 'Confirm this action?',
-    message: 'Confirmations are for consequential decisions. Everything else gets a toast.',
-    confirmLabel: 'Do it'
-  });
-  toast(ok ? 'Confirmed' : 'Cancelled', ok ? 'success' : 'neutral');
-}
-
-function progressRing(percent, size){
-  const px = size || 56, r = (px / 2) - 4, c = 2 * Math.PI * r;
-  const offset = c * (1 - Math.max(0, Math.min(100, percent)) / 100);
-  return '<svg class="progress-ring" width="' + px + '" height="' + px + '" ' +
-    'viewBox="0 0 ' + px + ' ' + px + '" role="img" aria-label="' + percent + ' percent">' +
-    '<circle class="progress-ring-track" cx="' + px/2 + '" cy="' + px/2 + '" r="' + r + '"/>' +
-    '<circle class="progress-ring-fill" cx="' + px/2 + '" cy="' + px/2 + '" r="' + r + '" ' +
-      'style="stroke-dasharray:' + c.toFixed(2) + ';stroke-dashoffset:' + offset.toFixed(2) + '"/>' +
-  '</svg>';
-}
-
-/* =========================================================
    IDENTITY PANEL — proves config is derived, not typed
    ========================================================= */
 function renderIdentity(){
@@ -2168,6 +1702,13 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 function escapeAttr(str){ return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+/* One stat tile. Foundation-owned because Backup & data uses it; it used to
+   live in the demo section, which broke that page when the demo was removed. */
+function statHtml(value, label){
+  return '<div class="stat"><span class="stat-value">' + escapeHtml(String(value)) + '</span>' +
+         '<span class="stat-label">' + escapeHtml(label) + '</span></div>';
+}
 
 function formatDate(iso){
   if(!iso) return '—';

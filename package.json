@@ -1,8 +1,8 @@
 {
-  "name": "app-starter",
+  "name": "capybara-sushi",
   "version": "0.1.0",
   "private": true,
-  "description": "An opinionated, offline-capable mobile app foundation.",
+  "description": "A cozy sushi-slicing game. Gray-box prototype.",
   "scripts": {
     "verify": "node test/run.js verify",
     "test": "node test/run.js contracts",

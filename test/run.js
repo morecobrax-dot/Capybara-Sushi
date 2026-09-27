@@ -31,7 +31,7 @@ const SUITES = [
   C.testOverlays,
   C.testToast,
   C.testConfirmation,
-  C.testForms,
+  C.testErase,
   C.testMobile,
   C.testDesignSystem,
   C.testPWA,

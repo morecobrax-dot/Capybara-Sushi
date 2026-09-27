@@ -36,6 +36,10 @@ function js(){ return H.mainScript(H.readApp()); }
 function stripComments(s){
   return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
+/* Words inside string literals are markup and messages, not references. */
+function stripStrings(s){
+  return s.replace(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g, "''");
+}
 
 /* =========================================================
    CONTRACT 1 — BOOT
@@ -54,14 +58,16 @@ function testBoot(){
   T('a first run writes nothing else', app.storage._map.size === 1, String(app.storage._map.size));
 
   sub('booting on top of existing data');
+  /* The game saves nothing yet, so the fixture is a neutral stored record.
+     What this protects is that booting never disturbs data it did not write. */
   const shared = new Map();
   const seeded = H.loadApp({ sharedStorage: shared });
-  seeded.ctx.items.push({ id: 'i_x', title: 'Existing', note: '', status: 'active',
-                          createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
-  seeded.ctx.persistItems();
+  seeded.ctx.Store.setJSON('data.fixture', [{ id: 'r_x', title: 'Existing',
+                                             updatedAt: '2026-01-01T00:00:00.000Z' }]);
   const second = H.loadApp({ sharedStorage: shared });
-  T('an existing record survives a reload', second.ctx.items.length === 1);
-  T('and keeps its identity', second.ctx.items[0].title === 'Existing');
+  const survived = second.ctx.Store.getJSON('data.fixture', []);
+  T('an existing record survives a reload', survived.length === 1);
+  T('and keeps its identity', !!survived[0] && survived[0].title === 'Existing');
   T('reloading raises no errors', second.errors.length === 0, second.errors.join(' | '));
 
   sub('there is only one script block, so the suite sees all the code');
@@ -115,6 +121,14 @@ function testConfig(){
   const pkg = H.readPkg();
   T('package name', pkg.name === cfg.id, pkg.name);
   T('package version', pkg.version === c.APP_VERSION, pkg.version);
+
+  sub('orientation is a validated setting, never a hand edit');
+  const tool = require('../scripts/config.js');
+  T('the configured orientation is one the manifest allows',
+    tool.validateOrientation(cfg.orientation) === null, String(cfg.orientation));
+  T('the manifest carries it', man.orientation === cfg.orientation, man.orientation);
+  ['sideways', 'Landscape', 'portrait ', '', undefined].forEach(v =>
+    T('refuses orientation ' + JSON.stringify(v), typeof tool.validateOrientation(v) === 'string'));
 
   /* Compared through the same escape the sync applies, so a product whose
      name contains & " or < is not reported as drift for being correct. */
@@ -214,11 +228,9 @@ function testCollision(){
   T('app-one.listKeys never returns an app-two key',
     one.ctx.Store.listKeys().every(k => shared.get('app-one.' + k) !== undefined));
 
-  one.ctx.items.push({ id: 'i1', title: 'One', note: '', status: 'active',
-                       createdAt: 'a', updatedAt: 'a' });
-  one.ctx.persistItems();
+  one.ctx.Store.setJSON('data.fixture', [{ id: 'r1', title: 'One', updatedAt: 'a' }]);
   T('one app writing records leaves the other empty',
-    two.ctx.Store.getJSON(two.ctx.KEYS.items, []).length === 0);
+    two.ctx.Store.getJSON('data.fixture', []).length === 0);
 
   sub('cache identity');
   T('cache names differ', one.ctx.CACHE_NAMESPACE !== two.ctx.CACHE_NAMESPACE);
@@ -252,16 +264,16 @@ function testMigration(){
   T('nothing was migrated on a fresh install', c.runMigrations().migrated === false);
 
   sub('idempotence');
-  c.Store.set(c.KEYS.items, JSON.stringify([{ id: 'a', title: 'A', status: 'active' }]));
-  const before = c.Store.get(c.KEYS.items);
+  c.Store.set('data.fixture', JSON.stringify([{ id: 'a', title: 'A' }]));
+  const before = c.Store.get('data.fixture');
   c.runMigrations(); c.runMigrations(); c.runMigrations();
-  T('running migrations repeatedly changes nothing', c.Store.get(c.KEYS.items) === before);
+  T('running migrations repeatedly changes nothing', c.Store.get('data.fixture') === before);
 
   sub('a corrupt or absent version is handled without data loss');
   c.Store.set(c.KEYS.schemaVersion, 'not-a-number');
   const r = c.runMigrations();
   T('a nonsense version does not throw', r && typeof r === 'object');
-  T('records survive it', c.Store.get(c.KEYS.items) === before);
+  T('records survive it', c.Store.get('data.fixture') === before);
 
   sub('the mechanism exists even though the starter has no migrations yet');
   T('a migration table is declared', typeof c.MIGRATIONS === 'object');
@@ -278,30 +290,32 @@ function testNavigation(){
   const app = H.loadApp();
   const c = app.ctx, d = app.dom.document;
 
-  sub('every tab resolves to a screen');
-  const tabs = [...d.querySelectorAll('.tab-btn')].map(b => b.dataset.tab).filter(Boolean);
-  T('the tab bar declares tabs', tabs.length >= 2, String(tabs.length));
-  tabs.forEach(t => T('tab "' + t + '" has a view', !!d.getElementById('view-' + t)));
-  T('the demo ships only as many tabs as it needs', tabs.length <= 4, String(tabs.length));
+  /* A game is one play surface, not a dashboard of tabs. The markup is the
+     single source of which screens exist, and it declares exactly one. */
+  sub('play is one screen, not a dashboard');
+  const views = [...d.querySelectorAll('.view')];
+  T('exactly one screen is declared', views.length === 1, String(views.length));
+  T('it is the play surface', !!views[0] && views[0].id === 'view-play');
+  T('it is showing from boot', !!views[0] && views[0].classList.contains('active'));
+  T('the current screen says so', c.currentTab === 'play', String(c.currentTab));
+  T('there is no tab bar to wander off through',
+    d.querySelectorAll('.tab-btn').length === 0 && !/<nav class="tabbar"/.test(H.readApp()));
 
-  sub('an unknown tab is a no-op, not a blank screen');
-  c.switchTab('items');
-  const before = c.currentTab;
+  sub('an unknown screen is a no-op, not a blank screen');
   c.switchTab('does-not-exist');
-  T('currentTab is unchanged', c.currentTab === before);
-  T('the current view is still active', d.getElementById('view-items').classList.contains('active'));
+  T('currentTab is unchanged', c.currentTab === 'play');
+  T('the play surface is still active', d.getElementById('view-play').classList.contains('active'));
 
-  sub('a tab opens at its top, so the same tap gives the same result');
-  app.ctx.window && (app.ctx.window.scrollY = 400);
-  c.switchTab('home');
+  sub('a screen opens at its top, so the same tap gives the same result');
+  c.window.scrollY = 400;
+  c.switchTab('play');
   T('the page is scrolled to top on entry', c.window.scrollY === 0);
   T('and it is instant, not animated', /behavior: 'instant'/.test(js()));
 
   sub('only one view is ever active');
-  c.switchTab('settings');
   const active = [...d.querySelectorAll('.view')].filter(v => v.classList.contains('active'));
   T('exactly one active view', active.length === 1, String(active.length));
-  T('it is the one asked for', active[0].id === 'view-settings');
+  T('it is the one asked for', !!active[0] && active[0].id === 'view-play');
 }
 
 /* =========================================================
@@ -343,14 +357,16 @@ function testOverlays(){
   T('the locked body refuses chaining entirely',
     /body\.scroll-locked\{[\s\S]{0,200}overscroll-behavior: none/.test(style));
 
+  /* Backup & data under its own erase confirmation is the real nesting the
+     product ships, so it is the pair these run on. */
   sub('opening and closing, for real');
-  open(app, 'itemDetailOverlay');
+  open(app, 'dataOverlay');
   T('the stack records it', c._openSheetStack.length === 1);
   T('the background is locked', d.body.classList.contains('scroll-locked'));
   T('the surface is announced as a dialog',
-    d.getElementById('itemDetailOverlay').getAttribute('aria-modal') === 'true');
+    d.getElementById('dataOverlay').getAttribute('aria-modal') === 'true');
   T('it is painted at the stack base',
-    d.getElementById('itemDetailOverlay').style.zIndex === String(c.OVERLAY_Z_BASE));
+    d.getElementById('dataOverlay').style.zIndex === String(c.OVERLAY_Z_BASE));
 
   sub('stacking is open order, not document order');
   open(app, 'confirmOverlay');
@@ -358,23 +374,25 @@ function testOverlays(){
   T('the newest is on top', c.topOpenSheet().id === 'confirmOverlay');
   T('and painted above the one beneath it',
     Number(d.getElementById('confirmOverlay').style.zIndex) >
-    Number(d.getElementById('itemDetailOverlay').style.zIndex));
+    Number(d.getElementById('dataOverlay').style.zIndex));
   T('the lock counts both layers', c._lockDepth === 2, String(c._lockDepth));
 
   sub('closing a child reveals its parent — the surface below is the way back');
   close(app, 'confirmOverlay');
-  T('the parent is still open', d.getElementById('itemDetailOverlay').classList.contains('open'));
+  T('the parent is still open', d.getElementById('dataOverlay').classList.contains('open'));
   T('the stack shrank to one', c._openSheetStack.length === 1);
   T('the background is still locked', d.body.classList.contains('scroll-locked'));
   T('the closed surface gave back its z-index', d.getElementById('confirmOverlay').style.zIndex === '');
-  close(app, 'itemDetailOverlay');
+  close(app, 'dataOverlay');
   T('closing the last one unlocks', !d.body.classList.contains('scroll-locked'));
   T('the stack is empty', c._openSheetStack.length === 0);
   T('the lock depth is zero', c._lockDepth === 0);
 
   sub('every surface declares a way out');
   const ids = [...H.readApp().matchAll(/<div class="overlay(?: overlay-page)?" id="([A-Za-z]+)"/g)].map(m => m[1]);
-  T('the app has overlays to check', ids.length >= 4, String(ids.length));
+  const required = ['confirmOverlay', 'dataOverlay', 'updatesOverlay'];
+  T('every surface the foundation and the game rely on is declared',
+    required.every(id => ids.indexOf(id) !== -1), ids.join(','));
   const noExit = ids.filter(id => {
     open(app, id);
     const has = !!c.sheetCloser(d.getElementById(id));
@@ -517,95 +535,60 @@ function testConfirmation(){
 }
 
 /* =========================================================
-   CONTRACT 10 — FORMS AND THE DEMO DOMAIN
+   CONTRACT 10 — BACKUP & DATA WITHOUT A DEMO, AND ERASING
+   ---------------------------------------------------------
+   The template's Backup & data page read the demo's own list and
+   its stat helper, so it threw the moment a product deleted the
+   demo, and erasing created a stray global. These hold the page to
+   what is actually stored, and erasing to asking first.
    ========================================================= */
-function testForms(){
-  section('CONTRACT 10 — create, edit, validate, persist, delete');
+function testErase(){
+  section('CONTRACT 10 — Backup & data works without a demo, and erasing asks first');
   const shared = new Map();
   const app = H.loadApp({ sharedStorage: shared });
   const c = app.ctx, d = app.dom.document;
+  c.Store.setJSON('data.fixture', [{ id: 'a', title: 'A' }, { id: 'b', title: 'B' }]);
+  c.Store.set('ui.fixture', 'kept until erased');
 
-  sub('validation refuses to save nothing');
-  c.openItemForm(); c.__flush();
-  d.getElementById('itemTitle').value = '   ';
-  c.saveItemForm();
-  T('an empty title does not create a record', c.items.length === 0);
-  T('the field is flagged', d.getElementById('itemTitle').classList.contains('field-error'));
-  T('and marked invalid for assistive tech',
-    d.getElementById('itemTitle').getAttribute('aria-invalid') === 'true');
-  T('with a message that says what to do',
-    d.getElementById('itemTitleError').textContent.length > 10);
-  T('the form stays open', d.getElementById('itemFormOverlay').classList.contains('open'));
+  sub('the page opens with no demo behind it');
+  c.openDataSettings(); c.__flush();
+  T('it opens', d.getElementById('dataOverlay').classList.contains('open'));
+  T('opening it raises no errors', app.errors.length === 0, app.errors.join(' | '));
+  const stats = d.getElementById('dataStats').innerHTML;
+  T('records are counted from what is stored, whatever the product calls them',
+    /<span class="stat-value">2<\/span><span class="stat-label">Records/.test(stats), stats.slice(0, 160));
+  T('the foundation reads no product binding to count them',
+    !/\bitems\b/.test(String(c.renderDataStats)));
+  T('erasing assigns no product binding either', !/\bitems\s*=/.test(String(c.resetAllData)));
 
-  sub('creating');
-  d.getElementById('itemTitle').value = 'First item';
-  d.getElementById('itemNote').value = 'A note';
-  c.setFormStatus('active');
-  c.saveItemForm(); c.__flush();
-  T('the record exists', c.items.length === 1);
-  T('with its title', c.items[0].title === 'First item');
-  T('with its note', c.items[0].note === 'A note');
-  T('with a status', c.items[0].status === 'active');
-  T('with an id', typeof c.items[0].id === 'string' && c.items[0].id.length > 4);
-  T('with timestamps', !!c.items[0].createdAt && !!c.items[0].updatedAt);
-  T('the form closed', !d.getElementById('itemFormOverlay').classList.contains('open'));
-  T('it was persisted', H.loadApp({ sharedStorage: shared }).ctx.items.length === 1);
-
-  sub('editing changes the record, not its identity');
-  const id = c.items[0].id, created = c.items[0].createdAt;
-  c.openItemForm(id); c.__flush();
-  T('the form is pre-filled', d.getElementById('itemTitle').value === 'First item');
-  d.getElementById('itemTitle').value = 'Renamed';
-  c.setFormStatus('done');
-  c.saveItemForm(); c.__flush();
-  T('still one record', c.items.length === 1);
-  T('the title changed', c.items[0].title === 'Renamed');
-  T('the status changed', c.items[0].status === 'done');
-  T('the id is unchanged', c.items[0].id === id);
-  T('createdAt is unchanged', c.items[0].createdAt === created);
-
-  sub('a draft lives outside the committed collection');
-  c.openItemForm(); c.__flush();
-  d.getElementById('itemTitle').value = 'Half typed';
-  c.flushDraft();
-  T('the draft was written', c.Store.getJSON(c.KEYS.itemDraft, null).title === 'Half typed');
-  T('it is under its own key', c.KEYS.itemDraft.indexOf('draft.') === 0);
-  T('it did not become a record', c.items.length === 1);
-  T('and it cannot be counted as one',
-    c.Store.getJSON(c.KEYS.items, []).length === 1);
-  const restored = H.loadApp({ sharedStorage: shared });
-  restored.ctx.openItemForm(); restored.ctx.__flush();
-  T('reopening the form restores it',
-    restored.dom.document.getElementById('itemTitle').value === 'Half typed');
-  T('editing an existing record never writes a draft',
-    /if\(editingItemId\) return;\s*\/\/ an edit in progress is not a draft/.test(js()) ||
-    /function scheduleDraftSave\(\)\{\s*if\(editingItemId\) return;/.test(js()));
-
-  sub('saving clears the draft');
-  d.getElementById('itemTitle').value = 'Second item';
-  c.saveItemForm(); c.__flush();
-  T('the draft is gone', c.Store.get(c.KEYS.itemDraft) === null);
-  T('the record was created', c.items.length === 2);
-
-  sub('deleting asks first');
-  const target = c.items[1].id;
-  c.openItemDetail(target); c.__flush();
-  const p = c.deleteItemFromDetail();
-  c.__flush();
+  sub('erasing asks first, and cancel keeps everything');
+  const p = c.resetAllData(); c.__flush();
   T('a confirmation is shown', d.getElementById('confirmOverlay').classList.contains('open'));
+  T('its loud button is not the destructive one',
+    d.getElementById('confirmAccept').className.indexOf('btn-primary') === -1);
   c.closeConfirm(); c.__flush();
   return p.then(() => {
-    T('cancelling keeps the record', c.items.length === 2);
-    c.openItemDetail(target); c.__flush();
-    const p2 = c.deleteItemFromDetail();
-    c.__flush();
+    T('cancelling keeps the records', c.Store.getJSON('data.fixture', []).length === 2);
+    T('and every other key', c.Store.get('ui.fixture') === 'kept until erased');
+
+    sub('confirming erases, and the product re-reads its state through its seam');
+    let hydrated = 0;
+    const realHydrate = c.Domain.hydrate;
+    c.Domain.hydrate = () => { hydrated++; realHydrate(); };
+    const p2 = c.resetAllData(); c.__flush();
     c.acceptConfirm(); c.__flush();
     return p2.then(() => {
-      T('confirming removes it', c.items.length === 1);
-      T('the right one went', !c.items.some(i => i.id === target));
-      T('the detail page closed', !d.getElementById('itemDetailOverlay').classList.contains('open'));
-      T('the removal was persisted',
-        H.loadApp({ sharedStorage: shared }).ctx.items.length === 1);
+      c.Domain.hydrate = realHydrate;
+      T('the records are gone', c.Store.get('data.fixture') === null);
+      T('only the schema version remains', c.Store.listKeys().join(',') === 'sys.schemaVersion',
+        c.Store.listKeys().join(','));
+      T('the product was asked to re-read its state', hydrated === 1, String(hydrated));
+      T('no stray global was created on the way', !Object.prototype.hasOwnProperty.call(c, 'items'));
+      T('the page stays open, showing the emptied store',
+        d.getElementById('dataOverlay').classList.contains('open') &&
+        /<span class="stat-value">0<\/span><span class="stat-label">Records/.test(d.getElementById('dataStats').innerHTML));
+      T('no errors on the way', app.errors.length === 0, app.errors.join(' | '));
+      T('the erase persisted', H.loadApp({ sharedStorage: shared }).ctx.Store.get('data.fixture') === null);
     });
   });
 }
@@ -647,7 +630,8 @@ function testMobile(){
 
   sub('every full page is protected — none opts out');
   const pageIds = [...src.matchAll(/<div class="overlay overlay-page" id="([A-Za-z]+)"/g)].map(m => m[1]);
-  T('there are full pages to protect', pageIds.length >= 3, String(pageIds.length));
+  T('the full pages the product ships are all here to protect',
+    ['dataOverlay', 'updatesOverlay'].every(id => pageIds.indexOf(id) !== -1), pageIds.join(','));
   const unprotected = pageIds.filter(id => {
     const at = src.indexOf('id="' + id + '"');
     return !/class="sheet"/.test(src.slice(at, at + 400));
@@ -847,59 +831,60 @@ function testStress(){
   const app = H.loadApp();
   const c = app.ctx, d = app.dom.document;
 
-  sub('100 tab switches');
-  const tabs = ['home', 'items', 'settings'];
-  for(let i = 0; i < 100; i++) c.switchTab(tabs[i % tabs.length]);
+  sub('100 navigations, to the one screen and to screens that do not exist');
+  for(let i = 0; i < 100; i++) c.switchTab(i % 2 ? 'play' : 'nowhere-' + i);
   const active = [...d.querySelectorAll('.view')].filter(v => v.classList.contains('active'));
   T('still exactly one active view', active.length === 1, String(active.length));
+  T('and it is still play', !!active[0] && active[0].id === 'view-play');
   T('no scroll lock was acquired', c._lockDepth === 0, String(c._lockDepth));
   T('no console errors', app.errors.length === 0, app.errors.join(' | '));
 
   sub('100 overlay open/close cycles');
-  for(let i = 0; i < 100; i++){ open(app, 'itemDetailOverlay'); close(app, 'itemDetailOverlay'); }
+  for(let i = 0; i < 100; i++){ open(app, 'dataOverlay'); close(app, 'dataOverlay'); }
   T('the stack is empty', c._openSheetStack.length === 0, String(c._openSheetStack.length));
   T('the lock depth is zero', c._lockDepth === 0, String(c._lockDepth));
   T('the body is not left locked', !d.body.classList.contains('scroll-locked'));
-  T('no z-index is left painted', d.getElementById('itemDetailOverlay').style.zIndex === '');
+  T('no z-index is left painted', d.getElementById('dataOverlay').style.zIndex === '');
   T('the opener map did not grow', c._sheetOpeners.size === 0, String(c._sheetOpeners.size));
 
   sub('50 nested cycles');
   for(let i = 0; i < 50; i++){
-    open(app, 'itemDetailOverlay');
+    open(app, 'dataOverlay');
     open(app, 'confirmOverlay');
     close(app, 'confirmOverlay');
-    close(app, 'itemDetailOverlay');
+    close(app, 'dataOverlay');
   }
   T('the stack is empty', c._openSheetStack.length === 0, String(c._openSheetStack.length));
   T('the lock depth is zero', c._lockDepth === 0, String(c._lockDepth));
   T('history depth did not run away', Math.abs(c._historyDepth) <= 1, String(c._historyDepth));
 
-  sub('50 create / edit / delete cycles');
-  const before = c.items.length;
+  /* The erase path through the confirmation is the one destructive flow
+     the product ships; run it until something would leak. */
+  sub('50 store-and-erase cycles');
+  let chain = Promise.resolve();
   for(let i = 0; i < 50; i++){
-    c.openItemForm();
-    d.getElementById('itemTitle').value = 'Item ' + i;
-    c.saveItemForm();
-    const id = c.items[c.items.length - 1].id;
-    c.openItemForm(id);
-    d.getElementById('itemTitle').value = 'Item ' + i + ' edited';
-    c.saveItemForm();
-    c.items = c.items.filter(x => x.id !== id);
-    c.persistItems();
+    chain = chain.then(() => {
+      c.Store.setJSON('data.fixture', [{ id: 'r' + i, title: 'Record ' + i }]);
+      c.openDataSettings(); c.__flush();
+      const p = c.resetAllData(); c.__flush();
+      c.acceptConfirm(); c.__flush();
+      return p.then(() => { c.closeDataSettings(); c.__flush(); });
+    });
   }
-  T('the collection returned to its starting size', c.items.length === before,
-    c.items.length + ' vs ' + before);
-  T('no draft was left behind', c.Store.get(c.KEYS.itemDraft) === null);
-  T('the stack is still empty', c._openSheetStack.length === 0);
-  T('storage did not accumulate keys', c.Store.listKeys().length <= 4,
-    c.Store.listKeys().join(','));
-  T('no console errors after all of it', app.errors.length === 0, app.errors.join(' | '));
+  return chain.then(() => {
+    T('storage returned to its first-run size', c.Store.listKeys().join(',') === 'sys.schemaVersion',
+      c.Store.listKeys().join(','));
+    T('the stack is still empty', c._openSheetStack.length === 0, String(c._openSheetStack.length));
+    T('the lock depth is zero', c._lockDepth === 0, String(c._lockDepth));
+    T('no confirmation was left waiting', c._confirmResolve === null);
+    T('no console errors after all of it', app.errors.length === 0, app.errors.join(' | '));
 
-  sub('an overlay left open at teardown still unlocks on close');
-  open(app, 'dataOverlay');
-  T('locked', d.body.classList.contains('scroll-locked'));
-  close(app, 'dataOverlay');
-  T('unlocked', !d.body.classList.contains('scroll-locked'));
+    sub('an overlay left open at teardown still unlocks on close');
+    open(app, 'dataOverlay');
+    T('locked', d.body.classList.contains('scroll-locked'));
+    close(app, 'dataOverlay');
+    T('unlocked', !d.body.classList.contains('scroll-locked'));
+  });
 }
 
 /* =========================================================
@@ -910,8 +895,11 @@ function testAccessibility(){
   const src = H.readApp(), style = css();
 
   sub('semantics');
-  T('navigation is a <nav> with a name', /<nav class="tabbar" aria-label="Main">/.test(src));
-  T('screens are <main> elements', (src.match(/<main class="view/g) || []).length >= 3);
+  T('the one screen is a <main> landmark with a name',
+    (src.match(/<main class="view/g) || []).length === 1 &&
+    /<main class="view active play-view" id="view-play" aria-label="[^"]+"/.test(src));
+  T('the page keeps a real heading, though the game is drawn',
+    /<h1 class="app-title" id="appTitle">/.test(src));
   T('every icon-only control has a label',
     [...src.matchAll(/<button[^>]*class="[^"]*icon-btn[^"]*"[^>]*>/g)]
       .every(m => /aria-label=/.test(m[0])));
@@ -920,15 +908,16 @@ function testAccessibility(){
   T('generated SVG is hidden and unfocusable',
     /aria-hidden="true" focusable="false"/.test(js()));
 
-  sub('state is exposed, not just painted');
-  T('the filter is a tablist', /role="tablist"/.test(src));
-  T('its options report selection', /aria-selected="true"/.test(src));
-  T('the status control is a radiogroup', /role="radiogroup"/.test(src));
-  T('its options report checked state', /aria-checked="true"/.test(src));
-  T('the toggle exposes checked state', /\.toggle\[aria-checked="true"\]/.test(style));
-  T('validation errors are announced', /role="alert"/.test(src));
-  T('an invalid field is marked', /setAttribute\('aria-invalid', 'true'\)/.test(js()));
-  T('a field points at its own error message', /aria-describedby="itemTitleError"/.test(src));
+  /* A canvas is invisible to assistive technology unless it says what it
+     is, and unreachable by keyboard unless it can take focus. */
+  sub('the play surface can be found, reached and understood');
+  const stageTag = (src.match(/<canvas[^>]*id="stage"[^>]*>/) || [''])[0];
+  T('the stage is keyboard-reachable', /tabindex="0"/.test(stageTag), stageTag);
+  T('it says what it is and how to play it', /aria-label="[^"]*[Ss]wipe[^"]*"/.test(stageTag));
+  T('it tells assistive technology it handles its own keys', /role="application"/.test(stageTag));
+  T('what happens in play is announced politely',
+    /<div class="sr-only" id="playStatus" role="status" aria-live="polite">/.test(src));
+  T('the toggle primitive still exposes checked state', /\.toggle\[aria-checked="true"\]/.test(style));
 
   sub('focus');
   T('focus is always visible', /\*:focus-visible\{ outline: 2px solid var\(--accent\)/.test(style));
@@ -953,9 +942,26 @@ function testContamination(){
 
   const src = H.readApp();
   T('no legacy brand token in the app', !/\bLOOP\b/.test(src));
-  T('the demo domain is neutral', /const ITEM_STATUSES/.test(js()));
-  T('the demo is small enough to delete easily',
-    (js().match(/DEMO DOMAIN[\s\S]*?SETTINGS — data ownership/) || [''])[0].split('\n').length < 400);
+
+  /* The starter's demo was replaced wholesale. Any of it left behind is
+     dead code at best, and at worst a foundation dependency like the one
+     Backup & data had on the demo's list. */
+  sub('the starter demo is gone');
+  T('no demo section remains', !/DEMO DOMAIN/.test(js()));
+  T('no demo surface remains in the markup',
+    !/itemDetailOverlay|itemFormOverlay|componentsOverlay|id="view-(home|items|settings)"/.test(src));
+  const demoNames = (js().match(/[A-Za-z_$][A-Za-z0-9_$]*[Ii]tem[A-Za-z0-9_$]*/g) || [])
+    .filter(n => !/^(set|get|remove)Item$/.test(n));
+  T('no demo identifier remains in the script', demoNames.length === 0, [...new Set(demoNames)].join(', '));
+
+  sub('the game is one delimited section');
+  const script = js();
+  const seam = script.indexOf('FOUNDATION → DOMAIN SEAM');
+  const game = script.indexOf('GAME DOMAIN — Slicing');
+  const settings = script.indexOf('SETTINGS — data ownership');
+  T('it has exactly one banner', (script.match(/GAME DOMAIN — Slicing/g) || []).length === 1);
+  T('it sits between the seam and the foundation that follows',
+    seam > 0 && game > seam && settings > game);
 }
 
 /* =========================================================
@@ -1044,18 +1050,24 @@ function testPortability(){
   T('the seam defaults are no-ops, so a product boots before it has a domain',
     /const Domain = \{[\s\S]{0,200}hydrate\(\)\{\},/.test(src));
 
-  sub('no foundation function names the demo entity');
-  /* The boundary is the DEMO DOMAIN banner. Everything above it, plus the
-     settings/updates/utilities/boot sections below it, is foundation. */
-  const demoStart = src.indexOf('DEMO DOMAIN — Item');
-  const demoEnd = src.indexOf('SETTINGS — data ownership');
-  T('the demo section is delimited', demoStart > 0 && demoEnd > demoStart);
-  const foundation = src.slice(0, demoStart) + src.slice(demoEnd);
-  /* setItem/getItem/removeItem are the localStorage API, not the demo. */
-  const demoRefs = (foundation.match(/[A-Za-z_$][A-Za-z0-9_$]*[Ii]tem[A-Za-z0-9_$]*/g) || [])
-    .filter(n => !/^(set|get|remove)Item$/.test(n));
-  T('the foundation contains no reference to the demo entity',
-    demoRefs.length === 0, [...new Set(demoRefs)].join(', '));
+  sub('no foundation code names anything the game declares');
+  /* The boundary is the GAME DOMAIN banner. Everything above it, plus the
+     settings/updates/utilities/boot sections below it, is foundation.
+     The template's own version of this check matched only names containing
+     "item", so Backup & data could read the demo's list and call its stat
+     helper and still pass. This one takes every name the game declares and
+     looks for each in the foundation's code — comments and strings aside. */
+  const gameStart = src.indexOf('GAME DOMAIN — Slicing');
+  const gameEnd = src.indexOf('SETTINGS — data ownership');
+  T('the game section is delimited', gameStart > 0 && gameEnd > gameStart);
+  const gameCode = stripComments(src.slice(gameStart, gameEnd));
+  const declared = [...gameCode.matchAll(
+    /(?:^|\n)\s*(?:async\s+)?(?:function\s+([A-Za-z_$][\w$]*)|(?:const|let|var|class)\s+([A-Za-z_$][\w$]*))/g)]
+    .map(m => m[1] || m[2]);
+  const foundationCode = stripStrings(stripComments(src.slice(0, gameStart) + src.slice(gameEnd)));
+  const leaks = declared.filter(n =>
+    new RegExp('(^|[^\\w$.])' + n.replace(/\$/g, '\\$') + '(?![\\w$])').test(foundationCode));
+  T('the foundation names nothing the game declares', leaks.length === 0, leaks.join(', '));
 
   sub('backup import is domain-agnostic');
   T('merge iterates the backup, not a hard-coded key list',
@@ -1134,7 +1146,7 @@ function testPortability(){
 module.exports = {
   T, section, sub, results, reset, testPortability,
   testBoot, testConfig, testStorage, testCollision, testMigration,
-  testNavigation, testOverlays, testToast, testConfirmation, testForms,
+  testNavigation, testOverlays, testToast, testConfirmation, testErase,
   testMobile, testDesignSystem, testPWA, testRelease, testStress,
   testAccessibility, testContamination, testSourcesOfTruth
 };

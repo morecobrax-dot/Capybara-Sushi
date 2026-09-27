@@ -16,7 +16,7 @@
  */
 
 /* APP-CACHE-BEGIN */
-const CACHE_NAME = 'app-starter-v0.1.0';
+const CACHE_NAME = 'capybara-sushi-v0.1.0';
 /* APP-CACHE-END */
 
 const ASSETS = [

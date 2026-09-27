@@ -46,11 +46,23 @@ function replaceRegion(text, beginMark, endMark, replacement, file){
 }
 
 /* ---------- read the source of truth ---------- */
+/* The values the Web App Manifest spec allows. Anything else is refused
+   rather than written, so a typo cannot silently unlock every orientation. */
+const ORIENTATIONS = ['any', 'natural', 'landscape', 'landscape-primary', 'landscape-secondary',
+                      'portrait', 'portrait-primary', 'portrait-secondary'];
+
+function validateOrientation(value){
+  if(ORIENTATIONS.indexOf(value) !== -1) return null;
+  return 'APP_CONFIG.orientation must be one of: ' + ORIENTATIONS.join(', ') + '. Got: ' + value;
+}
+
 function loadConfig(){
   const app = H.loadApp();
   const cfg = app.ctx.APP_CONFIG;
   const err = app.ctx.validateAppId(cfg.id);
   if(err) throw new Error(err);
+  const orientationErr = validateOrientation(cfg.orientation);
+  if(orientationErr) throw new Error(orientationErr);
   return {
     cfg,
     version: app.ctx.APP_VERSION,
@@ -102,6 +114,7 @@ function targets(c){
           name: cfg.name,
           short_name: cfg.shortName,
           description: cfg.description,
+          orientation: cfg.orientation,
           background_color: cfg.backgroundColor,
           theme_color: cfg.themeColor
         });
@@ -193,4 +206,4 @@ if(require.main === module){
   catch(e){ console.error('config:' + MODE + '  ERROR — ' + e.message); process.exit(1); }
 }
 
-module.exports = { loadConfig, targets, esc };
+module.exports = { loadConfig, targets, esc, validateOrientation, ORIENTATIONS };

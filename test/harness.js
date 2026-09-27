@@ -18,8 +18,29 @@
    every contract here and the suite will still pass. A contract
    asserts there is only one substantial block; keep it that way.
 
+   TIME IS VIRTUAL
+   setTimeout, requestAnimationFrame and performance.now run on a
+   clock that moves only when a test calls ctx.__advance(ms). A
+   frame requested during a frame runs on the NEXT frame, and a
+   cancelled frame never runs — the semantics a browser gives. An
+   earlier version ran animation frames synchronously, which makes
+   any self-scheduling animation recurse at boot.
+
+   CANVAS, POINTERS AND THE SCREEN
+   <canvas> elements get a 2D context that records calls instead of
+   drawing. Pointer capture is tracked per element. The viewport,
+   safe-area insets, device pixel ratio and reduced-motion setting
+   are options to loadApp(), and ctx.__resize() /
+   ctx.__setReducedMotion() change them while the app runs.
+
+   NOTHING FAILS QUIETLY
+   An exception thrown inside an event listener, a timer or a frame
+   is recorded in `errors`, so "no console errors" means none were
+   swallowed along the way.
+
    ISOLATION GUARANTEE
-   The harness never reads or writes real user data.
+   The harness never reads or writes real user data, and it has no
+   network: every network API is a recording stand-in.
    ========================================================= */
 'use strict';
 const fs = require('fs');
@@ -93,6 +114,172 @@ function makeLocalStorage(shared, failWrites){
 }
 
 /* =========================================================
+   VIRTUAL CLOCK
+   ---------------------------------------------------------
+   Timers and animation frames on one timeline that moves only when
+   a test calls advance(ms). Frames follow a 60 Hz grid; a callback
+   requested inside a frame waits for the next one, and a cancelled
+   callback never runs, even when cancelled by an earlier callback
+   of the same frame.
+   ========================================================= */
+function makeClock(report){
+  const c = {
+    now: 0, seq: 0, lastFrame: -Infinity, frameMs: 1000 / 60,
+    timers: new Map(), frames: new Map(),
+    stats: { count: 0, live: 0, frames: 0 }
+  };
+  const sync = () => { c.stats.live = c.timers.size; };
+  const run = (label, fn, arg) => {
+    try{ fn(arg); }catch(e){ report(label + ': ' + (e && e.stack || e)); }
+  };
+
+  c.setTimeout = (fn, ms) => {
+    const id = ++c.seq;
+    c.timers.set(id, { due: c.now + Math.max(0, Number(ms) || 0), fn, every: 0 });
+    c.stats.count++; sync();
+    return id;
+  };
+  c.setInterval = (fn, ms) => {
+    const id = ++c.seq, every = Math.max(1, Number(ms) || 0);
+    c.timers.set(id, { due: c.now + every, fn, every });
+    c.stats.count++; sync();
+    return id;
+  };
+  c.clearTimeout = id => { c.timers.delete(id); sync(); };
+  c.clearInterval = c.clearTimeout;
+  c.requestAnimationFrame = fn => { const id = ++c.seq; c.frames.set(id, fn); return id; };
+  c.cancelAnimationFrame = id => { c.frames.delete(id); };
+  c.pendingFrames = () => c.frames.size;
+  c.liveTimers = () => c.timers.size;
+
+  function runFrame(){
+    c.lastFrame = c.now;
+    c.stats.frames++;
+    [...c.frames.keys()].forEach(id => {
+      const fn = c.frames.get(id);
+      if(!fn) return;                        // cancelled earlier in this frame
+      c.frames.delete(id);
+      run('animation frame', fn, c.now);
+    });
+  }
+  function runTimer(id){
+    const t = c.timers.get(id);
+    if(!t) return;
+    if(t.every) t.due += t.every; else c.timers.delete(id);
+    sync();
+    run('timer', t.fn);
+  }
+
+  c.advance = ms => {
+    const end = c.now + Math.max(0, Number(ms) || 0);
+    for(let guard = 0; ; guard++){
+      if(guard > 200000) throw new Error('virtual clock: something reschedules itself without end');
+      let due = Infinity, id = null;
+      c.timers.forEach((t, k) => { if(t.due < due){ due = t.due; id = k; } });
+      const frame = c.frames.size ? Math.max(c.now, c.lastFrame + c.frameMs) : Infinity;
+      const next = Math.min(due, frame);
+      if(next > end) break;
+      c.now = next;
+      if(frame <= due) runFrame(); else runTimer(id);
+    }
+    c.now = end;
+  };
+  /* Exactly one frame, if one is waiting. */
+  c.frame = () => {
+    if(!c.frames.size) return false;
+    c.advance(Math.max(0, c.lastFrame + c.frameMs - c.now));
+    return true;
+  };
+  return c;
+}
+
+/* =========================================================
+   MEDIA QUERY
+   ---------------------------------------------------------
+   A MediaQueryList whose answer a test can change, firing `change`
+   the way a browser does when the system setting flips.
+   ========================================================= */
+function makeMediaQuery(media, matches){
+  const listeners = new Set();
+  const mq = {
+    media, matches: !!matches,
+    addEventListener(type, fn){ if(type === 'change' && typeof fn === 'function') listeners.add(fn); },
+    removeEventListener(type, fn){ listeners.delete(fn); },
+    addListener(fn){ if(typeof fn === 'function') listeners.add(fn); },
+    removeListener(fn){ listeners.delete(fn); },
+    listenerCount(){ return listeners.size; },
+    set(value, report){
+      const next = !!value;
+      if(next === mq.matches) return;
+      mq.matches = next;
+      [...listeners].forEach(fn => {
+        try{ fn({ matches: next, media }); }catch(e){ if(report) report('media change: ' + (e && e.stack || e)); }
+      });
+    }
+  };
+  return mq;
+}
+
+/* =========================================================
+   DESIGN TOKENS, AS A BROWSER WOULD COMPUTE THEM
+   ---------------------------------------------------------
+   getComputedStyle(root).getPropertyValue('--x') returns the value
+   of the token with var() references already substituted. Parsed
+   from the shipped :root block, so the canvas under test paints with
+   the same colours a browser would hand it.
+   ========================================================= */
+function rootTokens(src){
+  const style = styleBlock(src).split('\r\n').join('\n');
+  const a = style.indexOf(':root{');
+  const b = style.indexOf('\n}', a);
+  if(a === -1 || b === -1) return {};
+  const raw = {};
+  style.slice(a, b).replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi, (_, k, v) => { raw[k] = v.trim(); return ''; });
+  const resolve = (v, depth) => depth > 8 ? v :
+    v.replace(/var\((--[a-z0-9-]+)\)/gi, (m, k) => raw[k] !== undefined ? resolve(raw[k], depth + 1) : m);
+  const out = {};
+  Object.keys(raw).forEach(k => { out[k] = resolve(raw[k], 0); });
+  return out;
+}
+
+/* =========================================================
+   2D CONTEXT
+   ---------------------------------------------------------
+   Counts every call. Set `recording = true` to keep the calls of the
+   frames that follow in `log` (with their arguments), which is how a
+   contract can see what was painted without a pixel.
+   ========================================================= */
+const CTX_METHODS = [
+  'save', 'restore', 'scale', 'rotate', 'translate', 'transform', 'setTransform', 'resetTransform',
+  'clearRect', 'fillRect', 'strokeRect', 'beginPath', 'closePath', 'moveTo', 'lineTo',
+  'bezierCurveTo', 'quadraticCurveTo', 'arc', 'arcTo', 'ellipse', 'rect', 'roundRect',
+  'fill', 'stroke', 'clip', 'fillText', 'strokeText', 'setLineDash', 'drawImage', 'putImageData'
+];
+function makeContext2d(canvas){
+  const ctx = {
+    canvas, calls: 0, counts: {}, recording: false, log: [],
+    fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, globalAlpha: 1,
+    lineCap: 'butt', lineJoin: 'miter', font: '10px sans-serif', textAlign: 'start',
+    textBaseline: 'alphabetic', lineDashOffset: 0, shadowBlur: 0, shadowColor: 'transparent'
+  };
+  CTX_METHODS.forEach(m => {
+    ctx[m] = function(...args){
+      ctx.calls++;
+      ctx.counts[m] = (ctx.counts[m] || 0) + 1;
+      if(ctx.recording){
+        ctx.log.push({ m, args, fillStyle: ctx.fillStyle, strokeStyle: ctx.strokeStyle,
+                       alpha: ctx.globalAlpha });
+      }
+    };
+  });
+  ctx.measureText = () => ({ width: 0 });
+  ctx.getLineDash = () => [];
+  ctx.createLinearGradient = ctx.createRadialGradient = () => ({ addColorStop(){} });
+  return ctx;
+}
+
+/* =========================================================
    DOM STUB
    ---------------------------------------------------------
    Enough of a document for the overlay engine, the renderers and
@@ -149,6 +336,7 @@ function buildDom(src){
       removeChild(c){ const i = this.children.indexOf(c); if(i > -1) this.children.splice(i, 1); },
       focus(){ dom.document.activeElement = this; },
       blur(){},
+      select(){},
       click(){ const h = attrs.get('onclick'); if(h) try{ evalOnclick(h); }catch(e){} },
       addEventListener(type, fn){ (this._listeners[type] = this._listeners[type] || []).push(fn); },
       removeEventListener(type, fn){
@@ -156,7 +344,24 @@ function buildDom(src){
         const i = l.indexOf(fn); if(i > -1) l.splice(i, 1);
       },
       _listeners: {},
-      dispatch(type, ev){ (this._listeners[type] || []).forEach(f => { try{ f(ev || {}); }catch(e){} }); },
+      dispatch(type, ev){ dispatchTo(this, type, ev); },
+      /* Pointer capture, per element, the way the stage relies on it. */
+      _captured: new Set(),
+      setPointerCapture(id){ this._captured.add(id); },
+      releasePointerCapture(id){ this._captured.delete(id); },
+      hasPointerCapture(id){ return this._captured.has(id); },
+      /* A canvas fills the viewport, which is the only layout the stage has. */
+      width: 300,
+      height: 150,
+      getBoundingClientRect(){
+        const w = this.tagName === 'CANVAS' ? dom.viewport.width : 0;
+        const h = this.tagName === 'CANVAS' ? dom.viewport.height : 0;
+        return { left: 0, top: 0, x: 0, y: 0, width: w, height: h, right: w, bottom: h };
+      },
+      getContext(type){
+        if(this.tagName !== 'CANVAS' || type !== '2d') return null;
+        return this._ctx || (this._ctx = makeContext2d(this));
+      },
       querySelector(sel){ return query(sel, this)[0] || null; },
       querySelectorAll(sel){ return query(sel, this); },
       closest(){ return null; },
@@ -238,6 +443,16 @@ function buildDom(src){
     return false;
   }
 
+  /* A listener that throws in a browser reports to the console and the
+     page carries on. Here it lands in the app's error list, so a contract
+     that asserts "no errors" cannot pass over a swallowed exception. */
+  function dispatchTo(target, type, ev){
+    (target._listeners[type] || []).slice().forEach(f => {
+      try{ f(ev || {}); }
+      catch(e){ dom.reportError('listener ' + type + ': ' + (e && e.stack || e)); }
+    });
+  }
+
   const body = mkEl('body', 'body');
   const html = mkEl('html', 'documentElement');
 
@@ -245,6 +460,9 @@ function buildDom(src){
     mkEl,
     byId,
     all,
+    dispatchTo,
+    viewport: { width: 1024, height: 768 },
+    reportError(){},
     setOnclickEvaluator(fn){ evalOnclick = fn; },
     document: {
       body,
@@ -259,9 +477,12 @@ function buildDom(src){
       querySelector(sel){ return query(sel)[0] || null; },
       querySelectorAll(sel){ return query(sel); },
       addEventListener(type, fn){ (this._listeners[type] = this._listeners[type] || []).push(fn); },
-      removeEventListener(){},
+      removeEventListener(type, fn){
+        const l = this._listeners[type]; if(!l) return;
+        const i = l.indexOf(fn); if(i > -1) l.splice(i, 1);
+      },
       _listeners: {},
-      dispatch(type, ev){ (this._listeners[type] || []).forEach(f => { try{ f(ev || {}); }catch(e){} }); },
+      dispatch(type, ev){ dispatchTo(this, type, ev); },
       contains(){ return true; }
     }
   };
@@ -269,7 +490,7 @@ function buildDom(src){
   /* Register every element the shipped markup declares with an id, carrying
      its real class list and its owning overlay/view for scoped queries. */
   const bodyHtml = bodyBlock(src);
-  const tagRe = /<(div|main|nav|section|header|footer|form|label|button|input|textarea|select|span|p|ul|ol|li|a|h1|h2|h3|h4)\b([^>]*)>/g;
+  const tagRe = /<(div|main|nav|section|header|footer|form|label|button|input|textarea|select|span|p|ul|ol|li|a|h1|h2|h3|h4|canvas)\b([^>]*)>/g;
   let m;
 
   /* Two passes: ids first (so scoping can resolve), then scope assignment by
@@ -327,17 +548,27 @@ function buildDom(src){
    `overrides.appId` rewrites APP_CONFIG.id before evaluation, which
    is how the cross-app collision contracts run two identities
    against one shared localStorage.
+
+   Screen options, all optional:
+     viewport: { width, height, dpr, insets: { top, right, bottom, left } }
+     reducedMotion: true      the system asks for less motion at boot
+     search: '?tune'          the page's query string
    ========================================================= */
 const BRIDGE = [
+  /* foundation */
   'APP_CONFIG', 'APP_UPDATES', 'APP_VERSION', 'APP_ID_PATTERN',
   'STORAGE_NAMESPACE', 'CACHE_NAMESPACE', 'KEYS',
-  'Store', 'DATA_SCHEMA_VERSION', 'MIGRATIONS', 'migrationWarning', 'Domain',
-  'items', 'itemFilter', 'editingItemId', 'detailItemId', 'formStatus',
-  'ITEM_STATUSES', 'STATUS_LABEL', 'currentTab',
+  'Store', 'DATA_SCHEMA_VERSION', 'MIGRATIONS', 'migrationWarning', 'Domain', 'currentTab',
   'TOAST_MS', 'MAX_TOASTS', 'TOAST_VARIANTS',
   'OVERLAY_Z_BASE', '_openSheetStack', '_sheetOpeners', '_lockDepth', '_lockedScrollY',
-  '_historyDepth', '_pendingSelfPops', '_confirmResolve'
+  '_historyDepth', '_pendingSelfPops', '_confirmResolve',
+  /* product: the slicing game */
+  'TUNING_DEFAULTS', 'TUNING', 'TUNING_SPEC', 'SLICE', 'TUNE_ENABLED',
+  'game', 'roll', 'pieces', 'gesture', 'layout', 'hint', 'trail', 'healing', 'paint',
+  'pauses', 'frameId', 'reducedMotion', 'gx', 'stageEl', 'wired'
 ];
+
+const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
 function loadApp(opts){
   const o = opts || {};
@@ -354,7 +585,23 @@ function loadApp(opts){
   const storage = makeLocalStorage(o.sharedStorage, o.failWrites);
   const errors = [];
   const logs = [];
-  const timers = { count: 0, live: 0 };
+  const report = msg => errors.push(String(msg));
+  dom.reportError = report;
+  const clock = makeClock(report);
+  const timers = clock.stats;
+
+  const vp = Object.assign({ width: 1024, height: 768, dpr: 2 }, o.viewport || {});
+  const screen = { width: vp.width, height: vp.height, dpr: vp.dpr,
+                   insets: Object.assign({}, NO_INSETS, vp.insets || {}) };
+  dom.viewport = screen;
+  const tokens = rootTokens(src);
+  const motion = makeMediaQuery('(prefers-reduced-motion: reduce)', !!o.reducedMotion);
+  const resizeObservers = [];
+
+  /* Every network API records instead of reaching anything, so a
+     contract can prove that play sends nothing anywhere. */
+  const net = [];
+  const netLog = kind => (...a) => { net.push({ kind, target: String(a[0]) }); };
 
   const sandbox = {
     console: {
@@ -363,13 +610,39 @@ function loadApp(opts){
       error: (...a) => errors.push(a.map(String).join(' '))
     },
     document: dom.document,
-    navigator: { serviceWorker: { register: () => Promise.resolve() }, vibrate: () => true },
-    location: { protocol: 'https:', origin: 'https://example.github.io', href: '', reload(){} },
+    navigator: {
+      serviceWorker: { register: () => Promise.resolve() },
+      vibrate: () => true,
+      sendBeacon: (...a) => { netLog('sendBeacon')(...a); return true; }
+    },
+    location: { protocol: 'https:', origin: 'https://example.github.io', href: '',
+                search: o.search || '', reload(){} },
     history: { pushState(){}, replaceState(){}, back(){} },
-    setTimeout: (fn, ms) => { timers.count++; timers.live++; const t = setTimeout(() => { timers.live--; fn(); }, ms); return t; },
-    clearTimeout: (t) => { clearTimeout(t); },
-    setInterval, clearInterval,
-    requestAnimationFrame: f => f(),
+    setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout,
+    setInterval: clock.setInterval, clearInterval: clock.clearInterval,
+    requestAnimationFrame: clock.requestAnimationFrame,
+    cancelAnimationFrame: clock.cancelAnimationFrame,
+    performance: { now: () => clock.now },
+    getComputedStyle(el){
+      const probe = el && el.id === 'safeProbe';
+      const px = v => (probe ? v : 0) + 'px';
+      return {
+        getPropertyValue: name => tokens[name] !== undefined ? tokens[name] : '',
+        paddingTop: px(screen.insets.top), paddingRight: px(screen.insets.right),
+        paddingBottom: px(screen.insets.bottom), paddingLeft: px(screen.insets.left)
+      };
+    },
+    ResizeObserver: class {
+      constructor(cb){ this.cb = cb; this.targets = []; resizeObservers.push(this); }
+      observe(el){ this.targets.push(el); }
+      unobserve(el){ this.targets = this.targets.filter(t => t !== el); }
+      disconnect(){ const i = resizeObservers.indexOf(this); if(i > -1) resizeObservers.splice(i, 1); }
+    },
+    fetch: (...a) => { netLog('fetch')(...a); return new Promise(() => {}); },
+    XMLHttpRequest: class { open(m, u){ netLog('xhr')(u); } send(){} setRequestHeader(){} abort(){} },
+    WebSocket: class { constructor(u){ netLog('websocket')(u); } send(){} close(){} },
+    EventSource: class { constructor(u){ netLog('eventsource')(u); } close(){} },
+    Image: class { set src(u){ netLog('image')(u); } get src(){ return ''; } },
     Blob: class { constructor(p){ this.parts = p; } },
     URL: Object.assign(function(u){ return { origin: 'https://example.github.io', href: u }; },
                        { createObjectURL: () => 'blob:x', revokeObjectURL(){} }),
@@ -383,16 +656,46 @@ function loadApp(opts){
   sandbox.window = {
     localStorage: storage,
     scrollY: 0, pageYOffset: 0,
+    innerWidth: screen.width, innerHeight: screen.height, devicePixelRatio: screen.dpr,
     scrollTo(arg){ sandbox.window.scrollY = (arg && arg.top) || 0; },
     addEventListener(type, fn){ (sandbox.window._listeners[type] = sandbox.window._listeners[type] || []).push(fn); },
-    removeEventListener(){},
+    removeEventListener(type, fn){
+      const l = sandbox.window._listeners[type]; if(!l) return;
+      const i = l.indexOf(fn); if(i > -1) l.splice(i, 1);
+    },
     _listeners: {},
-    dispatch(type, ev){ (sandbox.window._listeners[type] || []).forEach(f => { try{ f(ev || {}); }catch(e){} }); },
-    matchMedia: () => ({ matches: false, addEventListener(){}, removeEventListener(){} }),
+    dispatch(type, ev){ dom.dispatchTo(sandbox.window, type, ev); },
+    matchMedia: q => q === motion.media ? motion :
+      { matches: false, media: q, addEventListener(){}, removeEventListener(){}, addListener(){}, removeListener(){} },
+    requestAnimationFrame: clock.requestAnimationFrame,
+    cancelAnimationFrame: clock.cancelAnimationFrame,
+    getComputedStyle: sandbox.getComputedStyle,
     MutationObserver: undefined
   };
+  if(o.windowExtras) Object.assign(sandbox.window, o.windowExtras);
   sandbox.globalThis = sandbox;
   sandbox.localStorage = storage;
+
+  /* Time, the screen and the system's motion setting are changed only by
+     the test, through these. */
+  sandbox.__clock = clock;
+  sandbox.__advance = ms => clock.advance(ms);
+  sandbox.__frame = () => clock.frame();
+  sandbox.__net = net;
+  sandbox.__motion = motion;
+  sandbox.__screen = screen;
+  sandbox.__resizeObservers = resizeObservers;
+  sandbox.__setReducedMotion = on => motion.set(on, report);
+  sandbox.__resize = (width, height, insets) => {
+    screen.width = width; screen.height = height;
+    if(insets) screen.insets = Object.assign({}, NO_INSETS, insets);
+    sandbox.window.innerWidth = width; sandbox.window.innerHeight = height;
+    resizeObservers.slice().forEach(ro => {
+      try{ ro.cb(ro.targets.map(t => ({ target: t, contentRect: { width, height } }))); }
+      catch(e){ report('resize observer: ' + (e && e.stack || e)); }
+    });
+    sandbox.window.dispatch('resize', {});
+  };
 
   /* Minimal MutationObserver: registered like the real one, but fired on
      demand by a test through ctx.__flush(), so contracts drive the engine
@@ -428,7 +731,7 @@ function loadApp(opts){
   /* Clicking a stub element runs its onclick in the app's own context. */
   dom.setOnclickEvaluator(expr => vm.runInContext(expr, sandbox));
 
-  return { ctx: sandbox, dom, storage, errors, logs, timers, src };
+  return { ctx: sandbox, dom, storage, errors, logs, timers, src, clock, net };
 }
 
 function settle(ms){ return new Promise(r => setTimeout(r, ms === undefined ? 30 : ms)); }
@@ -436,6 +739,6 @@ function settle(ms){ return new Promise(r => setTimeout(r, ms === undefined ? 30
 module.exports = {
   ROOT, APP_PATH, SW_PATH, MANIFEST_PATH, PKG_PATH,
   readApp, readSW, readManifest, readPkg,
-  scriptBlocks, mainScript, styleBlock, bodyBlock,
-  loadApp, settle, mulberry32, makeLocalStorage, BRIDGE
+  scriptBlocks, mainScript, styleBlock, bodyBlock, rootTokens,
+  loadApp, settle, mulberry32, makeLocalStorage, makeClock, BRIDGE
 };

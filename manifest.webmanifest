@@ -1,14 +1,14 @@
 {
   "name": "Capybara Sushi",
   "short_name": "Capy Sushi",
-  "description": "A cozy sushi-slicing game. Gray-box prototype.",
+  "description": "A cozy sushi-slicing game. Development preview.",
   "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#1B1A18",
-  "theme_color": "#1B1A18",
+  "background_color": "#EAD3B5",
+  "theme_color": "#EAD3B5",
   "icons": [
     {
       "src": "icon-192.png",

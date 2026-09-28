@@ -1,8 +1,8 @@
 {
   "name": "capybara-sushi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "A cozy sushi-slicing game. Gray-box prototype.",
+  "description": "A cozy sushi-slicing game. Development preview.",
   "scripts": {
     "verify": "node test/run.js verify",
     "test": "node test/run.js contracts",

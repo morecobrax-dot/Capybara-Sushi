@@ -38,6 +38,18 @@
    is recorded in `errors`, so "no console errors" means none were
    swallowed along the way.
 
+   THE 3D LIBRARY IS REAL; ONLY THE GPU IS NOT
+   The app loads Three.js from lib/three with one dynamic import().
+   The harness imports that same vendored file into Node once
+   (preloadThree(), awaited by the runner) and hands the app the
+   real library with a single substitution: WebGLRenderer becomes a
+   stand-in that records what it is asked to draw and accounts for
+   geometries and textures the way the real one does. So the scene
+   graph, the geometry, the deformation and the camera are the
+   shipped code running for real; only pixels are not produced.
+   The app's `import(THREE_URL)` is rewritten to `__import(...)`,
+   which answers at once (or fails, or waits, as a test asks).
+
    ISOLATION GUARANTEE
    The harness never reads or writes real user data, and it has no
    network: every network API is a recording stand-in.
@@ -46,12 +58,14 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { pathToFileURL } = require('url');
 
 const ROOT = path.join(__dirname, '..');
 const APP_PATH = path.join(ROOT, 'index.html');
 const SW_PATH = path.join(ROOT, 'sw.js');
 const MANIFEST_PATH = path.join(ROOT, 'manifest.webmanifest');
 const PKG_PATH = path.join(ROOT, 'package.json');
+const THREE_DIR = path.join(ROOT, 'lib', 'three');
 
 function readApp(){ return fs.readFileSync(APP_PATH, 'utf8'); }
 function readSW(){ return fs.readFileSync(SW_PATH, 'utf8'); }
@@ -277,6 +291,146 @@ function makeContext2d(canvas){
   ctx.getLineDash = () => [];
   ctx.createLinearGradient = ctx.createRadialGradient = () => ({ addColorStop(){} });
   return ctx;
+}
+
+/* =========================================================
+   THREE.JS, WITH A STAND-IN FOR THE GPU
+   ---------------------------------------------------------
+   preloadThree() imports the vendored build once per process.
+   Each app then gets the real module's exports with WebGLRenderer
+   replaced by RendererStub, which:
+     - fails to construct when a test says the device has no WebGL
+     - updates world matrices on render(), as the real one does
+     - accounts for geometries and textures it has "uploaded", and
+       forgets them when they are disposed — info.memory, like the
+       real renderer — so a leak shows up as a growing count
+     - reports drawing a geometry after it was disposed, which the
+       real renderer would silently re-upload and leak
+     - listens to its canvas before the app does, and refuses to draw
+       between losing its context and its own restore, as the real one
+       effectively does (it draws nothing then)
+   ========================================================= */
+let THREE_LIB = null;
+async function preloadThree(){
+  if(!THREE_LIB) THREE_LIB = await import(pathToFileURL(path.join(THREE_DIR, 'three.module.js')).href);
+  return THREE_LIB;
+}
+
+const TEXTURE_SLOTS = ['map', 'bumpMap', 'roughnessMap', 'metalnessMap', 'alphaMap', 'normalMap',
+                       'emissiveMap', 'aoMap', 'lightMap', 'envMap', 'displacementMap'];
+
+function makeRendererStub(gpu){
+  return class RendererStub {
+    constructor(params){
+      gpu.constructed++;
+      if(gpu.failNext > 0){ gpu.failNext--; throw new Error('Error creating WebGL context.'); }
+      this.params = params || {};
+      this.domElement = this.params.canvas || null;
+      this.pixelRatio = 1;
+      this.width = 0;
+      this.height = 0;
+      this.toneMapping = 0;
+      this.toneMappingExposure = 1;
+      this.outputColorSpace = '';
+      this.clear = null;
+      this.disposed = false;
+      this.renders = 0;
+      this.info = { memory: { geometries: 0, textures: 0 }, render: { calls: 0, triangles: 0, frame: 0 } };
+      this.capabilities = { isWebGL2: true, maxTextureSize: 4096, getMaxAnisotropy: () => 8 };
+      this.live = { geometries: new Set(), textures: new Set(), materials: new Set() };
+      /* Like the real renderer: it listens to its canvas first, and cannot
+         draw between losing its context and rebuilding its state on restore. */
+      this.lost = false;
+      this.onLost = ev => {
+        if(ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+        this.lost = true;
+      };
+      this.onRestored = () => { this.lost = false; };
+      if(this.domElement && typeof this.domElement.addEventListener === 'function'){
+        this.domElement.addEventListener('webglcontextlost', this.onLost);
+        this.domElement.addEventListener('webglcontextrestored', this.onRestored);
+      }
+      gpu.renderers.push(this);
+    }
+    setPixelRatio(r){ this.pixelRatio = r; }
+    getPixelRatio(){ return this.pixelRatio; }
+    setSize(w, h){
+      this.width = w;
+      this.height = h;
+      if(this.domElement){
+        this.domElement.width = Math.floor(w * this.pixelRatio);
+        this.domElement.height = Math.floor(h * this.pixelRatio);
+      }
+    }
+    setClearColor(color, alpha){ this.clear = { color, alpha }; }
+    track(kind, obj){
+      const set = this.live[kind];
+      if(set.has(obj)) return;
+      if(gpu.disposed.has(obj)) gpu.report('drew a ' + kind.slice(0, -1) + ' after it was disposed');
+      set.add(obj);
+      const onDispose = () => {
+        set.delete(obj);
+        gpu.disposed.add(obj);
+        obj.removeEventListener('dispose', onDispose);
+      };
+      obj.addEventListener('dispose', onDispose);
+    }
+    render(scene, camera){
+      if(this.disposed){ gpu.report('render() on a disposed renderer'); return; }
+      if(this.lost){ gpu.report('render() while the context was lost: nothing would be drawn'); return; }
+      this.renders++;
+      this.info.render.frame++;
+      if(scene.matrixWorldAutoUpdate !== false) scene.updateMatrixWorld();
+      if(camera.parent === null && camera.matrixWorldAutoUpdate !== false) camera.updateMatrixWorld();
+      let calls = 0, triangles = 0;
+      scene.traverseVisible(obj => {
+        if(!obj.isMesh) return;
+        calls++;
+        const g = obj.geometry;
+        this.track('geometries', g);
+        triangles += (g.index ? g.index.count : g.attributes.position.count) / 3;
+        [].concat(obj.material).forEach(m => {
+          this.track('materials', m);
+          TEXTURE_SLOTS.forEach(k => { if(m[k] && m[k].isTexture) this.track('textures', m[k]); });
+        });
+      });
+      this.info.render.calls = calls;
+      this.info.render.triangles = triangles;
+      this.info.memory.geometries = this.live.geometries.size;
+      this.info.memory.textures = this.live.textures.size;
+    }
+    dispose(){
+      this.disposed = true;
+      if(this.domElement && typeof this.domElement.removeEventListener === 'function'){
+        this.domElement.removeEventListener('webglcontextlost', this.onLost);
+        this.domElement.removeEventListener('webglcontextrestored', this.onRestored);
+      }
+    }
+  };
+}
+
+/* The answer to the app's import(): a thenable that settles at once, so a
+   test sees a fully booted app the moment loadApp() returns — or fails, or
+   waits until the test settles it. A throw inside the app's callback is an
+   unhandled rejection in a browser; here it is an error. */
+function importAnswer(gpu, report){
+  return url => {
+    gpu.imports.push(String(url));
+    return {
+      then(ok, fail){
+        const settle = (how, value) => {
+          try{
+            if(how === 'ok' && typeof ok === 'function') ok(value);
+            if(how === 'fail' && typeof fail === 'function') fail(value);
+          }catch(e){ report('unhandled rejection after import(): ' + (e && e.stack || e)); }
+        };
+        if(gpu.mode === 'ok') settle('ok', gpu.lib);
+        else if(gpu.mode === 'fail') settle('fail', new Error('Failed to fetch dynamically imported module: ' + url));
+        else if(gpu.mode === 'deferred') gpu.waiting.push(settle);
+        return undefined;
+      }
+    };
+  };
 }
 
 /* =========================================================
@@ -553,19 +707,28 @@ function buildDom(src){
      viewport: { width, height, dpr, insets: { top, right, bottom, left } }
      reducedMotion: true      the system asks for less motion at boot
      search: '?tune'          the page's query string
+
+   The 3D library (after preloadThree()):
+     three: 'ok'              import() answers at once (the default)
+     three: 'fail'            the library cannot be loaded
+     three: 'deferred'        it waits; app.gpu.resolve() / .reject()
+     noWebGL: n               the first n renderers cannot be created
+   Without preloadThree(), import() never answers, as on a page that is
+   still loading — enough for tooling that only reads APP_CONFIG.
    ========================================================= */
 const BRIDGE = [
   /* foundation */
-  'APP_CONFIG', 'APP_UPDATES', 'APP_VERSION', 'APP_ID_PATTERN',
+  'APP_CONFIG', 'APP_FILES', 'APP_UPDATES', 'APP_VERSION', 'APP_ID_PATTERN',
   'STORAGE_NAMESPACE', 'CACHE_NAMESPACE', 'KEYS',
   'Store', 'DATA_SCHEMA_VERSION', 'MIGRATIONS', 'migrationWarning', 'Domain', 'currentTab',
   'TOAST_MS', 'MAX_TOASTS', 'TOAST_VARIANTS',
   'OVERLAY_Z_BASE', '_openSheetStack', '_sheetOpeners', '_lockDepth', '_lockedScrollY',
   '_historyDepth', '_pendingSelfPops', '_confirmResolve',
   /* product: the slicing game */
-  'TUNING_DEFAULTS', 'TUNING', 'TUNING_SPEC', 'SLICE', 'TUNE_ENABLED',
-  'game', 'roll', 'pieces', 'gesture', 'layout', 'colors', 'hint', 'trail', 'healing', 'paint',
-  'pauses', 'frameId', 'lastFrameAt', 'reducedMotion', 'gx', 'stageEl', 'ctx2d', 'wired'
+  'TUNING_DEFAULTS', 'TUNING', 'TUNING_SPEC', 'SLICE', 'SCENE', 'TUNE_ENABLED', 'COLOR_TOKENS',
+  'game', 'roll', 'pieces', 'gesture', 'layout', 'colors', 'hint', 'trail', 'healing', 'paint', 'wobble',
+  'pauses', 'frameId', 'lastFrameAt', 'reducedMotion', 'gx', 'stageEl', 'ctx2d', 'wired',
+  'THREE_URL', 'THREE', 'sceneEl', 'view3d'
 ];
 
 const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -581,6 +744,14 @@ function loadApp(opts){
     if(code === before) throw new Error('could not override APP_CONFIG.id');
   }
 
+  /* The app's one dynamic import, answered by the harness. There must be
+     exactly one, so nothing else can load behind the suite's back. */
+  const imports = code.match(/\bimport\(THREE_URL\)/g) || [];
+  if(imports.length !== 1 || (code.match(/\bimport\s*\(/g) || []).length !== 1){
+    throw new Error('expected exactly one import(THREE_URL) in the app, and no other import()');
+  }
+  code = code.replace(/\bimport\(THREE_URL\)/, '__import(THREE_URL)');
+
   const dom = buildDom(src);
   const storage = makeLocalStorage(o.sharedStorage, o.failWrites);
   const errors = [];
@@ -589,6 +760,14 @@ function loadApp(opts){
   dom.reportError = report;
   const clock = makeClock(report);
   const timers = clock.stats;
+
+  const gpu = {
+    mode: THREE_LIB ? (o.three || 'ok') : 'never', failNext: Number(o.noWebGL) || 0,
+    constructed: 0, renderers: [], imports: [], waiting: [], disposed: new WeakSet(), report, lib: null
+  };
+  if(THREE_LIB) gpu.lib = Object.assign({}, THREE_LIB, { WebGLRenderer: makeRendererStub(gpu) });
+  gpu.resolve = () => { gpu.mode = 'ok'; gpu.waiting.splice(0).forEach(s => s('ok', gpu.lib)); };
+  gpu.reject = () => { gpu.mode = 'fail'; gpu.waiting.splice(0).forEach(s => s('fail', new Error('import failed'))); };
 
   const vp = Object.assign({ width: 1024, height: 768, dpr: 2 }, o.viewport || {});
   const screen = { width: vp.width, height: vp.height, dpr: vp.dpr,
@@ -651,6 +830,10 @@ function loadApp(opts){
     },
     Math, JSON, Date, Object, Array, String, Number, Boolean, RegExp, Error,
     parseInt, parseFloat, isNaN, isFinite, Promise, Set, Map, Symbol,
+    /* The library runs in this process's realm, so the typed arrays the
+       app hands it come from the same realm. */
+    Float32Array, Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, Int32Array, ArrayBuffer,
+    __import: importAnswer(gpu, report),
     __errors: errors, __logs: logs, __timers: timers
   };
   /* In a browser `window` IS the global object, so `window[name]` finds the
@@ -738,14 +921,14 @@ function loadApp(opts){
   /* Clicking a stub element runs its onclick in the app's own context. */
   dom.setOnclickEvaluator(expr => vm.runInContext(expr, sandbox));
 
-  return { ctx: sandbox, dom, storage, errors, logs, timers, src, clock, net };
+  return { ctx: sandbox, dom, storage, errors, logs, timers, src, clock, net, gpu };
 }
 
 function settle(ms){ return new Promise(r => setTimeout(r, ms === undefined ? 30 : ms)); }
 
 module.exports = {
-  ROOT, APP_PATH, SW_PATH, MANIFEST_PATH, PKG_PATH,
+  ROOT, APP_PATH, SW_PATH, MANIFEST_PATH, PKG_PATH, THREE_DIR,
   readApp, readSW, readManifest, readPkg,
   scriptBlocks, mainScript, styleBlock, bodyBlock, rootTokens,
-  loadApp, settle, mulberry32, makeLocalStorage, makeClock, BRIDGE
+  loadApp, settle, mulberry32, makeLocalStorage, makeClock, preloadThree, BRIDGE
 };

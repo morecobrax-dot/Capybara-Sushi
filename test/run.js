@@ -16,6 +16,7 @@
    ========================================================= */
 'use strict';
 const C = require('./contracts.js');
+const H = require('./harness.js');
 
 const TIER = (process.argv[2] || 'contracts').toLowerCase();
 
@@ -50,7 +51,9 @@ const SUITES = [
   C.testLayout,
   C.testMotion,
   C.testLifecycle,
-  C.testPermanentRules
+  C.testPermanentRules,
+  C.testSceneLifecycle,
+  C.testVendoredLibrary
 ];
 
 async function main(){
@@ -58,6 +61,11 @@ async function main(){
   console.log('\n' + '='.repeat(64));
   console.log('  STARTER CONTRACTS — tier: ' + TIER);
   console.log('='.repeat(64));
+
+  /* The vendored Three.js, imported once, so every app the contracts load
+     runs the real 3D code (with a stand-in for the GPU). */
+  const THREE = await H.preloadThree();
+  console.log('  Three.js r' + THREE.REVISION + ' loaded from lib/three for the contracts');
 
   for(const suite of SUITES){
     await suite();

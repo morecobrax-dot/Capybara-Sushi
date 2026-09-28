@@ -6,9 +6,9 @@
 <!-- APP-META-BEGIN
  — derived from APP_CONFIG by `npm run config:sync`. Do not hand-edit. -->
 <title>Capybara Sushi</title>
-<meta name="description" content="A cozy sushi-slicing game. Gray-box prototype.">
+<meta name="description" content="A cozy sushi-slicing game. Development preview.">
 <meta name="apple-mobile-web-app-title" content="Capy Sushi">
-<meta name="theme-color" content="#1B1A18">
+<meta name="theme-color" content="#EAD3B5">
 <!-- APP-META-END -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -143,19 +143,44 @@
   --bp-lg: 900px;
 
   /* ---- 4 · DOMAIN ----------------------------------------------
-     Capybara Sushi's gray box. Plain values on purpose: they exist to
-     prove the slicing, and final art replaces them. The canvas reads
-     these at runtime, so no colour is typed into the drawing code. */
-  --stage-counter: #2A2825;
-  --stage-plate: #3A3733;
-  --roll-body: #8D8984;
-  --roll-cut: #C9C4BC;
-  --roll-flash: #F3E6C0;
-  --guide-mark: rgba(238,241,245,0.34);
-  --blade-trail: rgba(238,241,245,0.62);
-  --incision: #3B3833;
-  --hint-ghost: rgba(238,241,245,0.55);
-  --done-mark: #9FD3B8;
+     Capybara Sushi's counter, after the moodboard: a warm cream counter,
+     a honey-wood board, a sage plate, and appetizing food. The 3D scene
+     and the flat layer over it read these at runtime, so no colour is
+     typed into the game's code. Scene colours are hex: the textures are
+     worked out from them pixel by pixel. */
+  --scene-sky: #EAD3B5;
+  --scene-counter: #E9D3B4;
+  --scene-counter-speck: #CDAE88;
+  --board-wood: #D9A56A;
+  --board-grain: #B47E47;
+  --plate-glaze: #9CB08C;
+  --nori: #2C4632;
+  --nori-dark: #1A2B1F;
+  --nori-light: #48674D;
+  --rice: #F3EDE1;
+  --rice-shade: #D6CCBB;
+  --rice-light: #FFFDF8;
+  --salmon: #F58B5A;
+  --salmon-deep: #E26A43;
+  --salmon-fat: #FDD6BF;
+  --scene-shadow: #5B3E29;
+  --roll-flash: #FFF1CC;
+  --light-key: #FFEAD2;
+  --light-fill: #DCE6FF;
+  --light-sky: #FFF4E6;
+  --light-ground: #C8A07A;
+  /* The flat layer over the scene: it has to read over dark nori and light
+     wood alike, so light marks carry a soft dark edge. */
+  --guide-mark: rgba(92,58,32,0.5);
+  --blade-trail: rgba(255,251,242,0.92);
+  --blade-edge: rgba(74,46,26,0.28);
+  --incision: rgba(255,248,236,0.92);
+  --hint-ghost: rgba(255,255,255,0.88);
+  --hud-shade: rgba(74,46,26,0.38);
+  --done-mark: #4E8F6B;
+  --done-disc: rgba(255,251,242,0.94);
+  --scene-ink: #5B3E29;
+  --scene-ink-soft: rgba(91,62,41,0.22);
 }
 
 /* =========================================================
@@ -673,26 +698,65 @@ body.scroll-locked{
 /* =========================================================
    GAME STAGE
    ---------------------------------------------------------
-   One canvas fills the screen and owns every touch on it. The
-   page never scrolls, so a swipe cannot bounce it, pull it to
-   refresh, or be claimed by the browser as a scroll.
+   Two canvases fill the screen: the 3D scene underneath, and
+   over it the stage, which carries the flat marks and owns every
+   touch. The page never scrolls, so a swipe cannot bounce it,
+   pull it to refresh, or be claimed by the browser as a scroll.
    ========================================================= */
 html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
 
+/* The counter's own warm colour sits behind everything, so loading, a lost
+   GPU context or an unavailable scene show a calm screen rather than a
+   blank canvas, which a browser paints black or white. */
 .play-view{
   position: fixed; inset: 0;
   max-width: none; margin: 0; padding: 0;
+  background: var(--scene-sky);
 }
+.scene{
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  background: var(--scene-sky);
+  pointer-events: none;
+}
+.play-view:not([data-scene="ready"]) .scene{ visibility: hidden; }
 /* touch-action: none here and nowhere else. Anything looser lets the
    browser take a slow vertical drag for a scroll and cancel the stroke
    halfway through the roll. */
 .stage{
   position: absolute; inset: 0; width: 100%; height: 100%; display: block;
-  background: var(--bg);
+  background: transparent;
   touch-action: none;
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
+/* Loading, waiting for the GPU, or unavailable: a spinner, or a short note
+   and a way to try again. Touches pass through everything but the button. */
+.scene-status{
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-lg);
+  padding: calc(var(--inset-top) + var(--space-xl)) calc(var(--inset-right) + var(--space-xl))
+           calc(var(--inset-bottom) + var(--space-xl)) calc(var(--inset-left) + var(--space-xl));
+  pointer-events: none;
+}
+.scene-status[hidden]{ display: none; }
+.scene-spinner{
+  width: var(--touch-min); height: var(--touch-min); border-radius: 50%;
+  border: 4px solid var(--scene-ink-soft); border-top-color: var(--scene-ink);
+  animation: scene-spin 0.9s linear infinite;
+}
+.scene-status[data-state="unavailable"] .scene-spinner{ display: none; }
+.scene-note{
+  margin: 0; max-width: 26em; text-align: center;
+  font-size: var(--fs-support); line-height: var(--lh-body); color: var(--scene-ink);
+}
+.scene-note:empty{ display: none; }
+.scene-retry{
+  pointer-events: auto;
+  color: var(--scene-ink); background: var(--done-disc); border: 1px solid var(--scene-ink-soft);
+}
+.scene-retry[hidden]{ display: none; }
+@keyframes scene-spin{ to{ transform: rotate(360deg); } }
 /* The canvas cannot read env() itself. This invisible box carries the
    safe-area insets as padding, which the game reads back in pixels. */
 .safe-probe{
@@ -749,8 +813,16 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
 
   <!-- PLAY — one uncluttered stage: the roll, and nothing a child has to read -->
   <main class="view active play-view" id="view-play" aria-label="Sushi counter">
+    <canvas class="scene" id="scene" aria-hidden="true"></canvas>
     <canvas class="stage" id="stage" tabindex="0" role="application"
-            aria-label="A sushi roll. Swipe down across it to cut a piece, or press Space."></canvas>
+            aria-label="A sushi roll on a cutting board. Swipe down across it to cut a piece, or press Space."></canvas>
+    <!-- Shown only while the 3D scene loads, waits for the GPU, or cannot be shown -->
+    <div class="scene-status" id="sceneStatus" data-state="loading">
+      <span class="scene-spinner" aria-hidden="true"></span>
+      <p class="scene-note" id="sceneNote"></p>
+      <button class="icon-btn scene-retry" id="sceneRetry" aria-label="Try showing the kitchen again"
+              onclick="retryScene()" hidden></button>
+    </div>
     <!-- Developer only: shown when the address carries ?tune, never in ordinary play -->
     <button class="icon-btn tune-btn" id="tuneBtn" aria-label="Feel tuning (developer)"
             onclick="openTuning()" hidden></button>
@@ -886,9 +958,9 @@ const APP_CONFIG = {
   id: 'capybara-sushi',
   name: 'Capybara Sushi',
   shortName: 'Capy Sushi',
-  description: 'A cozy sushi-slicing game. Gray-box prototype.',
-  themeColor: '#1B1A18',
-  backgroundColor: '#1B1A18',
+  description: 'A cozy sushi-slicing game. Development preview.',
+  themeColor: '#EAD3B5',
+  backgroundColor: '#EAD3B5',
   /* Tablets first, phones too, either way up. config:sync writes this
      into the manifest and refuses a value the manifest spec does not allow. */
   orientation: 'any'
@@ -908,6 +980,20 @@ function validateAppId(id){
   }
   return null;
 }
+
+/* Every file the app is made of, relative to this page. The service worker
+   precaches exactly this list — config:sync writes it into sw.js — so a
+   file the app loads can never be missing offline. A contract checks each
+   one exists, and that every file the app loads is listed. */
+const APP_FILES = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icon-192.png',
+  './icon-512.png',
+  './lib/three/three.module.js',
+  './lib/three/three.core.js'
+];
 
 /* =========================================================
    RELEASE NOTES
@@ -933,6 +1019,27 @@ function validateAppId(id){
    New products replace this array wholesale; this one did at 0.1.0.
    ========================================================= */
 const APP_UPDATES = [
+  {
+    id: 'v0-2-0',
+    version: '0.2.0',
+    title: 'A real 3D roll',
+    date: '2026-09-27',
+    summary: 'Slicing now happens in 3D: a salmon roll on a wooden cutting board that squashes, wobbles ' +
+             'and rocks as you cut it. Still a development preview for trying by hand.',
+    newFeatures: [
+      'A salmon maki roll in 3D, on a honey-wood cutting board on a warm counter',
+      'Every cut shows the rice and salmon inside, and the two sides tip apart so you can see it',
+      'The roll squashes where the knife goes in, and a soft wobble runs along it before it settles',
+      'A finished roll hops onto a sage-green plate, and the next one slides in on its board',
+      'Jiggle strength, softness and settling can be tried from the developer sheet'
+    ],
+    improvements: [
+      'The swipe, its forgiveness and the pace between rolls are the same as before',
+      'Works offline once it has loaded, with the 3D library kept on the device',
+      'If a device cannot draw in 3D, or loses it for a while, the screen says so and offers to try again'
+    ],
+    fixes: []
+  },
   {
     id: 'v0-1-0',
     version: '0.1.0',
@@ -1539,20 +1646,24 @@ function renderAll(){
 /* =========================================================
    GAME DOMAIN — Slicing
    ---------------------------------------------------------
-   One plain roll on one canvas. A swipe down across it cuts a
-   piece; slow drags and quick flicks both count. Nothing here is
-   saved: the roll, the tuning and every gesture live in memory.
+   One salmon roll on a cutting board, drawn in 3D. A swipe down
+   across it cuts a piece; slow drags and quick flicks both count.
+   Nothing here is saved: the roll, the tuning and every gesture
+   live in memory.
 
    In the order a touch travels through it:
      TUNING     every feel value in one place, adjustable from ?tune
      MODEL      a roll is its cut positions; pieces are derived
-     LAYOUT     where the roll sits on this screen, inside the safe area
+     LAYOUT     the camera for this screen, fitted inside the safe area
      GEOMETRY   pieceRects(): the one answer to "where is the food?",
-                used by the renderer and by hit testing alike
+                used by the 3D scene and by hit testing alike
      GESTURE    one pointer owns the knife; a qualifying crossing cuts
-     MOTION     springs and the finished-roll beat, on one clock
+     MOTION     springs, the jiggle and the finished-roll beat, one clock
      FRAMES     drawn only while something is moving
      LIFECYCLE  pause, resume, resize, reduced motion
+     HUD        the knife's trail, the guides, the hint and the mark,
+                drawn flat on top of the scene
+     SCENE      the counter, board, roll and plate in 3D (Three.js)
      TUNING UI  the developer sheet, ?tune only
 
    It reaches the foundation only through the Domain seams at the
@@ -1571,6 +1682,9 @@ const TUNING_DEFAULTS = Object.freeze({
   gap: 10,         // px between pieces after a cut, before the screen limits it
   pop: 220,        // px/s each side of a new cut leaves with
   bounce: 0.35,    // 0 settles with no overshoot; 1 overshoots most
+  jiggle: 1,       // how much the roll squashes, wobbles and rocks (0 = not at all)
+  soft: 0.5,       // 0 firm and quick; 1 soft and slow
+  settle: 0.5,     // 0 wobbles on for a while; 1 comes to rest almost at once
   holdMs: 650,     // a finished roll stays in view this long
   clearMs: 300,    // the plate leaving, and the next roll arriving, each
   hintS: 5         // idle seconds before the hint shows the swipe
@@ -1585,6 +1699,9 @@ const TUNING_SPEC = [
   { key: 'gap',     group: 'Separation',       label: 'Gap after a cut (px)',     min: 4,   max: 24,   step: 1 },
   { key: 'pop',     group: 'Separation',       label: 'Pop (px/s)',               min: 0,   max: 600,  step: 20 },
   { key: 'bounce',  group: 'Separation',       label: 'Bounce',                   min: 0,   max: 1,    step: 0.05 },
+  { key: 'jiggle',  group: 'Jiggle',           label: 'Strength',                 min: 0,   max: 2,    step: 0.1 },
+  { key: 'soft',    group: 'Jiggle',           label: 'Softness',                 min: 0,   max: 1,    step: 0.05 },
+  { key: 'settle',  group: 'Jiggle',           label: 'Settling',                 min: 0,   max: 1,    step: 0.05 },
   { key: 'holdMs',  group: 'Transitions',      label: 'Finished roll shown (ms)', min: 200, max: 2000, step: 50 },
   { key: 'clearMs', group: 'Transitions',      label: 'Clear and next roll (ms)', min: 100, max: 800,  step: 25 },
   { key: 'hintS',   group: 'Transitions',      label: 'Hint after (s)',           min: 1,   max: 10,   step: 0.5 },
@@ -1610,6 +1727,62 @@ const SLICE = Object.freeze({
   hintMoveMs: 1000,  // the hint's ghost swipe
   hintRestMs: 1200,  // the pause before it swipes again
   maxStepMs: 50      // one frame never moves the game further than this
+});
+
+/* The 3D presentation. Sizes are world units; the roll's radius is 1.
+   Nothing here changes where a cut lands or whether a roll can be
+   finished: these set how the scene looks, how the food moves, and what
+   drawing it may cost. The three Jiggle values in TUNING scale the
+   springs and impulses below, and nothing else sets them. */
+const SCENE = Object.freeze({
+  rollLen: 8.4,        // the roll's length
+  halfHeight: 0.96,    // half its height: it sits a little lower than it is wide
+  squareness: 2.4,     // its cross-section, from round (2) toward square
+  lumps: 0.02,         // how much its girth wanders along its length
+  endRound: 0.08,      // the rounding where the roll's two ends meet the nori
+  endDome: 0.38,       // how far the rice bulges out of those two ends, so they show
+  cutRound: 0.05,      // the soft edge of a cut face
+  ringStep: 0.15,      // geometry rings along the roll
+  segments: 40,        // geometry points around it
+  capRings: 6,         // geometry rings across a face
+  texSpan: 6.6,        // world units the nori texture covers before it repeats
+  pitch: 26,           // degrees the camera looks down at the roll
+  distance: 17,        // from the camera to the middle of the roll
+  board: Object.freeze({ w: 10.6, d: 4.6, h: 0.5, round: 0.55, bevel: 0.14 }),
+  plate: Object.freeze({ w: 10.2, d: 3.8, h: 0.3, round: 1.3, bevel: 0.15 }),
+  hop: 1.1,            // how high the pieces hop onto the plate
+  staggerMs: 22,       // one piece after the other
+  nodes: 41,           // points along the roll the jiggle is worked out at
+  /* The jiggle is a soft body: a wobble travels along the roll at a wave
+     speed, each point is drawn gently back to rest, and the damping sets how
+     long it lasts. ?tune softness moves the first two between these ends,
+     settling moves the third. */
+  firmWave: 13,        // units/s a wobble travels along the roll at softness 0 ...
+  softWave: 7.5,       // ... and at softness 1
+  firmOmega: 11,       // rad/s the roll breathes back to rest at softness 0 ...
+  softOmega: 6,        // ... and at softness 1
+  settleLow: 2.5,      // damping per second at settling 0 ...
+  settleHigh: 10,      // ... and at settling 1
+  spread: 4,           // extra damping of short ripples, so the roll moves as one soft thing
+  squashMax: 0.3,      // the most any point may squash; it may stretch 0.8 of this
+  kickWidth: 0.06,     // how much of the roll one cut squashes at once
+  kickCut: 2.4,        // squash speed where a cut lands
+  kickTouch: 0.6,      // squash speed where the knife first presses in
+  kickTap: 1.6,        // squash speed under a tap
+  kickLand: 1.0,       // squash speed of a piece landing on the plate
+  kickArrive: 0.6,     // squash speed of a new roll coming to a stop
+  /* Each piece also tips and rocks as a whole, on springs of its own. */
+  tipFirm: 26,         // rad/s of tipping and rocking at softness 0 ...
+  tipSoft: 14,         // ... and at softness 1
+  tipSettleLow: 0.1,   // their damping ratio at settling 0 ...
+  tipSettleHigh: 0.5,  // ... and at settling 1
+  tipKick: 2.2,        // rad/s the two sides of a cut tip away from it
+  tipMax: 0.12,        // radians a piece may tip when nothing stands beside it
+  rockKick: 1.3,       // rad/s the halves rock back from the blade
+  pixelBudget: 3.2e6,  // the most drawing-buffer pixels the scene renders
+  maxDpr: 2,           // and never more than this many per CSS pixel
+  recoverMs: 2500,     // how long a lost 3D context gets to come back by itself
+  rebuilds: 2          // then how many times a fresh renderer is tried
 });
 
 /* ---------- MODEL ---------- */
@@ -1692,22 +1865,88 @@ function cutTarget(r){
 
 /* ---------- STATE ---------- */
 /* The roll on the counter, and how it looks right now. `pieces` runs
-   parallel to piecesOf(roll): one entry of presentation state per piece.
-   phase: ready (cuttable), done (the finished roll on show), clear (it
-   leaves), enter (the next one arrives). */
-function newPieceState(){ return { off: 0, vel: 0, flashL: 0, flashR: 0 }; }
+   parallel to piecesOf(roll): one entry of presentation state per piece —
+   its slide along the board, its tip onto one bottom edge, its rock toward
+   and away from the camera, and the glow on its two newest faces.
+   phase: ready (cuttable), done (the finished roll is served), clear (the
+   plate leaves), enter (the next roll arrives). */
+function newPieceState(){
+  return { off: 0, vel: 0, flashL: 0, flashR: 0, tilt: 0, tiltV: 0, rock: 0, rockV: 0 };
+}
+const AT_REST = Object.freeze(newPieceState());
 let roll = newRoll(TUNING.pieces);
 let pieces = [newPieceState()];
 const game = { phase: 'ready', phaseT: 0, rolls: 0, gathered: false };
 let gx = 0;                   // the whole roll's offset while it leaves or arrives
+
+/* The jiggle, worked out for the roll as one soft body: how squashed it is
+   at evenly spaced points along its length (below 0 squashed, above 0
+   stretched), how fast that is changing, and which neighbouring points are
+   still joined. A cut parts two points for good, so each piece then wobbles
+   on its own. */
+const wobble = {
+  s: new Float32Array(SCENE.nodes),
+  v: new Float32Array(SCENE.nodes),
+  a: new Float32Array(SCENE.nodes),       // scratch: this step's accelerations
+  joined: new Uint8Array(SCENE.nodes - 1),
+  active: false
+};
+resetWobble();
 
 /* ---------- LAYOUT ---------- */
 let layout = null;            // this screen's geometry; null until the stage has a size
 let colors = {};              // the layer-4 tokens, read from CSS
 let stageLeft = 0, stageTop = 0;
 
+/* The camera looks down at the roll from the same angle and distance on
+   every screen; only the scale changes, as ppw (pixels per world unit).
+   Every point on the roll's axis is the same depth from the camera, so the
+   roll maps onto the screen at that one scale — which keeps the flat
+   geometry the knife is tested against exact. */
+function viewFor(ppw, px0, py0){
+  const p = SCENE.pitch * Math.PI / 180;
+  return { ppw: ppw, F: ppw * SCENE.distance, px0: px0, py0: py0,
+           sin: Math.sin(p), cos: Math.cos(p), ay: SCENE.halfHeight,
+           cy: SCENE.halfHeight + SCENE.distance * Math.sin(p), cz: SCENE.distance * Math.cos(p) };
+}
+
+/* A point in the world as stage pixels, through that camera. The 3D scene
+   is drawn through the same camera; a contract checks the two agree. */
+function project(v, x, y, z){
+  const dy = y - v.cy, dz = z - v.cz;
+  const depth = -v.sin * dy - v.cos * dz;
+  const up = v.cos * dy - v.sin * dz;
+  return { x: v.px0 + v.F * x / depth, y: v.py0 - v.F * up / depth };
+}
+
+/* The roll's cross-section: a softly squared circle, a little flattened,
+   resting on the board at y = 0. t runs round from the top, toward the
+   camera first. */
+function profilePoint(t){
+  const m = SCENE.squareness, c = Math.cos(t), s = Math.sin(t);
+  const k = Math.pow(Math.pow(Math.abs(c), m) + Math.pow(Math.abs(s), m), -1 / m);
+  return { y: SCENE.halfHeight * (1 + c * k), z: s * k };
+}
+
+/* How far above and below its middle the roll shows, at one pixel per unit.
+   The same on every screen, so it is worked out once. */
+let bandCache = null;
+function unitBand(){
+  if(bandCache) return bandCache;
+  const v = viewFor(1, 0, 0);
+  let top = Infinity, bot = -Infinity;
+  for(let i = 0; i < 180; i++){
+    const q = profilePoint(i / 180 * Math.PI * 2), p = project(v, 0, q.y, q.z);
+    if(p.y < top) top = p.y;
+    if(p.y > bot) bot = p.y;
+  }
+  bandCache = { top: top, bot: bot };
+  return bandCache;
+}
+
 /* The roll is sized so that, fully cut, gaps and all, it still fits in the
-   safe area — on a tablet or a phone held either way. */
+   safe area — on a tablet or a phone held either way — and the camera is
+   placed to show it at exactly that size. */
 function computeLayout(W, H, ins, n, gapWanted, dpr){
   const margin = Math.max(16, Math.min(W, H) * 0.04);
   const area = { x: ins.left + margin, y: ins.top + margin,
@@ -1715,11 +1954,14 @@ function computeLayout(W, H, ins, n, gapWanted, dpr){
                  h: H - ins.top - ins.bottom - margin * 2 };
   if(!(area.w > 40 && area.h > 40)) return null;
   const gap = Math.min(gapWanted, area.w * 0.14 / Math.max(1, n - 1));
-  const L = Math.min(area.w * 0.86, 760);
-  const T = Math.min(Math.max(L * 0.24, 44), 160, area.h * 0.34);
-  const mid = area.y + area.h * 0.55;
-  return { W: W, H: H, dpr: dpr, ins: ins, area: area, L: L, T: T, gap: gap,
-           top: mid - T / 2, bot: mid + T / 2, mid: mid, cx: area.x + area.w / 2 };
+  const band = unitBand();
+  const thick = (band.bot - band.top) / SCENE.rollLen;      // on-screen thickness per unit of length
+  const L = Math.min(area.w * 0.86, 760, Math.min(160, area.h * 0.34) / thick);
+  const ppw = L / SCENE.rollLen;
+  const cx = area.x + area.w / 2, py0 = area.y + area.h * 0.55;
+  const top = py0 + band.top * ppw, bot = py0 + band.bot * ppw;
+  return { W: W, H: H, dpr: dpr, ins: ins, area: area, L: L, T: bot - top, gap: gap,
+           top: top, bot: bot, mid: (top + bot) / 2, cx: cx, view: viewFor(ppw, cx, py0) };
 }
 
 /* The canvas cannot read env(). The probe carries the insets as padding. */
@@ -1732,19 +1974,29 @@ function readInsets(){
            bottom: px(cs.paddingBottom), left: px(cs.paddingLeft) };
 }
 
+/* Every colour the game uses, by the token that owns it. */
+const COLOR_TOKENS = Object.freeze({
+  sky: '--scene-sky', counter: '--scene-counter', speck: '--scene-counter-speck',
+  wood: '--board-wood', grain: '--board-grain', plate: '--plate-glaze',
+  nori: '--nori', noriDark: '--nori-dark', noriLight: '--nori-light',
+  rice: '--rice', riceShade: '--rice-shade', riceLight: '--rice-light',
+  salmon: '--salmon', salmonDeep: '--salmon-deep', salmonFat: '--salmon-fat',
+  shadow: '--scene-shadow', flash: '--roll-flash',
+  keyLight: '--light-key', fillLight: '--light-fill', skyLight: '--light-sky', groundLight: '--light-ground',
+  guide: '--guide-mark', blade: '--blade-trail', bladeEdge: '--blade-edge', incision: '--incision',
+  hint: '--hint-ghost', hudShade: '--hud-shade', done: '--done-mark', doneDisc: '--done-disc'
+});
 function readColors(){
   const cs = typeof getComputedStyle === 'function' ? getComputedStyle(document.documentElement) : null;
-  const token = name => cs ? String(cs.getPropertyValue(name) || '').trim() : '';
-  return {
-    ground: token('--bg'), counter: token('--stage-counter'), plate: token('--stage-plate'),
-    roll: token('--roll-body'), cut: token('--roll-cut'), flash: token('--roll-flash'),
-    guide: token('--guide-mark'), blade: token('--blade-trail'), incision: token('--incision'),
-    hint: token('--hint-ghost'), done: token('--done-mark')
-  };
+  const out = {};
+  Object.keys(COLOR_TOKENS).forEach(k => {
+    out[k] = cs ? String(cs.getPropertyValue(COLOR_TOKENS[k]) || '').trim() : '';
+  });
+  return out;
 }
 
-/* Measure the stage and size the canvas for this screen. True when the
-   geometry changed. */
+/* Measure the stage and size the flat canvas for this screen. True when the
+   geometry changed; the 3D scene follows. */
 function relayout(){
   if(!stageEl) return false;
   const box = typeof stageEl.getBoundingClientRect === 'function' ? stageEl.getBoundingClientRect() : null;
@@ -1760,13 +2012,15 @@ function relayout(){
   if(stageEl.width !== bw) stageEl.width = bw;
   if(stageEl.height !== bh) stageEl.height = bh;
   colors = readColors();
-  return !before || ['W', 'H', 'dpr', 'L', 'T', 'gap', 'top', 'cx'].some(k => before[k] !== layout[k]);
+  const changed = !before || ['W', 'H', 'dpr', 'L', 'T', 'gap', 'top', 'cx'].some(k => before[k] !== layout[k]);
+  if(changed) applyView();
+  return changed;
 }
 
 /* ---------- GEOMETRY ---------- */
-/* One function says where every piece is on screen. The renderer paints
-   exactly these rectangles and the knife is tested against exactly these,
-   so a piece is always cut where it appears, moving or not. */
+/* One function says where every piece is. The 3D scene places each piece
+   from exactly these poses and the knife is tested against their
+   projection, so a piece is always cut where it appears, moving or not. */
 function playGap(){ return game.gathered ? SLICE.plateGap : (layout ? layout.gap : 0); }
 
 function restLefts(){
@@ -1775,14 +2029,56 @@ function restLefts(){
   return pcs.map((p, i) => left + p.u0 * layout.L + i * g);
 }
 
+/* Each piece's left end from its slide alone, in stage pixels. The tip and
+   the hop are drawn on top of this and never fed back into it. */
+function slideLefts(){
+  return restLefts().map((x, i) => x + (pieces[i] ? pieces[i].off : 0));
+}
+
 function pieceRects(){
   if(!layout) return [];
-  const pcs = piecesOf(roll), lefts = restLefts();
-  return pcs.map((p, i) => ({
-    index: i, u0: p.u0, u1: p.u1,
-    x: lefts[i] + (pieces[i] ? pieces[i].off : 0) + gx,
-    y: layout.top, w: (p.u1 - p.u0) * layout.L, h: layout.T
-  }));
+  const pcs = piecesOf(roll), lefts = slideLefts(), v = layout.view;
+  return pcs.map((p, i) => {
+    const s = pieces[i] || AT_REST;
+    const len = (p.u1 - p.u0) * SCENE.rollLen;
+    const pose = poseOf((lefts[i] + gx - layout.cx) / v.ppw, len, tipShown(i, lefts), s.rock,
+                        liftOf(i, pcs.length));
+    const a = project(v, pose.ax, pose.ay, pose.az), b = project(v, pose.bx, pose.by, pose.bz);
+    return { index: i, u0: p.u0, u1: p.u1, x: a.x, y: layout.top, w: b.x - a.x, h: layout.T, pose: pose };
+  });
+}
+
+/* A piece's pose in the world: its bottom middle, how it is turned, and
+   where its axis runs. It tips about the bottom edge it leans over, so it
+   neither leaves the board nor sinks into it, and it rocks about the line
+   it rests on. */
+function poseOf(x0, len, tip, rock, lift){
+  const ox = x0 + len / 2, pivot = tip > 0 ? x0 : x0 + len;
+  const c = Math.cos(tip), s = Math.sin(tip);
+  const qx = pivot + (ox - pivot) * c, qy = lift + (ox - pivot) * s;
+  const ay = SCENE.halfHeight * Math.cos(rock), az = SCENE.halfHeight * Math.sin(rock);
+  const h = len / 2;
+  return { x: qx, y: qy, tip: tip, rock: rock, len: len,
+           ax: qx - h * c - ay * s, ay: qy - h * s + ay * c, az: az,
+           bx: qx + h * c - ay * s, by: qy + h * s + ay * c, bz: az };
+}
+
+/* How far piece i may tip toward a neighbour without touching it: half the
+   gap between them, since the neighbour may tip back. With nothing beside
+   it, a piece tips at most SCENE.tipMax. */
+function tipRoom(i, lefts, toward){
+  const pcs = piecesOf(roll), j = i - toward;           // toward 1 leans left, -1 right
+  if(j < 0 || j >= pcs.length || !layout) return SCENE.tipMax;
+  const lo = Math.min(i, j), hi = Math.max(i, j);
+  const gapPx = lefts[hi] - (lefts[lo] + (pcs[lo].u1 - pcs[lo].u0) * layout.L);
+  const room = Math.max(0, gapPx / layout.view.ppw) / 2;
+  return Math.min(SCENE.tipMax, Math.asin(Math.min(1, room / (2 * SCENE.halfHeight))));
+}
+function tipShown(i, lefts){
+  const t = pieces[i] ? pieces[i].tilt : 0;
+  if(t > 0) return Math.min(t, tipRoom(i, lefts, 1));
+  if(t < 0) return Math.max(t, -tipRoom(i, lefts, -1));
+  return 0;
 }
 
 function pieceAt(x){
@@ -1795,14 +2091,17 @@ function pieceAt(x){
 function uAt(rect, x){ return rect.u0 + (x - rect.x) / rect.w * (rect.u1 - rect.u0); }
 function xAt(rect, u){ return rect.x + (u - rect.u0) / (rect.u1 - rect.u0) * rect.w; }
 
-/* Keep every piece exactly where it is drawn while its resting place moves;
+/* Keep every piece exactly where it slides to while its resting place moves;
    the springs then carry it there, or reduced motion puts it there at once. */
 function holdInPlace(drawnLefts){
   const lefts = restLefts();
   pieces.forEach((p, i) => { p.off = drawnLefts[i] - lefts[i]; });
   if(motionReduced()) settleSprings();
 }
-function settleSprings(){ pieces.forEach(p => { p.off = 0; p.vel = 0; }); }
+function settleSprings(){
+  pieces.forEach(p => { p.off = 0; p.vel = 0; p.tilt = 0; p.tiltV = 0; p.rock = 0; p.rockV = 0; });
+  resetWobbleMotion();
+}
 
 /* ---------- GESTURE ---------- */
 /* One pointer owns the knife from its press until it lifts, is cancelled,
@@ -1853,6 +2152,13 @@ function closeVisit(g){
   if(v && !v.dead && !g.spent) healVisit(v);
 }
 
+/* The knife presses in: the food gives a little where it first touches. */
+function touchFood(p){
+  if(game.phase !== 'ready') return;
+  const r = pieceAt(p.x);
+  if(r) kick(uAt(r, p.x), -SCENE.kickTouch, SCENE.kickWidth * 1.4);
+}
+
 function addTrail(p, s){
   trail.push({ x: p.x, y: p.y, age: 0, s: s });
   if(trail.length > SLICE.trailMax) trail.shift();
@@ -1867,7 +2173,7 @@ function feed(g, p){
   if(g.spent || !layout || game.phase !== 'ready' || g.rollId !== roll.id) return;
   const part = clipToBand(a, p, bandTop(), bandBot());
   if(!part){ if(g.visit) closeVisit(g); return; }
-  if(!g.visit) g.visit = openVisit(part.a);
+  if(!g.visit){ g.visit = openVisit(part.a); touchFood(part.a); }
   const v = g.visit;
   [part.a, part.b].forEach(q => {
     const y = clampToRoll(q.y);
@@ -1900,20 +2206,30 @@ function tryCut(g){
 }
 
 function commitCut(index, u, g){
-  const rects = pieceRects();
-  const drawn = rects.map(r => r.x - gx);
-  const splitAt = drawn[index] + (u - rects[index].u0) * layout.L;
+  const drawn = slideLefts();
+  const splitAt = drawn[index] + (u - piecesOf(roll)[index].u0) * layout.L;
   const parent = pieces[index] || newPieceState();
   addCut(roll, u);
+  splitWobble(u);
   if(g){ g.spent = true; g.visit = null; }
-  const left = { off: 0, vel: parent.vel, flashL: parent.flashL, flashR: SLICE.flashMs };
-  const right = { off: 0, vel: parent.vel, flashL: SLICE.flashMs, flashR: parent.flashR };
+  /* The half holding the edge the parent was tipped over keeps the tip, so
+     it does not jump; the other half starts level. */
+  const keepLeft = parent.tilt >= 0;
+  const left = { off: 0, vel: parent.vel, flashL: parent.flashL, flashR: SLICE.flashMs,
+                 tilt: keepLeft ? parent.tilt : 0, tiltV: keepLeft ? parent.tiltV : 0,
+                 rock: parent.rock, rockV: parent.rockV };
+  const right = { off: 0, vel: parent.vel, flashL: SLICE.flashMs, flashR: parent.flashR,
+                  tilt: keepLeft ? 0 : parent.tilt, tiltV: keepLeft ? 0 : parent.tiltV,
+                  rock: parent.rock, rockV: parent.rockV };
   pieces.splice(index, 1, left, right);
   drawn.splice(index + 1, 0, splitAt);
   holdInPlace(drawn);
   /* The roll parts at the knife: everything on each side moves together,
      so pieces already cut never bump into each other. */
-  if(!motionReduced()) pieces.forEach((p, i) => { p.vel += (i <= index ? -1 : 1) * TUNING.pop; });
+  if(!motionReduced()){
+    pieces.forEach((p, i) => { p.vel += (i <= index ? -1 : 1) * TUNING.pop; });
+    recoil(index, u);
+  }
   const remaining = roll.n - 1 - roll.cuts.length;
   announce(remaining > 0 ? 'Cut. ' + remaining + ' to go.' : 'Roll finished. Here comes another.');
   if(rollComplete(roll)) finishRoll();
@@ -1921,7 +2237,7 @@ function commitCut(index, u, g){
 }
 
 /* The last cut. The knife lifts at once, so nothing a finger still does can
-   reach the next roll, and the pieces are shown together. */
+   reach the next roll, and the pieces are served together. */
 function finishRoll(){
   game.phase = 'done';
   game.phaseT = 0;
@@ -1960,7 +2276,7 @@ function onStageDown(ev){
   if(typeof ev.preventDefault === 'function') ev.preventDefault();
   hideHint();
   addTrail(p, gesture.seq);
-  if(p.y >= bandTop() && p.y <= bandBot()) gesture.visit = openVisit(p);
+  if(p.y >= bandTop() && p.y <= bandBot()){ gesture.visit = openVisit(p); touchFood(p); }
   requestFrame();
 }
 
@@ -1989,12 +2305,15 @@ function onStageCancel(ev){
   if(gesture && ev && ev.pointerId === gesture.id) endGesture();
 }
 
-/* A tap is noticed, never punished: the piece under it jiggles. */
+/* A tap is noticed, never punished: the piece under it squashes and jiggles. */
 function tapWobble(p){
   if(motionReduced() || !layout || p.y < layout.top || p.y > layout.bot) return;
   const rect = pieceAt(p.x);
   if(!rect || !pieces[rect.index]) return;
-  pieces[rect.index].vel += (p.x < rect.x + rect.w / 2 ? 1 : -1) * SLICE.tapKick;
+  const s = pieces[rect.index];
+  s.vel += (p.x < rect.x + rect.w / 2 ? 1 : -1) * SLICE.tapKick;
+  s.rockV -= SCENE.rockKick * 0.5 * TUNING.jiggle;
+  kick(uAt(rect, p.x), -SCENE.kickTap, SCENE.kickWidth * 1.6);
 }
 
 /* Space, Enter or the down arrow cut at the next guide. Never while a sheet
@@ -2028,22 +2347,50 @@ function keyboardCut(){
 let reducedMotion = false;    // a live mirror of the system setting
 function motionReduced(){ return reducedMotion; }
 function zeta(){ return 1 - 0.55 * Math.max(0, Math.min(1, TUNING.bounce)); }
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+/* The jiggle's springs and damping, from the ?tune softness and settling:
+   the soft body's wave speed, breathing and damping, and the springs each
+   piece tips and rocks on. */
+function jiggleFeel(){
+  const soft = clamp01(TUNING.soft), settle = clamp01(TUNING.settle);
+  const by = (a, b, k) => a + (b - a) * k;
+  return { wave: by(SCENE.firmWave, SCENE.softWave, soft), w: by(SCENE.firmOmega, SCENE.softOmega, soft),
+           damp: by(SCENE.settleLow, SCENE.settleHigh, settle),
+           tw: by(SCENE.tipFirm, SCENE.tipSoft, soft), tz: by(SCENE.tipSettleLow, SCENE.tipSettleHigh, settle) };
+}
 
 function stepMotion(ms){
   if(ms > 0){
     if(motionReduced()) settleSprings();
     else {
-      const w = SLICE.omega, z = zeta();
+      const w = SLICE.omega, z = zeta(), J = jiggleFeel();
+      const tw = J.tw, tz = J.tz, rw = J.tw * 0.8, rz = J.tz;
       const steps = Math.max(1, Math.ceil(ms / 4));
       const h = ms / 1000 / steps;
       for(let s = 0; s < steps; s++){
         pieces.forEach(p => {
-          if(p.off === 0 && p.vel === 0) return;
-          p.vel += (-w * w * p.off - 2 * z * w * p.vel) * h;
-          p.off += p.vel * h;
+          if(p.off !== 0 || p.vel !== 0){
+            p.vel += (-w * w * p.off - 2 * z * w * p.vel) * h;
+            p.off += p.vel * h;
+          }
+          if(p.tilt !== 0 || p.tiltV !== 0){
+            p.tiltV += (-tw * tw * p.tilt - 2 * tz * tw * p.tiltV) * h;
+            p.tilt += p.tiltV * h;
+          }
+          if(p.rock !== 0 || p.rockV !== 0){
+            p.rockV += (-rw * rw * p.rock - 2 * rz * rw * p.rockV) * h;
+            p.rock += p.rockV * h;
+          }
         });
+        if(wobble.active) stepWobble(h, J);
       }
-      pieces.forEach(p => { if(Math.abs(p.off) < 0.05 && Math.abs(p.vel) < 2){ p.off = 0; p.vel = 0; } });
+      pieces.forEach(p => {
+        if(Math.abs(p.off) < 0.05 && Math.abs(p.vel) < 2){ p.off = 0; p.vel = 0; }
+        if(Math.abs(p.tilt) < 2e-4 && Math.abs(p.tiltV) < 4e-3){ p.tilt = 0; p.tiltV = 0; }
+        if(Math.abs(p.rock) < 2e-4 && Math.abs(p.rockV) < 4e-3){ p.rock = 0; p.rockV = 0; }
+      });
+      if(wobble.active) restWobble();
     }
     pieces.forEach(p => { p.flashL = Math.max(0, p.flashL - ms); p.flashR = Math.max(0, p.flashR - ms); });
     if(motionReduced()){ if(!gesture) trail = []; }
@@ -2058,6 +2405,100 @@ function stepMotion(ms){
   stepPhase(ms);
 }
 
+/* One step of the jiggle. Each point pulls on the points it is still
+   joined to, which carries a squash along the roll as a wobble, and is drawn
+   gently back to rest; the damping lets it all die away. Short ripples are
+   damped a little more, so the roll moves as one soft thing rather than as a
+   string of beads. */
+function stepWobble(h, J){
+  const s = wobble.s, v = wobble.v, a = wobble.a, j = wobble.joined, n = s.length;
+  const link = Math.pow(J.wave * (n - 1) / SCENE.rollLen, 2);
+  const w2 = J.w * J.w, damp = J.damp, spread = SCENE.spread;
+  for(let i = 0; i < n; i++){
+    let pull = 0, drag = 0;
+    if(i > 0 && j[i - 1]){ pull += s[i - 1] - s[i]; drag += v[i - 1] - v[i]; }
+    if(i < n - 1 && j[i]){ pull += s[i + 1] - s[i]; drag += v[i + 1] - v[i]; }
+    a[i] = -w2 * s[i] - damp * v[i] + link * pull + spread * drag;
+  }
+  const lo = -SCENE.squashMax, hi = SCENE.squashMax * 0.8;
+  for(let i = 0; i < n; i++){
+    v[i] += a[i] * h;
+    s[i] += v[i] * h;
+    if(s[i] < lo){ s[i] = lo; if(v[i] < 0) v[i] = 0; }
+    else if(s[i] > hi){ s[i] = hi; if(v[i] > 0) v[i] = 0; }
+  }
+}
+/* Once every point is still, the roll is exactly at rest again. */
+function restWobble(){
+  const s = wobble.s, v = wobble.v;
+  for(let i = 0; i < s.length; i++){
+    if(Math.abs(s[i]) > 2e-4 || Math.abs(v[i]) > 4e-3) return;
+  }
+  resetWobbleMotion();
+}
+function resetWobbleMotion(){ wobble.s.fill(0); wobble.v.fill(0); wobble.active = false; }
+function resetWobble(){ resetWobbleMotion(); wobble.a.fill(0); wobble.joined.fill(1); }
+
+/* The jiggle points inside a piece: node k belongs to the piece whose
+   [u0, u1) holds k / (nodes − 1). A piece is always wider than the node
+   spacing, so it holds at least one; the fallback is only a guard. */
+function nodeSpan(u0, u1){
+  const n = SCENE.nodes - 1;
+  let lo = Math.ceil(u0 * n - 1e-9), hi = u1 >= 1 ? n : Math.ceil(u1 * n - 1e-9) - 1;
+  if(hi < lo){ lo = hi = Math.min(n, Math.max(0, Math.round((u0 + u1) / 2 * n))); }
+  return { lo: lo, hi: hi };
+}
+/* A cut parts the two points either side of it, for good. */
+function splitWobble(u){
+  const k = Math.ceil(u * (SCENE.nodes - 1) - 1e-9) - 1;
+  if(k >= 0 && k < wobble.joined.length) wobble.joined[k] = 0;
+}
+
+/* Squash (below 0) or stretch the roll around u. It adds to whatever the
+   roll is already doing, so quick cuts blend rather than restart. */
+function kick(u, amount, width){
+  if(motionReduced() || !(TUNING.jiggle > 0)) return;
+  const v = wobble.v, n = v.length, k = amount * TUNING.jiggle;
+  for(let i = 0; i < n; i++){
+    const d = (i / (n - 1) - u) / width;
+    if(d > -3 && d < 3) v[i] += k * Math.exp(-d * d);
+  }
+  wobble.active = true;
+}
+/* The same, evenly over one whole piece. */
+function kickPiece(index, amount){
+  if(motionReduced() || !(TUNING.jiggle > 0)) return;
+  const p = piecesOf(roll)[index];
+  if(!p) return;
+  const span = nodeSpan(p.u0, p.u1), k = amount * TUNING.jiggle;
+  for(let i = span.lo; i <= span.hi; i++) wobble.v[i] += k;
+  wobble.active = true;
+}
+
+/* A cut squashes the roll where the knife went, tips the two new ends away
+   from each other, and rocks both halves back from the blade. */
+function recoil(index, u){
+  const j = TUNING.jiggle;
+  if(!(j > 0)) return;
+  kick(u, -SCENE.kickCut, SCENE.kickWidth);
+  const pcs = piecesOf(roll);
+  [index, index + 1].forEach((i, side) => {
+    const p = pieces[i], pc = pcs[i];
+    if(!p || !pc) return;
+    const len = (pc.u1 - pc.u0) * SCENE.rollLen;
+    p.tiltV += (side === 0 ? 1 : -1) * SCENE.tipKick * j / Math.sqrt(Math.max(0.5, len) / 2);
+    p.rockV -= SCENE.rockKick * j;
+  });
+}
+
+/* A new roll slides to a stop on the board: it settles with a small squash
+   and leans on the way it was going before rocking back. */
+function arrive(){
+  if(motionReduced() || !(TUNING.jiggle > 0)) return;
+  kickPiece(0, -SCENE.kickArrive);
+  if(pieces[0]) pieces[0].tiltV -= SCENE.tipKick * 0.35 * TUNING.jiggle;
+}
+
 function phaseLength(){
   if(game.phase === 'done') return TUNING.holdMs;
   if(game.phase === 'clear' || game.phase === 'enter') return motionReduced() ? 0 : TUNING.clearMs;
@@ -2066,24 +2507,86 @@ function phaseLength(){
 
 function stepPhase(ms){
   if(game.phase !== 'ready'){
+    const before = game.phaseT;
     game.phaseT += ms;
     if(game.phase === 'done' && !game.gathered && game.phaseT >= TUNING.holdMs * SLICE.gatherAt) gather();
+    if(game.phase === 'done' && game.gathered) landings(before, game.phaseT);
     for(let guard = 0; guard < 4 && game.phase !== 'ready' && game.phaseT >= phaseLength(); guard++){
       game.phaseT -= phaseLength();
       if(game.phase === 'done') game.phase = 'clear';
       else if(game.phase === 'clear'){ game.rolls++; startRoll(); game.phase = 'enter'; }
-      else { game.phase = 'ready'; game.phaseT = 0; armHint(); }
+      else { game.phase = 'ready'; game.phaseT = 0; armHint(); arrive(); }
     }
   }
   gx = groupOffset();
 }
 
-/* The finished roll is shown together: the pieces close up on a plate,
-   imperfect sizes and all. */
+/* The finished roll is shown together: the pieces close up, imperfect sizes
+   and all, and are served on the plate. */
 function gather(){
-  const drawn = pieceRects().map(r => r.x - gx);
+  const drawn = slideLefts();
   game.gathered = true;
   holdInPlace(drawn);
+}
+
+/* Serving happens inside the finished-roll beat, so the pace between rolls
+   is unchanged. From the gather, the pieces hop one after another, the board
+   slides away beneath them, the plate slides in, and they land on it.
+   Reduced motion puts them straight on the plate. */
+function serveTiming(){
+  const at = TUNING.holdMs * SLICE.gatherAt;
+  return { at: at, ms: Math.max(1, (TUNING.holdMs - at) * 0.8) };
+}
+function serveLag(n, ms){ return Math.min(SCENE.staggerMs, ms * 0.4 / Math.max(1, n - 1)); }
+function serveProgress(){
+  if(game.phase === 'clear') return 1;
+  if(game.phase !== 'done' || !game.gathered) return 0;
+  if(motionReduced()) return 1;
+  const st = serveTiming();
+  return clamp01((game.phaseT - st.at) / st.ms);
+}
+/* How far piece i is through its hop, 0 on the board to 1 on the plate. */
+function hopT(i, n){
+  if(game.phase === 'clear') return 1;
+  if(game.phase !== 'done' || !game.gathered) return 0;
+  if(motionReduced()) return 1;
+  const st = serveTiming(), lag = serveLag(n, st.ms);
+  return clamp01((game.phaseT - st.at - lag * i) / (st.ms - lag * (n - 1)));
+}
+function landTime(i, n){
+  const st = serveTiming();
+  return st.at + st.ms - serveLag(n, st.ms) * (n - 1 - i);
+}
+/* A piece that lands on the plate during this step squashes as it lands. */
+function landings(from, to){
+  if(motionReduced()) return;
+  const n = pieces.length;
+  for(let i = 0; i < n; i++){
+    const t = landTime(i, n);
+    if(from < t && to >= t) kickPiece(i, -SCENE.kickLand);
+  }
+}
+function plateTop(){ return SCENE.plate.h - SCENE.board.h; }
+/* The height of piece i's underside: the board's top, the air, the plate's top. */
+function liftOf(i, n){
+  const t = hopT(i, n);
+  if(t <= 0) return 0;
+  return plateTop() * t + (motionReduced() ? 0 : SCENE.hop * 4 * t * (1 - t));
+}
+function easeInOut(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(2 - 2 * t, 2) / 2; }
+
+/* Where the board and the plate are along the counter, or null when out of
+   the scene. Everything flows one way, left to right: a roll arrives on its
+   board, the plate pushes the board out as the pieces are served, and the
+   plate leaves with them. */
+function propsAt(){
+  if(!layout) return { board: 0, plate: null };
+  const g = gx / layout.view.ppw;
+  if(game.phase === 'clear') return { board: null, plate: g };
+  if(game.phase !== 'done' || !game.gathered) return { board: g, plate: null };
+  const span = SCENE.board.w / 2 + 1.15 * layout.W / layout.view.ppw;
+  const e = easeInOut(serveProgress());
+  return { board: e >= 1 ? null : e * span, plate: (e - 1) * span };
 }
 
 function groupOffset(){
@@ -2101,13 +2604,14 @@ function startRoll(){
   game.gathered = false;
   trail = [];
   healing = [];
+  resetWobble();
   relayout();
 }
 
 /* ---------- FRAMES ---------- */
 let frameId = 0;              // the one pending animation frame, or 0
 let lastFrameAt = null;       // null restarts the clock: a pause never counts as time
-const paint = { rects: [], frames: 0 };   // what the last frame painted
+const paint = { rects: [], frames: 0 };   // what the last frame drew, flat and in 3D
 
 function requestFrame(){
   if(frameId || !wired || isPaused() || typeof requestAnimationFrame !== 'function') return;
@@ -2123,15 +2627,25 @@ function onFrame(t){
   const ms = lastFrameAt === null ? 0 : Math.max(0, Math.min(SLICE.maxStepMs, t - lastFrameAt));
   lastFrameAt = t;
   stepMotion(ms);
-  draw();
+  const rects = pieceRects();
+  draw(rects);
+  renderScene(rects, false);
   if(needsFrames()) requestFrame();
   else lastFrameAt = null;
 }
+/* Draw now, outside the frame scheduler: after a pause, a resize or a
+   tuning change. One geometry serves both layers. */
+function paintNow(){
+  const rects = pieceRects();
+  draw(rects);
+  renderScene(rects, true);
+}
 function needsFrames(){
   if(isPaused() || !layout) return false;
-  if(game.phase !== 'ready' || healing.length) return true;
+  if(game.phase !== 'ready' || healing.length || wobble.active) return true;
   if(!motionReduced() && (trail.length || hint.showing)) return true;
-  return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.flashL > 0 || p.flashR > 0);
+  return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
+                          p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
 }
 
 /* ---------- HINT ---------- */
@@ -2157,7 +2671,7 @@ function showHint(){
 }
 
 /* ---------- LIFECYCLE ---------- */
-const pauses = new Set();     // why play is paused: 'hidden', 'tuning'
+const pauses = new Set();     // why play is paused: 'hidden', 'tuning', 'scene'
 function isPaused(){ return pauses.size > 0; }
 
 /* Paused play keeps its place (a finished roll resumes its beat where it
@@ -2167,7 +2681,7 @@ function pausePlay(why){
   endGesture();
   hideHint();
   cancelFrame();
-  draw();
+  paintNow();
 }
 function resumePlay(why){
   if(!pauses.delete(why) || pauses.size) return;
@@ -2177,7 +2691,9 @@ function resumePlay(why){
 
 function onStageResize(){
   const had = !!layout;
-  if(relayout() && had){
+  const changed = relayout();
+  if(!had && layout) armHint();          // a page opened with no size could not arm it
+  if(changed && had){
     /* The roll moved under the finger: a stroke in progress ends, and
        everything in motion comes to rest in the new geometry. */
     endGesture();
@@ -2185,7 +2701,7 @@ function onStageResize(){
     healing = [];
     trail = [];
   }
-  if(isPaused()) draw(); else requestFrame();
+  if(isPaused()) paintNow(); else requestFrame();
 }
 
 function setReducedMotion(on){
@@ -2197,7 +2713,7 @@ function setReducedMotion(on){
     if(!gesture) trail = [];
     gx = groupOffset();
   }
-  if(isPaused()) draw(); else requestFrame();
+  if(isPaused()) paintNow(); else requestFrame();
 }
 
 function announce(text){
@@ -2205,69 +2721,28 @@ function announce(text){
   if(el) el.textContent = text;
 }
 
-/* ---------- DRAWING ---------- */
+/* ---------- HUD ---------- */
+/* The flat layer over the scene: the knife's trail and incision, the guide
+   ticks, the hint and the finished-roll mark. The stage canvas carries it
+   and owns every touch; the 3D canvas beneath takes none. */
 let stageEl = null;
 let ctx2d = null;
 
-function roundRectPath(c, x, y, w, h, r){
-  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
-  c.beginPath();
-  c.moveTo(x + rr, y);
-  c.arcTo(x + w, y, x + w, y + h, rr);
-  c.arcTo(x + w, y + h, x, y + h, rr);
-  c.arcTo(x, y + h, x, y, rr);
-  c.arcTo(x, y, x + w, y, rr);
-  c.closePath();
-}
-
-function draw(){
+function draw(rects){
   if(!ctx2d || !layout) return;
-  const c = ctx2d, L = layout, C = colors;
+  const c = ctx2d, L = layout;
+  const list = rects || pieceRects();
   paint.frames++;
+  paint.rects = list;
   c.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
   c.globalAlpha = 1;
-  c.fillStyle = C.ground;
-  c.fillRect(0, 0, L.W, L.H);
-  c.fillStyle = C.counter;
-  roundRectPath(c, L.area.x, L.mid - L.T * 0.95, L.area.w, L.T * 1.9, 18);
-  c.fill();
-  const rects = pieceRects();
-  paint.rects = rects;
-  if(game.gathered) drawPlate(c, rects);
-  rects.forEach((r, i) => drawPiece(c, r, pieces[i] || newPieceState()));
-  if(game.phase === 'ready') drawGuides(c, rects);
-  drawIncisions(c, rects);
+  c.clearRect(0, 0, L.W, L.H);
+  if(view3d.status !== 'ready') return;          // no marks over food that is not on screen
+  if(game.phase === 'ready') drawGuides(c, list);
+  drawIncisions(c, list);
   drawTrail(c);
-  if(game.gathered) drawDoneMark(c, rects);
-  if(hint.showing && game.phase === 'ready' && !gesture) drawHint(c, rects);
-}
-
-function drawPiece(c, r, s){
-  const C = colors;
-  c.globalAlpha = 1;
-  c.fillStyle = C.roll;
-  roundRectPath(c, r.x, r.y, r.w, r.h, Math.min(10, r.w / 3, r.h / 4));
-  c.fill();
-  /* A cut face shows the inside of the roll. A fresh one is lit briefly, so
-     a cut reads as done even with no motion at all. */
-  c.save();
-  c.clip();
-  const face = Math.max(2, Math.min(6, r.w * 0.18));
-  if(r.u0 > 0) drawFace(c, r.x, r.y, face, r.h, s.flashL);
-  if(r.u1 < 1) drawFace(c, r.x + r.w - face, r.y, face, r.h, s.flashR);
-  c.restore();
-}
-function drawFace(c, x, y, w, h, flash){
-  const C = colors;
-  c.globalAlpha = 1;
-  c.fillStyle = C.cut;
-  c.fillRect(x, y, w, h);
-  if(flash > 0){
-    c.globalAlpha = motionReduced() ? 1 : Math.min(1, flash / SLICE.flashMs);
-    c.fillStyle = C.flash;
-    c.fillRect(x, y, w, h);
-    c.globalAlpha = 1;
-  }
+  if(game.gathered && serveProgress() >= 0.7) drawDoneMark(c, list);
+  if(hint.showing && game.phase === 'ready' && !gesture) drawHint(c, list);
 }
 
 /* Subtle ticks above and below the roll, only where a cut can still go. */
@@ -2276,7 +2751,7 @@ function drawGuides(c, rects){
   const tick = Math.max(6, L.T * 0.14);
   c.globalAlpha = 1;
   c.strokeStyle = C.guide;
-  c.lineWidth = 2;
+  c.lineWidth = 3;
   c.lineCap = 'round';
   freeGuides(roll).forEach(g => {
     const r = rects.find(q => g > q.u0 && g < q.u1);
@@ -2291,7 +2766,7 @@ function drawGuides(c, rects){
 }
 
 /* The knife's line through the food: live while it is in, closing when a
-   pass ends without a cut. Drawn only inside pieces, never in a gap. */
+   pass ends without a cut. Drawn only over pieces, never in a gap. */
 function drawIncisions(c, rects){
   const g = gesture;
   const live = g && !g.spent && g.visit && !g.visit.dead ? g.visit : null;
@@ -2317,33 +2792,25 @@ function drawIncisions(c, rects){
   c.globalAlpha = 1;
 }
 
+/* The blade's swoosh: a soft dark edge under a light stroke, so it reads
+   over the dark nori and the light wood alike. */
 function drawTrail(c){
   if(trail.length < 2) return;
   const C = colors;
-  c.strokeStyle = C.blade;
   c.lineCap = 'round';
-  for(let i = 1; i < trail.length; i++){
-    const a = trail[i - 1], b = trail[i];
-    if(a.s !== b.s) continue;
-    const life = motionReduced() ? 1 : Math.max(0, 1 - b.age / SLICE.trailMs);
-    if(life <= 0) continue;
-    c.globalAlpha = life;
-    c.lineWidth = 2 + 5 * life;
-    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
-  }
+  [[C.bladeEdge, 4], [C.blade, 0]].forEach(pass => {
+    c.strokeStyle = pass[0];
+    for(let i = 1; i < trail.length; i++){
+      const a = trail[i - 1], b = trail[i];
+      if(a.s !== b.s) continue;
+      const life = motionReduced() ? 1 : Math.max(0, 1 - b.age / SLICE.trailMs);
+      if(life <= 0) continue;
+      c.globalAlpha = life;
+      c.lineWidth = 2 + 5 * life + pass[1];
+      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+    }
+  });
   c.globalAlpha = 1;
-}
-
-function drawPlate(c, rects){
-  if(!rects.length) return;
-  const L = layout, C = colors;
-  const x0 = rects[0].x, x1 = rects[rects.length - 1].x + rects[rects.length - 1].w;
-  const pad = Math.min(L.T * 0.3, Math.max(0, (L.area.w - (x1 - x0)) / 2));
-  c.globalAlpha = 1;
-  c.fillStyle = C.plate;
-  c.beginPath();
-  c.ellipse((x0 + x1) / 2, L.bot - L.T * 0.02, (x1 - x0) / 2 + pad, L.T * 0.26, 0, 0, Math.PI * 2);
-  c.fill();
 }
 
 /* The finished roll is marked with a shape as well as a colour. */
@@ -2353,6 +2820,8 @@ function drawDoneMark(c, rects){
   const x0 = rects[0].x, x1 = rects[rects.length - 1].x + rects[rects.length - 1].w;
   const cx = (x0 + x1) / 2, cy = L.top - L.T * 0.55, r = L.T * 0.2;
   c.globalAlpha = 1;
+  c.fillStyle = C.doneDisc;
+  c.beginPath(); c.arc(cx, cy, r * 1.25, 0, Math.PI * 2); c.fill();
   c.strokeStyle = C.done;
   c.lineWidth = Math.max(3, L.T * 0.05);
   c.lineCap = 'round';
@@ -2373,21 +2842,22 @@ function drawHint(c, rects){
   const x = xAt(r, target.u);
   const y0 = L.top - L.T * 0.75, y1 = L.bot + L.T * 0.45;
   const dot = Math.max(12, L.T * 0.15);
-  c.strokeStyle = C.hint;
-  c.fillStyle = C.hint;
   c.lineCap = 'round';
   c.lineJoin = 'round';
   if(motionReduced()){
     /* A still picture of the same swipe: where to start, the path, the way. */
-    c.globalAlpha = 1;
-    c.lineWidth = 3;
-    c.setLineDash([6, 8]);
-    c.beginPath(); c.moveTo(x, y0 + dot); c.lineTo(x, y1 - dot * 0.6); c.stroke();
-    c.setLineDash([]);
-    c.beginPath(); c.arc(x, y0, dot, 0, Math.PI * 2); c.stroke();
-    c.beginPath();
-    c.moveTo(x - dot * 0.7, y1 - dot * 0.9); c.lineTo(x, y1); c.lineTo(x + dot * 0.7, y1 - dot * 0.9);
-    c.stroke();
+    [[C.hudShade, 6], [C.hint, 3]].forEach(pass => {
+      c.globalAlpha = 1;
+      c.strokeStyle = pass[0];
+      c.lineWidth = pass[1];
+      c.setLineDash([6, 8]);
+      c.beginPath(); c.moveTo(x, y0 + dot); c.lineTo(x, y1 - dot * 0.6); c.stroke();
+      c.setLineDash([]);
+      c.beginPath(); c.arc(x, y0, dot, 0, Math.PI * 2); c.stroke();
+      c.beginPath();
+      c.moveTo(x - dot * 0.7, y1 - dot * 0.9); c.lineTo(x, y1); c.lineTo(x + dot * 0.7, y1 - dot * 0.9);
+      c.stroke();
+    });
     return;
   }
   const t = (hint.t % (SLICE.hintMoveMs + SLICE.hintRestMs)) / SLICE.hintMoveMs;
@@ -2396,11 +2866,813 @@ function drawHint(c, rects){
   const y = y0 + (y1 - y0) * e;
   const fade = Math.min(1, t * 6, (1 - t) * 6);
   c.globalAlpha = 0.55 * fade;
+  c.strokeStyle = C.hint;
   c.lineWidth = 4;
   c.beginPath(); c.moveTo(x, y0); c.lineTo(x, y); c.stroke();
   c.globalAlpha = fade;
-  c.beginPath(); c.arc(x, y, dot, 0, Math.PI * 2); c.fill();
+  c.fillStyle = C.hint;
+  c.strokeStyle = C.hudShade;
+  c.lineWidth = 2;
+  c.beginPath(); c.arc(x, y, dot, 0, Math.PI * 2); c.fill(); c.stroke();
   c.globalAlpha = 1;
+}
+
+/* ---------- SCENE (3D) ---------- */
+/* The counter, the board, the roll and the plate, drawn with Three.js.
+   The library is the one file this app loads rather than carries inline:
+   lib/three holds the unmodified Three.js build, served from this app's
+   own folder and precached by the service worker for offline play. Every
+   line that uses it is here, in this script, where the contracts can see it.
+
+   The scene draws; it decides nothing. Each piece is placed from
+   pieceRects(), and play waits (the 'scene' pause) until the scene has
+   drawn once, so the knife never meets food that is not on screen. */
+const THREE_URL = './lib/three/three.module.js';
+const LOAD_NOTE = 'The kitchen could not load. The first visit needs a connection, and iPhone or iPad needs iOS 16.4 or newer.';
+let THREE = null;             // the library, once it has loaded
+let sceneEl = null;           // the WebGL canvas, beneath the stage
+const view3d = {
+  status: 'idle',             // idle, loading, ready, lost (waiting for the GPU), unavailable
+  why: '',                    // for a grown-up, when it is unavailable
+  renderer: null, scene: null, camera: null,
+  kit: null,                  // textures, materials and shapes every roll shares
+  props: null,                // the counter, the board, the plate and their shadows
+  pieceGroup: null,
+  views: [],                  // one per piece, in the order of piecesOf(roll)
+  bent: false,                // the pieces' vertices are away from rest
+  stale: true,                // the last frame drawn no longer shows the scene
+  ratio: 1, size: '',         // the drawing buffer's pixel ratio and size, as last set
+  losses: 0, rebuilds: 0, timer: 0, renders: 0,
+  made: { geometries: 0, materials: 0 },    // per-piece resources, created ...
+  freed: { geometries: 0, materials: 0 }    // ... and disposed
+};
+
+function loadScene(){
+  if(view3d.status !== 'idle') return;
+  view3d.status = 'loading';
+  showSceneStatus();
+  pausePlay('scene');
+  if(!sceneEl){ sceneUnavailable('There is no canvas to draw the kitchen on.'); return; }
+  let pending = null;
+  try{ pending = import(THREE_URL); }
+  catch(e){ pending = null; }
+  if(!pending || typeof pending.then !== 'function'){
+    sceneUnavailable(LOAD_NOTE);
+    return;
+  }
+  /* It fails offline on a first visit, before anything is cached, and on a
+     browser too old to read it (Safari before 16.4). */
+  pending.then(onThreeLoaded, err => sceneUnavailable(LOAD_NOTE, err));
+}
+
+function onThreeLoaded(ns){
+  if(view3d.status !== 'loading') return;
+  try{
+    THREE = ns;
+    if(!makeRenderer()) return;
+    buildWorld();
+    sceneReady();
+  }catch(e){
+    sceneUnavailable('The kitchen could not be built on this device.', e);
+  }
+}
+
+function makeRenderer(){
+  /* Read here, not left to the layout: a page opened in a background tab
+     has no size yet, and so no layout, but it still needs its colours. */
+  colors = readColors();
+  try{
+    view3d.renderer = new THREE.WebGLRenderer({ canvas: sceneEl, antialias: true, alpha: false,
+                                                powerPreference: 'default', preserveDrawingBuffer: false });
+  }catch(e){
+    view3d.renderer = null;
+    sceneUnavailable('This device could not start 3D drawing.', e);
+    return false;
+  }
+  const r = view3d.renderer;
+  /* After the renderer's own listeners, so on a restore Three.js has rebuilt
+     its GPU state before this app draws with it. */
+  watchCanvas(sceneEl);
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  r.toneMapping = THREE.NeutralToneMapping;
+  r.toneMappingExposure = 1;
+  r.setClearColor(new THREE.Color(colors.sky), 1);
+  view3d.size = '';
+  return true;
+}
+
+function sceneReady(){
+  view3d.status = 'ready';
+  showSceneStatus();
+  applyView();
+  renderScene(null, true);
+  resumePlay('scene');
+}
+
+function dropRenderer(){
+  const r = view3d.renderer;
+  view3d.renderer = null;
+  if(r){ try{ r.dispose(); }catch(e){} }
+}
+
+/* The GPU can take the context away at any time: a phone short of memory,
+   a driver reset, the app sent to the background. The browser is asked
+   for it back and play waits. If it does not come back, a fresh renderer
+   on a fresh canvas is tried, a bounded number of times, and after that
+   the scene says it is unavailable rather than freezing or going blank. */
+function watchCanvas(el){
+  el.addEventListener('webglcontextlost', onSceneLost);
+  el.addEventListener('webglcontextrestored', onSceneRestored);
+}
+function unwatchCanvas(el){
+  el.removeEventListener('webglcontextlost', onSceneLost);
+  el.removeEventListener('webglcontextrestored', onSceneRestored);
+}
+function onSceneLost(ev){
+  if(ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+  if(view3d.status !== 'ready') return;
+  view3d.status = 'lost';
+  view3d.losses++;
+  showSceneStatus();
+  pausePlay('scene');
+  clearTimeout(view3d.timer);
+  view3d.timer = setTimeout(recoverScene, SCENE.recoverMs);
+}
+function onSceneRestored(){
+  if(view3d.status !== 'lost') return;
+  clearTimeout(view3d.timer);
+  view3d.timer = 0;
+  view3d.size = '';                   // a restored context starts with a fresh drawing buffer
+  sceneReady();
+}
+function recoverScene(){
+  view3d.timer = 0;
+  if(view3d.status !== 'lost') return;
+  if(view3d.rebuilds >= SCENE.rebuilds){
+    sceneUnavailable('3D drawing stopped on this device and did not come back.');
+    return;
+  }
+  view3d.rebuilds++;
+  dropRenderer();
+  freshCanvas();
+  if(makeRenderer()) sceneReady();
+}
+/* A lost context cannot be asked for again on the same canvas. */
+function freshCanvas(){
+  const old = sceneEl;
+  const el = document.createElement('canvas');
+  el.className = old ? old.className : 'scene';
+  el.id = old ? old.id : 'scene';
+  el.setAttribute('aria-hidden', 'true');
+  if(old){
+    unwatchCanvas(old);
+    if(old.parentNode && typeof old.parentNode.replaceChild === 'function') old.parentNode.replaceChild(el, old);
+  }
+  sceneEl = el;
+}
+
+function sceneUnavailable(why, err){
+  /* Said out loud for whoever is debugging; the screen says it plainly. */
+  if(err) console.warn('The 3D scene is unavailable:', err);
+  view3d.status = 'unavailable';
+  view3d.why = why;
+  clearTimeout(view3d.timer);
+  view3d.timer = 0;
+  dropRenderer();
+  showSceneStatus();
+  if(!pauses.has('scene')) pausePlay('scene');
+  announce('The kitchen cannot be shown right now. ' + why);
+}
+
+/* A grown-up's way back. A library that could not load is remembered by the
+   browser as missing, so that retry is a fresh page; otherwise a new
+   renderer is tried on a fresh canvas. */
+function retryScene(){
+  if(view3d.status !== 'unavailable') return;
+  if(!THREE){ location.reload(); return; }
+  view3d.rebuilds = 0;
+  view3d.status = 'loading';
+  showSceneStatus();
+  freshCanvas();
+  if(!makeRenderer()) return;
+  try{ buildWorld(); sceneReady(); }
+  catch(e){ sceneUnavailable('The kitchen could not be built on this device.', e); }
+}
+
+/* While the scene loads or waits for the GPU a spinner shows; if it is
+   unavailable, a short note for a grown-up and a button to try again. */
+function showSceneStatus(){
+  const s = view3d.status;
+  const view = document.getElementById('view-play');
+  if(view) view.setAttribute('data-scene', s);      // the canvas shows only when it has something to show
+  const box = document.getElementById('sceneStatus');
+  if(!box) return;
+  box.hidden = s === 'ready';
+  box.setAttribute('data-state', s);
+  const note = document.getElementById('sceneNote');
+  if(note) note.textContent = s === 'unavailable' ? view3d.why : '';
+  const retry = document.getElementById('sceneRetry');
+  if(retry){
+    retry.hidden = s !== 'unavailable';
+    if(!retry.innerHTML) retry.innerHTML = retryIcon(24);
+  }
+}
+function retryIcon(s){ return svg('<path d="M13.3 8.6A5.3 5.3 0 1 1 11.6 4"/><path d="M11.9 1.3v2.9H9"/>', s); }
+
+/* The 3D camera, pointed exactly as the layout's camera, and a drawing
+   buffer with the screen's pixels — capped by a budget, so a big tablet
+   does not draw more than it needs. */
+function applyView(){
+  if(view3d.status !== 'ready' || !layout || !view3d.camera || !view3d.renderer) return;
+  const L = layout, v = L.view, cam = view3d.camera;
+  const fullW = 2 * Math.max(v.px0, L.W - v.px0), fullH = 2 * Math.max(v.py0, L.H - v.py0);
+  cam.fov = 2 * Math.atan(fullH / 2 / v.F) * 180 / Math.PI;
+  cam.aspect = fullW / fullH;
+  cam.position.set(0, v.cy, v.cz);
+  cam.up.set(0, 1, 0);
+  cam.lookAt(0, v.ay, 0);
+  cam.setViewOffset(fullW, fullH, fullW / 2 - v.px0, fullH / 2 - v.py0, L.W, L.H);
+  cam.updateMatrixWorld();
+  const ratio = sceneRatio(L.W, L.H), size = L.W + 'x' + L.H + '@' + ratio;
+  if(size !== view3d.size){
+    view3d.renderer.setPixelRatio(ratio);
+    view3d.renderer.setSize(L.W, L.H, false);
+    view3d.size = size;
+    view3d.ratio = ratio;
+  }
+  view3d.stale = true;
+}
+function sceneRatio(W, H){
+  const dpr = Math.min(SCENE.maxDpr, Math.max(1, Number(window.devicePixelRatio) || 1));
+  const fit = Math.sqrt(SCENE.pixelBudget / Math.max(1, W * H));
+  return Math.max(0.75, Math.min(dpr, fit));
+}
+
+/* Everything that outlives a roll, built once. It survives a renderer
+   rebuild: the new renderer simply uploads it again. */
+function buildWorld(){
+  if(view3d.scene) return;
+  const T3 = THREE, C = colors;
+  const scene = new T3.Scene();
+  scene.fog = new T3.Fog(new T3.Color(C.sky), SCENE.distance + 6, SCENE.distance + 46);
+  const camera = new T3.PerspectiveCamera(30, 1, 0.5, 140);
+  const sky = new T3.HemisphereLight(new T3.Color(C.skyLight), new T3.Color(C.groundLight), 1.25);
+  const key = new T3.DirectionalLight(new T3.Color(C.keyLight), 2.6);
+  key.position.set(-5, 9, 7);
+  const fill = new T3.DirectionalLight(new T3.Color(C.fillLight), 0.55);
+  fill.position.set(6, 3, 5);
+  const rim = new T3.DirectionalLight(new T3.Color(C.keyLight), 1.4);
+  rim.position.set(2, 6, -8);
+  scene.add(sky, key, fill, rim);
+  view3d.scene = scene;
+  view3d.camera = camera;
+  view3d.kit = makeKit(C);
+  view3d.props = makeProps();
+  Object.keys(view3d.props).forEach(k => scene.add(view3d.props[k]));
+  view3d.pieceGroup = new T3.Group();
+  scene.add(view3d.pieceGroup);
+}
+
+/* The shared textures, materials and the shadow's shape. Nothing here is
+   made again for a new roll. */
+function makeKit(C){
+  const T3 = THREE, caps = view3d.renderer.capabilities;
+  const aniso = Math.max(1, Math.min(4, caps && typeof caps.getMaxAnisotropy === 'function' ? caps.getMaxAnisotropy() : 1));
+  const nori = noriTextures(C), cap = capTextures(C);
+  const wood = woodTexture(C), counter = counterTexture(C), blob = shadowTexture();
+  wood.anisotropy = counter.anisotropy = aniso;
+  wood.repeat.set(1 / SCENE.board.w, 1 / SCENE.board.d);
+  wood.offset.set(0.5, 0.5);
+  counter.repeat.set(16, 16);
+  const blobGeo = new T3.PlaneGeometry(1, 1);
+  blobGeo.rotateX(-Math.PI / 2);
+  return {
+    textures: [nori.colour, nori.surface, cap.colour, cap.surface, wood, counter, blob],
+    nori: new T3.MeshStandardMaterial({ map: nori.colour, bumpMap: nori.surface, bumpScale: 1.4,
+                                        roughnessMap: nori.surface, roughness: 1, metalness: 0 }),
+    cap: new T3.MeshStandardMaterial({ map: cap.colour, bumpMap: cap.surface, bumpScale: 2,
+                                       roughnessMap: cap.surface, roughness: 1, metalness: 0,
+                                       emissive: new T3.Color(C.flash), emissiveIntensity: 0 }),
+    wood: new T3.MeshStandardMaterial({ map: wood, roughness: 0.72, metalness: 0 }),
+    counter: new T3.MeshStandardMaterial({ map: counter, roughness: 0.9, metalness: 0 }),
+    plate: new T3.MeshStandardMaterial({ color: new T3.Color(C.plate), roughness: 0.5, metalness: 0 }),
+    shadow: new T3.MeshBasicMaterial({ color: new T3.Color(C.shadow), alphaMap: blob, transparent: true,
+                                       depthWrite: false, opacity: 0.6, fog: false }),
+    blobGeo: blobGeo
+  };
+}
+
+function makeProps(){
+  const T3 = THREE, K = view3d.kit, B = SCENE.board, P = SCENE.plate;
+  const counterGeo = new T3.PlaneGeometry(100, 100);
+  counterGeo.rotateX(-Math.PI / 2);
+  const counter = new T3.Mesh(counterGeo, K.counter);
+  counter.position.y = -B.h;
+  const board = new T3.Mesh(slab(B.w, B.d, B.h, B.round, B.bevel), K.wood);
+  const plate = new T3.Mesh(slab(P.w, P.d, P.h, P.round, P.bevel), K.plate);
+  plate.position.y = plateTop();
+  const boardShadow = blobMesh(0.6);
+  boardShadow.scale.set(B.w + 1.3, 1, B.d + 1.3);
+  boardShadow.position.y = -B.h + 0.006;
+  const plateShadow = blobMesh(0.5);
+  plateShadow.scale.set(P.w + 1.1, 1, P.d + 1.1);
+  plateShadow.position.y = -B.h + 0.006;
+  return { counter: counter, boardShadow: boardShadow, board: board, plateShadow: plateShadow, plate: plate };
+}
+
+/* A soft contact shadow: a blurred blob under something, instead of a
+   shadow map, which would cost far more to draw. */
+function blobMesh(opacity){
+  const m = new THREE.Mesh(view3d.kit.blobGeo, view3d.kit.shadow.clone());
+  m.material.opacity = opacity;
+  m.renderOrder = 1;
+  return m;
+}
+
+/* A thick rounded rectangle with softly bevelled edges, lying flat with its
+   top at y = 0: the board, and the plate. */
+function slab(w, d, h, round, bevel){
+  const T3 = THREE, s = new T3.Shape();
+  const x = w / 2 - bevel, y = d / 2 - bevel, r = Math.min(round, x, y);
+  s.moveTo(-x + r, -y);
+  s.lineTo(x - r, -y); s.quadraticCurveTo(x, -y, x, -y + r);
+  s.lineTo(x, y - r); s.quadraticCurveTo(x, y, x - r, y);
+  s.lineTo(-x + r, y); s.quadraticCurveTo(-x, y, -x, y - r);
+  s.lineTo(-x, -y + r); s.quadraticCurveTo(-x, -y, -x + r, -y);
+  const g = new T3.ExtrudeGeometry(s, { depth: Math.max(0.01, h - 2 * bevel), bevelEnabled: true,
+    bevelThickness: bevel, bevelSize: bevel, bevelSegments: 4, curveSegments: 8 });
+  g.rotateX(-Math.PI / 2);
+  g.computeBoundingBox();
+  g.translate(0, -g.boundingBox.max.y, 0);
+  return g;
+}
+
+/* ---------- textures, worked out from the colour tokens ---------- */
+/* Every texture is computed pixel by pixel from the design tokens and a
+   seeded pattern: the same on every device, and nothing to download. It
+   belongs to its material, so it moves and squashes with the food. Colour
+   maps are sRGB; a surface map carries its bump in red and its roughness
+   in green, the channels Three.js reads them from.
+
+   These loops run a quarter of a million times each, so they keep the
+   helpers they call in local names rather than looking them up every
+   pixel. */
+function rgbOf(value){
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(value || '').trim());
+  if(!m) throw new Error('A scene colour token is not a hex colour: ' + value);
+  const h = m[1].length === 3 ? m[1].replace(/./g, ch => ch + ch) : m[1];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function mixRgb(a, b, t, out){
+  out[0] = a[0] + (b[0] - a[0]) * t;
+  out[1] = a[1] + (b[1] - a[1]) * t;
+  out[2] = a[2] + (b[2] - a[2]) * t;
+  return out;
+}
+function seeded(seed){
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/* Smooth value noise over the unit square, tiling at its edges, with px by
+   py cells: more cells across than down stretches it into streaks. */
+function valueNoise(seed, px, py){
+  const r = seeded(seed), g = new Float32Array(px * py), floor = Math.floor;
+  for(let i = 0; i < g.length; i++) g[i] = r();
+  return (u, v) => {
+    const x = u * px, y = v * py, xi = floor(x), yi = floor(y);
+    const fx = x - xi, fy = y - yi, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const x0 = ((xi % px) + px) % px, x1 = (x0 + 1) % px;
+    const y0 = (((yi % py) + py) % py) * px, y1 = ((((yi + 1) % py) + py) % py) * px;
+    const a = g[y0 + x0], b = g[y0 + x1], c = g[y1 + x0], d = g[y1 + x1];
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  };
+}
+function layeredNoise(seed, px, py, octaves){
+  const layers = [];
+  for(let o = 0; o < octaves; o++) layers.push(valueNoise(seed + o * 101, px << o, py << o));
+  return (u, v) => {
+    let sum = 0, amp = 0.5, norm = 0;
+    for(let o = 0; o < layers.length; o++){ sum += layers[o](u, v) * amp; norm += amp; amp *= 0.5; }
+    return sum / norm;
+  };
+}
+function dataTexture(data, w, h, srgb){
+  const T3 = THREE, t = new T3.DataTexture(data, w, h, T3.RGBAFormat);
+  t.colorSpace = srgb ? T3.SRGBColorSpace : T3.NoColorSpace;
+  t.wrapS = t.wrapT = T3.RepeatWrapping;
+  t.magFilter = T3.LinearFilter;
+  t.minFilter = T3.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
+}
+/* Paint w × h pixels: a colour map, and with `surface` a surface map too.
+   Values are clamped to bytes here, so a painter may overshoot. */
+function paintTextures(w, h, surface, pixel){
+  const colour = new Uint8Array(w * h * 4), bumps = surface ? new Uint8Array(w * h * 4) : null;
+  const c = [0, 0, 0], s = [0, 0];
+  const byte = x => x < 0 ? 0 : x > 255 ? 255 : x;
+  for(let y = 0; y < h; y++){
+    const v = (y + 0.5) / h;
+    for(let x = 0; x < w; x++){
+      pixel((x + 0.5) / w, v, c, s);
+      const i = (y * w + x) * 4;
+      colour[i] = byte(c[0]); colour[i + 1] = byte(c[1]); colour[i + 2] = byte(c[2]); colour[i + 3] = 255;
+      if(bumps){ bumps[i] = byte(s[0]); bumps[i + 1] = byte(s[1]); bumps[i + 3] = 255; }
+    }
+  }
+  return { colour: colour, surface: bumps };
+}
+
+/* The nori: dark green, mostly matte, with a soft sheen. Gently mottled at
+   a large scale and finely grained, both low in contrast, so it reads as
+   pressed seaweed rather than as stripes or seeds. It tiles both ways, so
+   the wrap has no seam. */
+function noriTextures(C){
+  const base = rgbOf(C.nori), dark = rgbOf(C.noriDark), light = rgbOf(C.noriLight), mix = mixRgb;
+  const mottle = layeredNoise(3, 3, 3, 4), grain = layeredNoise(5, 40, 40, 2);
+  const tmp = [0, 0, 0], N = 256;
+  const px = paintTextures(N, N, true, (u, v, c, s) => {
+    const m = mottle(u, v), g = grain(u, v);
+    mix(base, m > 0.5 ? light : dark, (m > 0.5 ? m - 0.5 : 0.5 - m) * 0.9, tmp);
+    const k = 0.965 + 0.07 * g;
+    c[0] = tmp[0] * k; c[1] = tmp[1] * k; c[2] = tmp[2] * k;
+    s[0] = 118 + 50 * g + 20 * m;
+    s[1] = 110 + 50 * m;
+  });
+  return { colour: dataTexture(px.colour, N, N, true), surface: dataTexture(px.surface, N, N, false) };
+}
+
+/* Rice grains on a jittered grid, for the cut face. */
+function riceGrains(cell, seed){
+  const r = seeded(seed), cols = Math.ceil(2.4 / cell), list = [];
+  for(let gy = 0; gy < cols; gy++){
+    for(let gx2 = 0; gx2 < cols; gx2++){
+      const ang = r() * Math.PI;
+      list.push({ x: -1.2 + (gx2 + 0.2 + r() * 0.6) * cell, y: -1.2 + (gy + 0.2 + r() * 0.6) * cell,
+                  c: Math.cos(ang), s: Math.sin(ang),
+                  len: cell * (0.62 + r() * 0.12), wid: cell * (0.36 + r() * 0.06), tone: r() });
+    }
+  }
+  return { cell: cell, cols: cols, list: list, e: 9, tone: 0 };
+}
+/* Find the grain nearest (a, b): afterwards G.e below 1 means inside it. */
+function grainFinder(G){
+  const floor = Math.floor, cell = G.cell, cols = G.cols, list = G.list;
+  return (a, b) => {
+    const cx = floor((a + 1.2) / cell), cy = floor((b + 1.2) / cell);
+    G.e = 9;
+    for(let dy = -1; dy <= 1; dy++){
+      const y = cy + dy;
+      if(y < 0 || y >= cols) continue;
+      for(let dx = -1; dx <= 1; dx++){
+        const x = cx + dx;
+        if(x < 0 || x >= cols) continue;
+        const g = list[y * cols + x];
+        const px = a - g.x, py = b - g.y;
+        const p = (px * g.c + py * g.s) / g.len, q = (py * g.c - px * g.s) / g.wid;
+        const e = p * p + q * q;
+        if(e < G.e){ G.e = e; G.tone = g.tone; }
+      }
+    }
+  };
+}
+
+/* The inside of the roll, as every cut face shows it: a thin ring of nori,
+   soft rice with a restrained grain, and a core of salmon with its pale
+   stripes and a gentle sheen. Mapped so the disc fills each face exactly. */
+function capTextures(C){
+  const m = SCENE.squareness, N = 256;
+  const nori = rgbOf(C.nori), noriDark = rgbOf(C.noriDark);
+  const rice = rgbOf(C.rice), riceShade = rgbOf(C.riceShade), riceLight = rgbOf(C.riceLight);
+  const salmon = rgbOf(C.salmon), deep = rgbOf(C.salmonDeep), fat = rgbOf(C.salmonFat);
+  const grains = riceGrains(0.11, 17), findGrain = grainFinder(grains);
+  const wiggle = valueNoise(21, 6, 6), tint = valueNoise(23, 12, 12);
+  const mix = mixRgb, pow = Math.pow, abs = Math.abs, sqrt = Math.sqrt, round = Math.round, sin = Math.sin;
+  const clamp = x => x < 0 ? 0 : x > 1 ? 1 : x;
+  const tmp = [0, 0, 0];
+  const px = paintTextures(N, N, true, (u, v, c, s) => {
+    const a = u * 2 - 1, b = v * 2 - 1;
+    const rho = pow(pow(abs(a), m) + pow(abs(b), m), 1 / m);
+    if(rho > 0.955){
+      mix(nori, noriDark, 0.3 + 0.3 * wiggle(u, v), c);
+      s[0] = 128; s[1] = 170;
+      return;
+    }
+    const ca = (a - 0.02) / 0.34, cb = (b - 0.07) / 0.31;
+    const core = pow(pow(abs(ca), 3.2) + pow(abs(cb), 3.2), 1 / 3.2) + 0.07 * (wiggle(u, v) - 0.5);
+    if(core < 1){
+      const st = (ca * 0.72 + cb * 0.69) * 2.6 + 0.3 * sin(cb * 2.8 + 0.9);
+      const d = abs(st - round(st));
+      const fatAmt = clamp((0.11 - d) / 0.07) * 0.78;
+      mix(salmon, fat, fatAmt, tmp);
+      mix(tmp, deep, clamp((core - 0.7) / 0.3) * 0.45 + (tint(u, v) - 0.5) * 0.2, c);
+      s[0] = 150 - 40 * fatAmt;
+      s[1] = 92 + 60 * fatAmt;
+      return;
+    }
+    findGrain(a, b);
+    if(grains.e < 1){
+      const dome = sqrt(1 - grains.e);
+      mix(rice, riceLight, 0.25 + 0.5 * dome * (0.6 + 0.4 * grains.tone), c);
+      s[0] = 110 + 120 * dome;
+      s[1] = 214;
+    } else {
+      mix(rice, riceShade, 0.55, c);
+      s[0] = 72;
+      s[1] = 232;
+    }
+    const nearNori = clamp((rho - 0.8) / 0.155), nearCore = clamp(1 - (core - 1) / 0.12);
+    mix(c, riceShade, 0.35 * nearNori * nearNori + 0.3 * nearCore * nearCore, c);
+  });
+  return { colour: dataTexture(px.colour, N, N, true), surface: dataTexture(px.surface, N, N, false) };
+}
+
+/* The board's wood: grain lines along its length, gently wavering. */
+function woodTexture(C){
+  const wood = rgbOf(C.wood), grain = rgbOf(C.grain), mix = mixRgb, abs = Math.abs, round = Math.round;
+  const warp = layeredNoise(31, 3, 2, 3), fine = valueNoise(37, 96, 24);
+  const px = paintTextures(512, 256, false, (u, v, c) => {
+    const t = v * 13 + warp(u, v) * 2.2;
+    const line = 1 - abs(t - round(t)) / 0.13;
+    mix(wood, grain, (line > 0 ? line * 0.55 : 0) + (fine(u, v) - 0.5) * 0.12, c);
+  });
+  return dataTexture(px.colour, 512, 256, true);
+}
+
+/* The counter: warm and plain, softly mottled, with a few specks. */
+function counterTexture(C){
+  const base = rgbOf(C.counter), speck = rgbOf(C.speck), mix = mixRgb;
+  const soft = layeredNoise(41, 4, 4, 3), dots = valueNoise(43, 64, 64);
+  const px = paintTextures(256, 256, false, (u, v, c) => {
+    const g = 0.95 + 0.1 * soft(u, v), d = dots(u, v);
+    c[0] = base[0] * g; c[1] = base[1] * g; c[2] = base[2] * g;
+    if(d > 0.9) mix(c, speck, (d - 0.9) * 4, c);
+  });
+  return dataTexture(px.colour, 256, 256, true);
+}
+
+/* A soft, rounded blob for contact shadows: its green channel is the alpha. */
+function shadowTexture(){
+  const pow = Math.pow, abs = Math.abs;
+  const px = paintTextures(64, 64, false, (u, v, c) => {
+    const a = abs(u * 2 - 1), b = abs(v * 2 - 1);
+    const r = 1 - pow(pow(a, 3) + pow(b, 3), 1 / 3);
+    c[0] = c[1] = c[2] = r > 0 ? 255 * pow(r, 1.25) : 0;
+  });
+  const t = dataTexture(px.colour, 64, 64, false);
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}
+
+/* ---------- the roll's pieces ---------- */
+/* Each piece is built from its own share of the roll: the nori round it,
+   rounded softly where it ends, and a face at each end showing the rice
+   and salmon inside, so every piece is solid, never a hollow tube. Its
+   vertices remember where along the roll they sit, so the jiggle can
+   squash them, and the faces share their rim with the nori exactly. */
+
+/* Each roll is a little different: its girth wanders gently along it, from
+   a pattern seeded by the roll, so the pieces of one roll still line up. */
+function lumpsFor(id){
+  const r = seeded(id * 7919 + 13);
+  const a1 = SCENE.lumps * (0.6 + 0.4 * r()), a2 = SCENE.lumps * 0.5 * r();
+  const f1 = 1 + r(), f2 = 2.5 + 2 * r(), p1 = r() * Math.PI * 2, p2 = r() * Math.PI * 2;
+  return u => 1 + a1 * Math.sin(Math.PI * 2 * f1 * u + p1) + a2 * Math.sin(Math.PI * 2 * f2 * u + p2);
+}
+
+/* The cross-section's points and outward normals, once. */
+let ringCache = null;
+function profileRing(){
+  if(ringCache) return ringCache;
+  const S = SCENE.segments, out = [];
+  for(let j = 0; j <= S; j++){
+    const t = j / S * Math.PI * 2, p = profilePoint(t);
+    const a = profilePoint(t - 1e-4), b = profilePoint(t + 1e-4);
+    const dy = b.y - a.y, dz = b.z - a.z, k = 1 / Math.sqrt(dy * dy + dz * dz);
+    out.push({ y: p.y, z: p.z, ny: dz * k, nz: -dy * k });
+  }
+  ringCache = out;
+  return out;
+}
+
+/* Geometry plus what the jiggle needs: the rest shape, and for every vertex
+   the two jiggle points it follows (both inside its own piece). */
+function finishPart(pos, nrm, uv, us, idx, span){
+  const T3 = THREE, geo = new T3.BufferGeometry();
+  geo.setAttribute('position', new T3.BufferAttribute(new Float32Array(pos), 3).setUsage(T3.DynamicDrawUsage));
+  geo.setAttribute('normal', new T3.BufferAttribute(new Float32Array(nrm), 3).setUsage(T3.DynamicDrawUsage));
+  geo.setAttribute('uv', new T3.BufferAttribute(new Float32Array(uv), 2));
+  geo.setIndex(idx);
+  const count = us.length, n = SCENE.nodes - 1;
+  const na = new Uint16Array(count), nb = new Uint16Array(count), nw = new Float32Array(count);
+  for(let i = 0; i < count; i++){
+    const x = us[i] * n;
+    let a = Math.floor(x), w = x - a, b = a + 1;
+    if(a < span.lo){ a = b = span.lo; w = 0; }
+    else if(b > span.hi){ a = b = Math.min(a, span.hi); w = 0; }
+    na[i] = a; nb[i] = b; nw[i] = w;
+  }
+  return { geo: geo, rest: new Float32Array(pos), restN: new Float32Array(nrm), na: na, nb: nb, nw: nw };
+}
+
+/* The nori side, x along the roll (centred on the piece), y up from the
+   board, z toward the camera. Rings along its length; a quarter-round at
+   each end, generous at the roll's own ends and slight at a cut. */
+function sideGeometry(u0, u1, lump){
+  const S = SCENE.segments, len = (u1 - u0) * SCENE.rollLen, h = len / 2, EDGE = 4;
+  const bL = u0 <= 0 ? SCENE.endRound : SCENE.cutRound, bR = u1 >= 1 ? SCENE.endRound : SCENE.cutRound;
+  const rings = [];
+  for(let k = 0; k <= EDGE; k++){
+    const al = (1 - k / EDGE) * Math.PI / 2;
+    rings.push({ x: -h + bL * (1 - Math.sin(al)), q: 1 - bL + bL * Math.cos(al), nx: -Math.sin(al) });
+  }
+  rings[0].at = u0;                      // the rims sit exactly where the faces do
+  const mid = len - bL - bR, steps = Math.max(1, Math.ceil(mid / SCENE.ringStep));
+  for(let k = 1; k < steps; k++) rings.push({ x: -h + bL + mid * k / steps, q: 1, nx: 0 });
+  for(let k = 0; k <= EDGE; k++){
+    const al = k / EDGE * Math.PI / 2;
+    rings.push({ x: h - bR * (1 - Math.sin(al)), q: 1 - bR + bR * Math.cos(al), nx: Math.sin(al) });
+  }
+  rings[rings.length - 1].at = u1;
+  const ring = profileRing(), pos = [], nrm = [], uv = [], us = [], idx = [];
+  rings.forEach(r => {
+    const u = r.at !== undefined ? r.at : u0 + (r.x + h) / SCENE.rollLen;
+    const L = lump(u), ca = Math.sqrt(1 - r.nx * r.nx);
+    for(let j = 0; j <= S; j++){
+      const p = ring[j];
+      pos.push(r.x, L * (SCENE.halfHeight + (p.y - SCENE.halfHeight) * r.q), p.z * L * r.q);
+      nrm.push(r.nx, p.ny * ca, p.nz * ca);
+      uv.push(u * SCENE.rollLen / SCENE.texSpan, j / S);
+      us.push(u);
+    }
+  });
+  const W = S + 1;
+  for(let i = 0; i < rings.length - 1; i++){
+    for(let j = 0; j < S; j++){
+      const a = i * W + j, b = a + W, c = a + 1, d = b + 1;
+      idx.push(a, c, b, c, d, b);
+    }
+  }
+  return finishPart(pos, nrm, uv, us, idx, nodeSpan(u0, u1));
+}
+
+/* A face: the left one (side −1) or the right (side 1). Concentric rings
+   from its rim to its centre. At the roll's own ends it bulges a little,
+   the way the rice does; at a cut it is flat. */
+function capGeometry(u0, u1, lump, side){
+  const S = SCENE.segments, K = SCENE.capRings, len = (u1 - u0) * SCENE.rollLen, h = len / 2;
+  const atEnd = side < 0 ? u0 <= 0 : u1 >= 1;
+  const qe = 1 - (atEnd ? SCENE.endRound : SCENE.cutRound), dome = atEnd ? SCENE.endDome : 0;
+  const u = side < 0 ? u0 : u1, L = lump(u);
+  const ring = profileRing(), pos = [], nrm = [], uv = [], us = [], idx = [];
+  for(let k = 0; k < K; k++){
+    const f = 1 - k / K, q = qe * f, slope = 2 * dome * f;
+    for(let j = 0; j <= S; j++){
+      const p = ring[j], ry = (p.y - SCENE.halfHeight) / SCENE.halfHeight, rz = p.z;
+      pos.push(side * (h + dome * (1 - f * f)), L * (SCENE.halfHeight + (p.y - SCENE.halfHeight) * q), p.z * L * q);
+      const nl = 1 / Math.sqrt(1 + slope * slope * (ry * ry + rz * rz));
+      nrm.push(side * nl, slope * ry * nl, slope * rz * nl);
+      uv.push(0.5 + 0.4925 * rz * f, 0.5 + 0.4925 * ry * f);
+      us.push(u);
+    }
+  }
+  pos.push(side * (h + dome), L * SCENE.halfHeight, 0);
+  nrm.push(side, 0, 0);
+  uv.push(0.5, 0.5);
+  us.push(u);
+  const W = S + 1, centre = K * W;
+  for(let k = 0; k < K - 1; k++){
+    for(let j = 0; j < S; j++){
+      const a = k * W + j, b = a + 1, c = a + W, d = c + 1;
+      if(side > 0) idx.push(a, b, c, b, d, c); else idx.push(a, c, b, b, c, d);
+    }
+  }
+  for(let j = 0; j < S; j++){
+    const a = (K - 1) * W + j, b = a + 1;
+    if(side > 0) idx.push(a, b, centre); else idx.push(a, centre, b);
+  }
+  return finishPart(pos, nrm, uv, us, idx, nodeSpan(u0, u1));
+}
+
+function makeView(u0, u1, key){
+  const T3 = THREE, K = view3d.kit, lump = lumpsFor(roll.id);
+  const parts = [sideGeometry(u0, u1, lump), capGeometry(u0, u1, lump, -1), capGeometry(u0, u1, lump, 1)];
+  const capL = K.cap.clone(), capR = K.cap.clone();
+  const group = new T3.Group();
+  group.rotation.order = 'ZYX';           // rock about the line it rests on, then tip
+  [K.nori, capL, capR].forEach((mat, i) => {
+    const mesh = new T3.Mesh(parts[i].geo, mat);
+    mesh.frustumCulled = false;           // it deforms, so a stored bounding box would go stale
+    group.add(mesh);
+  });
+  const shadow = blobMesh(0.62);
+  view3d.pieceGroup.add(shadow, group);
+  view3d.made.geometries += 3;
+  view3d.made.materials += 3;
+  return { key: key, u0: u0, u1: u1, len: (u1 - u0) * SCENE.rollLen, group: group, shadow: shadow,
+           capL: capL, capR: capR, parts: parts };
+}
+function dropView(v){
+  view3d.pieceGroup.remove(v.shadow, v.group);
+  v.parts.forEach(p => p.geo.dispose());
+  v.capL.dispose();
+  v.capR.dispose();
+  v.shadow.material.dispose();
+  view3d.freed.geometries += 3;
+  view3d.freed.materials += 3;
+}
+
+/* One view per piece, in order. A cut replaces one view with two; a new
+   roll replaces them all. Whatever is replaced is disposed at once. */
+function syncViews(){
+  const pcs = piecesOf(roll);
+  const keys = pcs.map(p => roll.id + ':' + p.u0 + ':' + p.u1);
+  const keep = [];
+  view3d.views.forEach(v => { if(keys.indexOf(v.key) === -1) dropView(v); else keep.push(v); });
+  view3d.views = pcs.map((p, i) => keep.find(v => v.key === keys[i]) || makeView(p.u0, p.u1, keys[i]));
+}
+
+/* The jiggle, applied: each vertex squashes (or stretches) with the two
+   jiggle points it follows, anchored at the board, so the roll never lifts
+   off it or sinks in. It bulges sideways as it squashes, and its normals
+   follow, so the light stays right. */
+function deformView(v){
+  const s = wobble.s;
+  v.parts.forEach(part => {
+    const pa = part.geo.attributes.position, no = part.geo.attributes.normal;
+    const pos = pa.array, nrm = no.array, rp = part.rest, rn = part.restN;
+    const na = part.na, nb = part.nb, nw = part.nw;
+    for(let i = 0, j = 0; i < na.length; i++, j += 3){
+      const q = s[na[i]] + (s[nb[i]] - s[na[i]]) * nw[i];
+      const sy = 1 + q, sz = 1 - 0.5 * q;
+      pos[j + 1] = rp[j + 1] * sy;
+      pos[j + 2] = rp[j + 2] * sz;
+      const nx = rn[j], ny = rn[j + 1] / sy, nz = rn[j + 2] / sz;
+      const k = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+      nrm[j] = nx * k; nrm[j + 1] = ny * k; nrm[j + 2] = nz * k;
+    }
+    pa.needsUpdate = true;
+    no.needsUpdate = true;
+  });
+}
+
+/* A fresh face glows briefly, so a cut reads as done even with no motion. */
+function glow(ms){ return ms > 0 ? 0.45 * (motionReduced() ? 1 : ms / SLICE.flashMs) : 0; }
+
+function poseView(v, q, s, i, n, deform){
+  const p = q.pose, g = v.group;
+  g.position.set(p.x, p.y, 0);
+  g.rotation.set(p.rock, 0, p.tip);
+  if(deform) deformView(v);
+  v.capL.emissiveIntensity = glow(s.flashL);
+  v.capR.emissiveIntensity = glow(s.flashR);
+  /* Its shadow lies on whatever it stands on, and fades as it hops. */
+  const floor = plateTop() * hopT(i, n), up = clamp01((p.y - floor) / SCENE.hop);
+  v.shadow.position.set((p.ax + p.bx) / 2, floor + 0.004, p.az * 0.5);
+  v.shadow.scale.set(v.len + 1.1 - 0.4 * up, 1, 3.3 - 0.8 * up);
+  v.shadow.material.opacity = 0.72 * (1 - 0.75 * up);
+}
+
+function placeProps(){
+  const P = view3d.props, at = propsAt();
+  P.board.visible = P.boardShadow.visible = at.board !== null;
+  P.plate.visible = P.plateShadow.visible = at.plate !== null;
+  if(at.board !== null){ P.board.position.x = at.board; P.boardShadow.position.x = at.board; }
+  if(at.plate !== null){ P.plate.position.x = at.plate; P.plateShadow.position.x = at.plate; }
+}
+
+/* Is anything in the scene itself moving? The hint, the trail and the
+   incision are flat marks: they need frames, but not the scene. */
+function sceneMoving(){
+  if(game.phase !== 'ready' || wobble.active || view3d.bent) return true;
+  return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
+                          p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
+}
+
+/* Draw the scene as the geometry says it is, this frame — but only when it
+   has changed. A still scene keeps its last frame, so an idle hint costs
+   the GPU nothing. One more frame is drawn after motion stops, at rest. */
+function renderScene(rects, force){
+  if(view3d.status !== 'ready' || !layout || !view3d.renderer) return;
+  const moving = sceneMoving();
+  if(!force && !moving && !view3d.stale) return;
+  view3d.stale = moving;
+  syncViews();
+  const list = rects || pieceRects(), n = list.length;
+  placeProps();
+  const deform = wobble.active || view3d.bent;
+  for(let i = 0; i < n; i++){
+    if(view3d.views[i]) poseView(view3d.views[i], list[i], pieces[i] || AT_REST, i, n, deform);
+  }
+  view3d.bent = wobble.active;
+  view3d.renderer.render(view3d.scene, view3d.camera);
+  view3d.renders++;
 }
 
 /* ---------- TUNING UI (developer only) ---------- */
@@ -2438,7 +3710,7 @@ function setTuning(key, value){
   if(!spec || value === '' || value === null || !isFinite(n)) return false;
   const clamped = Math.min(spec.max, Math.max(spec.min, n));
   TUNING[key] = Number((Math.round((clamped - spec.min) / spec.step) * spec.step + spec.min).toFixed(4));
-  if(key === 'gap'){ relayout(); settleSprings(); draw(); }
+  if(key === 'gap'){ relayout(); settleSprings(); paintNow(); }
   refreshTuning(key);
   return true;
 }
@@ -2446,7 +3718,7 @@ function resetTuning(){
   Object.keys(TUNING_DEFAULTS).forEach(k => { TUNING[k] = TUNING_DEFAULTS[k]; });
   relayout();
   settleSprings();
-  draw();
+  paintNow();
   renderTuning();
 }
 function newRollFromTuning(){
@@ -2454,7 +3726,7 @@ function newRollFromTuning(){
   game.phaseT = 0;
   gx = 0;
   startRoll();
-  draw();
+  paintNow();
 }
 
 function renderTuning(){
@@ -2509,6 +3781,7 @@ function wirePlay(){
   stageEl = document.getElementById('stage');
   if(!stageEl) return;
   wired = true;
+  sceneEl = document.getElementById('scene');
   try{ ctx2d = typeof stageEl.getContext === 'function' ? stageEl.getContext('2d') : null; }
   catch(e){ ctx2d = null; }
 
@@ -2547,6 +3820,7 @@ function wirePlay(){
 
   relayout();
   if(document.visibilityState === 'hidden') pausePlay('hidden');
+  loadScene();                   // play waits for the scene to draw
   armHint();
   requestFrame();
 }
@@ -2555,7 +3829,7 @@ function hydratePlay(){ /* nothing is saved: the roll and the tuning live in mem
 function renderPlay(){
   if(!wired) return;
   relayout();
-  if(isPaused()) draw(); else requestFrame();
+  if(isPaused()) paintNow(); else requestFrame();
 }
 
 /* ---------- the game claims the foundation's four seams ---------- */

@@ -4,12 +4,13 @@ A cozy children's game set in a tiny Tokyo neighbourhood, where a calm
 capybara chef runs a sushi counter. At its heart is satisfying sushi slicing:
 order, slice, the pieces separate, the chef reacts, plate, serve, next roll.
 
-**Status: a gray-box development prototype (v0.1.0), not a release for
-children.** One plain roll on one screen, with placeholder icons. There is no
-final art, no chef, and no sound, saving or final branding yet. It exists to
-prove the slicing feels good before any art is made. **Real-device testing is
-pending:** the prototype has not yet been tried on a phone or tablet
-([docs/DEVICE-QA.md](docs/DEVICE-QA.md)). See [docs/PRODUCT.md](docs/PRODUCT.md)
+**Status: a development preview (v0.2.0), not a release for children.** One
+3D scene: a salmon roll on a cutting board, which squashes, wobbles and
+rocks as you cut it, and a plate for the finished pieces. There is no chef,
+no customers, and no sound, saving, final branding or final icons yet.
+**Real-device testing of the 3D scene is pending**
+([docs/DEVICE-QA.md](docs/DEVICE-QA.md)). It needs WebGL 2 and, on iPhone
+and iPad, iOS or iPadOS 16.4 or newer. See [docs/PRODUCT.md](docs/PRODUCT.md)
 for the product and roadmap, and [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)
 for what is not done.
 
@@ -51,6 +52,9 @@ corner. It opens the Feel tuning sheet, which pauses play while it is open:
 | Separation | Gap after a cut (px) | 10 |
 | Separation | Pop (px/s) | 220 |
 | Separation | Bounce (0 = none, 1 = most) | 0.35 |
+| Jiggle | Strength (0 = none, up to 2) | 1 |
+| Jiggle | Softness (0 = firm and quick, 1 = soft and slow) | 0.5 |
+| Jiggle | Settling (0 = wobbles on, 1 = settles at once) | 0.5 |
 | Transitions | Finished roll shown (ms) | 650 |
 | Transitions | Clear and next roll (ms, each) | 300 |
 | Transitions | Hint after (s) | 5 |
@@ -73,7 +77,8 @@ npm run verify
 
 This runs the contract suite, checks that the generated PWA files still
 match `APP_CONFIG`, and runs the residue scan. It must be green before every
-commit. It needs no install: the project has no dependencies.
+commit. It needs no install: the only library, Three.js, is vendored in
+`lib/three`, and the suite loads that same file.
 
 ```bash
 npm test              # contracts only
@@ -82,28 +87,32 @@ npm run contamination # residue scan only
 npm run config:sync   # write APP_CONFIG into the generated files
 ```
 
-The contracts run the real game in Node with a virtual clock and dispatched
-pointer events. They cannot see a real browser's hit-testing or a real
+The contracts run the real game, and the real Three.js scene graph, in Node
+with a virtual clock and dispatched pointer events; only the GPU is a
+stand-in. They cannot see a real browser's hit-testing, a real GPU or a real
 finger, and they cannot judge how slicing *feels*: see
 [docs/DEVICE-QA.md](docs/DEVICE-QA.md).
 
 ## What it is made of
 
 One HTML file (`index.html`) holds the whole app: design tokens, the stage,
-and one script. The game draws on a single Canvas 2D element with no
-dependencies. Canvas 2D is a prototype choice; the permanent renderer is still
-to be decided. The app was generated from the private app-starter template,
-and its foundation (storage, overlays, config sync, PWA, tests) is described
-in [ARCHITECTURE.md](ARCHITECTURE.md).
+and one script. The scene is drawn in 3D with Three.js (r186, WebGL 2),
+vendored unmodified in `lib/three` with its licence and a record of its
+version, source and hashes, and loaded from this app's own folder, never from
+a CDN. Over it, a flat canvas carries the knife's trail, the guides and the
+hint, and takes every touch. The app was generated from the private
+app-starter template, and its foundation (storage, overlays, config sync,
+PWA, tests) is described in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ```
 index.html              the app: tokens, stage, foundation, the slicing game
-sw.js                   offline shell, cache name derived from APP_CONFIG
+lib/three/              Three.js r186, unmodified, with LICENSE and provenance
+sw.js                   offline shell; cache name and file list derived
 manifest.webmanifest    install metadata, derived from APP_CONFIG
 icon-192/512.png        placeholder icons, not final
 scripts/config.js       sync / verify generated files against APP_CONFIG
 scripts/contamination.js residue guard
-test/harness.js         the app in a Node vm: DOM stub, canvas, virtual clock
+test/harness.js         the app in a Node vm: DOM stub, Three.js, virtual clock
 test/contracts.js       the contract suite
 test/run.js             the runner
 ```

@@ -1,0 +1,4 @@
+# The vendored Three.js files are kept byte for byte as published, so their
+# recorded hashes hold on every checkout. Git must never rewrite their line
+# endings.
+lib/three/** -text

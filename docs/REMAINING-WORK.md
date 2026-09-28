@@ -25,18 +25,33 @@ None of this is done. It is listed so nothing here reads as finished.
   grown-ups area.
 - All apps under `morecobrax-dot.github.io` share one origin. `APP_ID` keeps
   their storage and caches apart, but they share one browser storage quota
-  (about 5 MB). That matters once Phase 3 saves progress.
-- Decide the permanent renderer at the Phase 1 clay test: stay with Canvas 2D
-  and pre-rendered art, or move to WebGL (a new dependency, which needs
-  approval).
+  (about 5 MB), and Cache Storage too. That matters once Phase 3 saves
+  progress; the 3D library alone is 2.1 MB in this app's cache.
+- Devices on iOS or iPadOS older than 16.4 cannot run the 3D scene (it shows
+  a note instead). If they matter, an older Three.js release would need a
+  deliberate decision.
 
-## Known limits of the prototype
+## Known limits (Phase 1A)
 
 - Cuts are straight. A slanted swipe cuts straight down at the point where it
   crossed the middle of the roll.
 - Every feel value is a starting hypothesis (see the README table) until it
-  has been judged on a device.
-- The canvas renders at most 2× the CSS resolution.
+  has been judged on a device, the Jiggle values included.
+- The camera looks straight across the roll, so cut faces show only in the
+  gaps, when the pieces tip, and at the edges of the screen. The finished
+  pieces lie on the plate in a row rather than standing to show their faces;
+  a long, imperfect piece would make a very tall tower.
+- Portrait works but leaves a lot of empty counter above and below the roll.
+- Shadows are soft contact blobs, not cast shadows, and there are no
+  reflections: both would cost far more to draw. The plate is a simple glazed
+  slab.
+- The textures are computed at load (about 40 ms on a desktop) and are
+  deliberately soft; there is no normal-mapped rice.
+- The Three.js files are unminified (2.1 MB, about 0.45 MB compressed); the
+  published package ships no minified build at this version.
+- The 3D scene draws at most 2 device pixels per CSS pixel, and at most about
+  3.2 million pixels a frame, so a large iPad is drawn a little under its full
+  resolution. The flat layer over it draws at up to 2×.
 - The toast host still sits a tab bar's height above the bottom. Only the
   developer sheet shows toasts.
 - Foundation CSS the game does not use (tab bar, segmented control, stats,

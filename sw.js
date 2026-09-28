@@ -16,16 +16,22 @@
  */
 
 /* APP-CACHE-BEGIN */
-const CACHE_NAME = 'capybara-sushi-v0.1.0';
+const CACHE_NAME = 'capybara-sushi-v0.2.0';
 /* APP-CACHE-END */
 
+/* The precache list is DERIVED too: config:sync writes it from APP_FILES in
+ * index.html, the one list of the files the app is made of. */
+/* APP-FILES-BEGIN */
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './lib/three/three.module.js',
+  './lib/three/three.core.js'
 ];
+/* APP-FILES-END */
 
 self.addEventListener('install', event => {
   event.waitUntil(

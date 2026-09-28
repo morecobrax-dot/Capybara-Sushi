@@ -63,8 +63,13 @@ function loadConfig(){
   if(err) throw new Error(err);
   const orientationErr = validateOrientation(cfg.orientation);
   if(orientationErr) throw new Error(orientationErr);
+  const files = app.ctx.APP_FILES;
+  if(!Array.isArray(files) || !files.length || files.some(f => typeof f !== 'string' || f.indexOf('./') !== 0)){
+    throw new Error('APP_FILES must be a non-empty list of paths relative to the page, each starting with ./');
+  }
   return {
     cfg,
+    files: files.slice(),
     version: app.ctx.APP_VERSION,
     cacheName: app.ctx.CACHE_NAMESPACE,
     storagePrefix: app.ctx.STORAGE_NAMESPACE
@@ -104,6 +109,14 @@ function targets(c){
       label: 'sw.js cache name',
       region: ['/* APP-CACHE-BEGIN */', '/* APP-CACHE-END */'],
       build: () => "const CACHE_NAME = '" + cacheName + "';"
+    },
+    {
+      /* What the service worker precaches is exactly what the app is made
+         of, so a file it loads cannot be missing offline. */
+      file: H.SW_PATH,
+      label: 'sw.js precache list',
+      region: ['/* APP-FILES-BEGIN */', '/* APP-FILES-END */'],
+      build: () => 'const ASSETS = [\n' + c.files.map(f => "  '" + f + "'").join(',\n') + '\n];'
     },
     {
       file: H.MANIFEST_PATH,

@@ -83,6 +83,10 @@ AUDIT → UNDERSTAND → IMPLEMENT → ADVERSARIAL VERIFY → DIFF AUDIT → SHI
 
 1. **New code goes in the largest inline `<script>` block.** A second block or
    a linked file is invisible to every contract, and the suite will still pass.
+   The one exception is the vendored Three.js build in `lib/three`, loaded by
+   the script's single `import()`. It is third-party code, unmodified and
+   hash-checked; none of this app's own code may live there or anywhere else
+   outside the script (rule 47).
 2. **Never hard-code a font size, font family, or colour.** Use the tokens. A
    genuine exception is marked `/* fs-exempt: reason */` on the lines above it.
 3. **Never add a lock/unlock pair to an overlay.** The engine's observer handles
@@ -91,13 +95,17 @@ AUDIT → UNDERSTAND → IMPLEMENT → ADVERSARIAL VERIFY → DIFF AUDIT → SHI
 4. **Never touch `localStorage` outside the storage adapter.** Anything else is
    an unnamespaced key and an origin collision waiting to happen.
 5. **Never edit `sw.js`, `manifest.webmanifest` or the derived `<head>` block by
-   hand.** Edit `APP_CONFIG`, run `npm run config:sync`.
+   hand.** Edit `APP_CONFIG` (or `APP_FILES`, the files the service worker
+   precaches), run `npm run config:sync`.
 6. **Never reference a path outside the repository** in application or tooling
    code. The starter is self-contained.
 7. **No `alert()`, `confirm()` or `prompt()`.** Use `toast()` and
    `confirmAction()`.
 8. **No new dependency, framework, or build step** without the user explicitly
    asking for one. The value here is proven behaviour, not stack novelty.
+   Phase 1A authorized one narrow exception: Three.js, pinned and served from
+   this app's own folder. It is not an npm dependency, it is never loaded from
+   a CDN, and it brings no physics engine, framework or build with it.
 
 ## Product rules
 
@@ -190,9 +198,12 @@ prototype. Each carries its reason; keep the reason with the rule.
     food. Release, cancel and lost capture never undo a cut and never add one.
     The release point can complete a crossing only if the stroke has not cut.
 36. **One geometry.** `pieceRects()` is the only answer to "where is the food".
-    The renderer paints it and the knife is tested against it, so a moving
-    piece is cut where it appears. A gap holds no food. A cut is refused rather
-    than leave a piece under `SLICE.minShare` of an ideal piece.
+    Each piece's pose (slide, tip, rock, hop) is projected through the layout's
+    camera into its rectangle; the 3D scene places the piece's meshes from that
+    same pose and the knife is tested against the rectangle, so a moving piece
+    is cut where it appears. The Three.js camera is set from the layout's
+    camera, and contract 22 checks the two agree. A gap holds no food. A cut is
+    refused rather than leave a piece under `SLICE.minShare` of an ideal piece.
 37. **Every roll can be finished.** `SLICE.minShare` stays at or below 0.5. The
     proof is in `cutTarget()`'s comment, and contract 20 plays thousands of
     random rolls against it. Changing the cutting rules means keeping this
@@ -201,30 +212,68 @@ prototype. Each carries its reason; keep the reason with the rule.
     way to a guide, and only toward a guide in the same piece.
 39. **Essential feedback survives reduced motion; decoration does not.** A cut
     always shows its gap and lit faces. A finished roll always shows its plate
-    and mark. Springs, overshoot, the tap jiggle, sliding and the moving hint
-    are decoration, and stop, live, when motion is reduced.
+    and mark. Springs, overshoot, the jiggle, tipping and rocking, the hop onto
+    the plate, sliding and the moving hint are decoration, and stop, live,
+    when motion is reduced.
 40. **Frames only while something moves.** `requestFrame()` keeps at most one
     frame waiting, and none at rest. One clock drives everything, capped at
     50 ms a frame and restarted after any pause, so coming back from the
-    background never makes anything jump. A pause (hidden, or the tuning sheet)
-    keeps play in place and lets no time pass.
-41. **Feel values live in `TUNING`, rules in `SLICE`.** A new feel value is a
-    `TUNING_DEFAULTS` entry and a `TUNING_SPEC` line. Nothing else types a
-    number that sets how slicing feels.
+    background never makes anything jump. A pause (hidden, the tuning sheet,
+    or the scene not showing) keeps play in place and lets no time pass. The 3D
+    scene is drawn only while something in it moves; flat marks alone never
+    redraw it.
+41. **Feel values live in `TUNING`, rules in `SLICE`, the 3D presentation in
+    `SCENE`.** A new feel value is a `TUNING_DEFAULTS` entry and a
+    `TUNING_SPEC` line. The three Jiggle values scale the springs and impulses
+    in `SCENE`; nothing else types a number that sets how slicing feels.
+
+## The 3D scene
+
+46. **The scene draws; it decides nothing.** It reads the game's state and
+    geometry and never changes them. Play waits (the `'scene'` pause) until
+    the scene has drawn, and whenever it is not showing, so the knife never
+    meets food that is not on screen, and the flat layer draws no marks over
+    it.
+47. **Three.js stays pinned, unmodified and local.** `lib/three` holds the
+    published files byte for byte; `lib/three/package.json` records the
+    version, source, integrity and hashes, and contract 29 checks them. Never
+    load it, or anything else, from another host. Never edit it: this app's
+    code lives in the one script. To update it, follow ARCHITECTURE.md.
+48. **Everything made for a piece is disposed when the piece is replaced.**
+    Shared textures, materials and shapes are made once per app. A piece's
+    geometry and material clones die with it. Contract 23 counts GPU
+    geometries and textures across a hundred rolls; the browser QA counts them
+    in the real renderer.
+49. **A lost GPU context is never a blank or frozen screen.** Play pauses, the
+    counter's colour and a spinner show, and the browser is asked for the
+    context back. If it does not return, a fresh renderer on a fresh canvas is
+    tried, at most `SCENE.rebuilds` times, then the scene says it is
+    unavailable and offers a way to try again. The app's canvas listeners are
+    attached after the renderer's own: on restore Three.js rebuilds its state
+    in its listener, and drawing before that draws nothing.
+50. **Colours reach the scene only through tokens.** `COLOR_TOKENS` names
+    every one; scene tokens are hex, because textures are computed from them
+    pixel by pixel. Textures belong to their materials, so they squash and move
+    with the food. None is downloaded.
 
 ## Development
 
 42. **`?tune` is a developer route, not a setting.** It must be removed, or
     moved behind the parent gate, before any child-facing release. Its values
     live in memory only.
-43. **Test touch with real input.** The contracts dispatch pointer events
-    straight at the stage and cannot see CSS hit-testing. Browser QA drives
-    headless Edge with CDP touch, mouse and pen input. Pace scripted drags at
-    about 16 ms a move, and let a stroke come to rest before tapping: Chromium
-    swallows a tap that follows a fling.
-44. **Nothing on this machine is a tablet or a phone.** Say what was not
-    physically tested, every time. How slicing *feels* is a human judgment
-    made on a device ([docs/DEVICE-QA.md](docs/DEVICE-QA.md)).
-45. **The residue scan rejects the word loop in capitals, and cool down written
-    as one word.** Both come naturally in game code. Call them a frame
-    scheduler and a settle.
+43. **Test touch with real input, and the scene with the real renderer.** The
+    contracts dispatch pointer events straight at the stage and cannot see CSS
+    hit-testing or a GPU. Browser QA drives headless Edge (hardware GPU through
+    ANGLE) with CDP touch, mouse and pen input, and checks what is actually on
+    screen from screenshots, not only the app's own state. Pace scripted drags
+    at about 16 ms a move, and let a stroke come to rest before tapping:
+    Chromium swallows a tap that follows a fling. A fast beat (a cut's recoil,
+    the serve) is checked while it happens, not after.
+44. **Nothing on this machine is a tablet or a phone, or has an Apple GPU.**
+    Say what was not physically tested, every time. How slicing *feels*, and
+    how the jiggle looks and performs on an iPhone or iPad, is a human
+    judgment made on a device ([docs/DEVICE-QA.md](docs/DEVICE-QA.md)).
+45. **The residue scan rejects the word loop in capitals, cool down written as
+    one word, and s-q-u-a-t (spelled out so this file passes).** All three come
+    naturally in game code. Call them a frame scheduler, a settle, and a
+    half-height.

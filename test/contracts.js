@@ -1499,32 +1499,102 @@ function testGeometry(){
   let app = play(), c = app.ctx;
   c.TUNING.pull = 0;
 
-  sub('the renderer paints exactly what the knife is tested against');
+  sub('the 3D scene shows exactly what the knife is tested against');
   stroke(app, guideX(app, 1));
   advance(app, 17);
-  T('pieces are moving after the cut', c.pieces.some(p => p.off !== 0 || p.vel !== 0));
+  T('pieces are moving after the cut', c.pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0));
   const painted = JSON.stringify(c.paint.rects), live = JSON.stringify(c.pieceRects());
-  T('the last frame painted the rectangles hit testing uses', painted === live);
-  const ctx = stageOf(app).getContext('2d');
-  ctx.recording = true; ctx.log.length = 0;
-  c.requestFrame(); advance(app, 17);
-  ctx.recording = false;
-  const rects = c.paint.rects;
-  T('each piece is painted from its own rectangle', rects.every(r => {
-    const rr = Math.max(0, Math.min(Math.min(10, r.w / 3, r.h / 4), r.w / 2, r.h / 2));
-    return ctx.log.some(e => e.m === 'moveTo' && near(e.args[0], r.x + rr) && near(e.args[1], r.y));
+  T('the last frame drew the rectangles hit testing uses', painted === live);
+  /* Through the real Three.js camera, not the game's own arithmetic: each
+     piece's meshes, as placed in the scene graph, project onto its rectangle. */
+  const onScreen = (cam, v) => {
+    const p = v.clone().project(cam);
+    return { x: (p.x + 1) / 2 * c.layout.W, y: (1 - p.y) / 2 * c.layout.H };
+  };
+  const cam = c.view3d.camera, T3 = c.THREE;
+  const placed = c.paint.rects.every((r, i) => {
+    const view = c.view3d.views[i];
+    if(!view) return false;
+    view.group.updateMatrixWorld(true);
+    const h = view.len / 2, y = c.SCENE.halfHeight;
+    const a = onScreen(cam, view.group.localToWorld(new T3.Vector3(-h, y, 0)));
+    const b = onScreen(cam, view.group.localToWorld(new T3.Vector3(h, y, 0)));
+    return near(a.x, r.x, 0.5) && near(b.x, r.x + r.w, 0.5);
+  });
+  T('each piece\'s meshes sit exactly on its rectangle, seen through the scene\'s camera', placed);
+  T('there is one set of meshes per piece, in order', c.view3d.views.length === c.pieceRects().length &&
+    c.view3d.views.every((v, i) => near(v.u0, c.pieceRects()[i].u0, 0) && near(v.u1, c.pieceRects()[i].u1, 0)));
+  const probes = [[0, c.SCENE.halfHeight, 0], [-4.2, 0, 1], [4.2, 2, -1], [2.5, 0.3, 2.3], [-6, -0.5, -2.3]];
+  T('the game\'s camera and the scene\'s camera agree to a fraction of a pixel', probes.every(([x, y, z]) => {
+    const mine = c.project(c.layout.view, x, y, z), theirs = onScreen(cam, new T3.Vector3(x, y, z));
+    return near(mine.x, theirs.x, 0.05) && near(mine.y, theirs.y, 0.05);
   }));
-  T('in the roll\'s own colour token', ctx.log.some(e => e.m === 'fill' && e.fillStyle === c.colors.roll) &&
-    /^#|^rgb/.test(c.colors.roll), String(c.colors.roll));
-  /* Hard rule 2: no colour typed into code. The canvas cannot use var(), so
-     it reads the tokens instead, and nothing in the game names a colour. */
+  /* Hard rule 2: no colour typed into code. The scene and the flat layer
+     cannot use var(), so they read the tokens instead, and nothing in the
+     game names a colour. */
   const gameText = stripComments(js().slice(js().indexOf('GAME DOMAIN — Slicing'), js().indexOf('SETTINGS — data ownership')));
   T('the game types no colour of its own: every one comes from a token',
     !/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(gameText),
     (gameText.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/) || [''])[0]);
-  T('every colour the canvas uses is a declared layer-4 or semantic token',
-    ['--bg', '--stage-counter', '--stage-plate', '--roll-body', '--roll-cut', '--roll-flash', '--guide-mark',
-     '--blade-trail', '--incision', '--hint-ghost', '--done-mark'].every(t => new RegExp(t + ':').test(css())));
+  const tokens = Object.values(c.COLOR_TOKENS);
+  T('every colour the game uses is a declared layer-4 token', tokens.length >= 20 &&
+    tokens.every(t => new RegExp(t + ':').test(css())), tokens.filter(t => !new RegExp(t + ':').test(css())).join(', '));
+  T('and each one resolved to a value at runtime', Object.keys(c.COLOR_TOKENS).every(k => !!c.colors[k]));
+  T('the materials are painted in their tokens', (() => {
+    const same = (a, b) => near(a.r, b.r, 1e-6) && near(a.g, b.g, 1e-6) && near(a.b, b.b, 1e-6);
+    return same(c.view3d.kit.plate.color, new T3.Color(c.colors.plate)) &&
+           same(c.view3d.kit.shadow.color, new T3.Color(c.colors.shadow)) &&
+           same(c.view3d.kit.cap.emissive, new T3.Color(c.colors.flash));
+  })());
+
+  /* The cut face is a solid disc: nori at its rim, rice, and salmon at its
+     heart — never a hollow tube or a paper-thin shell. */
+  sub('every piece is solid, with a filled cross-section');
+  const capTex = c.view3d.kit.cap.map.image;
+  const texel = (u, v) => {
+    const i = (Math.floor(v * capTex.height) * capTex.width + Math.floor(u * capTex.width)) * 4;
+    return [capTex.data[i], capTex.data[i + 1], capTex.data[i + 2]];
+  };
+  const closeTo = (px, token, tol) => { const t = c.rgbOf(c.colors[token]);
+    return Math.abs(px[0] - t[0]) + Math.abs(px[1] - t[1]) + Math.abs(px[2] - t[2]) <= tol; };
+  const lum = px => px[0] * 0.3 + px[1] * 0.59 + px[2] * 0.11;
+  const salmony = px => ['salmon', 'salmonDeep', 'salmonFat'].some(k => closeTo(px, k, 120));
+  T('the middle of a face is salmon', salmony(texel(0.51, 0.54)), texel(0.51, 0.54).join(','));
+  T('between the salmon and the rim is rice', lum(texel(0.5, 0.2)) > 170, texel(0.5, 0.2).join(','));
+  T('and the rim is nori', lum(texel(0.5, 0.005)) < 90, texel(0.5, 0.005).join(','));
+  /* Checked on the rest shape; the jiggle moves a face and its rim together. */
+  const view = c.view3d.views[0];
+  const [side, capL, capR] = view.parts;
+  const ring = part => { const p = part.rest, out = []; for(let i = 0; i < p.length; i += 3) out.push([p[i], p[i + 1], p[i + 2]]); return out; };
+  const S = c.SCENE.segments + 1, sidePts = ring(side);
+  const faceRim = pts => pts.slice(0, S), leftEnd = sidePts.slice(0, S), rightEnd = sidePts.slice(sidePts.length - S);
+  const joined = (a, b) => a.every((p, i) => near(p[0], b[i][0], 1e-5) && near(p[1], b[i][1], 1e-5) && near(p[2], b[i][2], 1e-5));
+  T('each face closes the nori exactly: its rim is the side\'s last ring, point for point',
+    joined(faceRim(ring(capL)), leftEnd) && joined(faceRim(ring(capR)), rightEnd));
+  T('and the jiggle moves a face with its rim: they follow the same points of the roll',
+    [0, 1].every(k => { const cap = k ? capR : capL, off = k ? side.na.length - S : 0;
+      for(let j = 0; j < S; j++) if(cap.na[j] !== side.na[off + j] || cap.nb[j] !== side.nb[off + j] ||
+                                     !near(cap.nw[j], side.nw[off + j], 1e-9)) return false;
+      return true; }));
+  /* Culling hides a triangle facing away from the camera, so a face wound
+     the wrong way round is a hole. Every triangle must face out. */
+  const outward = part => {
+    const p = part.rest, n = part.restN, idx = part.geo.index.array;
+    for(let k = 0; k < idx.length; k += 3){
+      const [a, b, d] = [idx[k] * 3, idx[k + 1] * 3, idx[k + 2] * 3];
+      const e1 = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]];
+      const e2 = [p[d] - p[a], p[d + 1] - p[a + 1], p[d + 2] - p[a + 2]];
+      const f = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      const len = Math.hypot(f[0], f[1], f[2]);
+      if(len < 1e-12) continue;
+      if(f[0] * (n[a] + n[b] + n[d]) + f[1] * (n[a + 1] + n[b + 1] + n[d + 1]) + f[2] * (n[a + 2] + n[b + 2] + n[d + 2]) <= 0) return false;
+    }
+    return true;
+  };
+  T('every triangle of the nori and of both faces faces outward', view.parts.every(outward));
+  T('a face is a full disc, not a ring: it reaches the middle',
+    [capL, capR].every(part => { const p = part.rest, k = p.length - 3;
+      return near(p[k + 2], 0, 1e-9) && near(p[k + 1] / c.SCENE.halfHeight, 1, 0.05); }));
 
   sub('a moving piece is cut where it appears');
   app = play(); c = app.ctx; c.TUNING.pull = 0;
@@ -1669,10 +1739,38 @@ function testRhythm(){
   T('never more than one timer waiting', maxTimers <= 1, String(maxTimers));
   T('the trail and incisions stay small', c.trail.length <= c.SLICE.trailMax && c.healing.length <= 8);
   T('pieces match the roll exactly', c.pieces.length === c.roll.cuts.length + 1);
-  advance(app, 1000);
+  advance(app, 3000);                              // the softest jiggle takes a moment to settle
   T('at rest, no frame is waiting at all', c.__clock.pendingFrames() === 0, String(c.__clock.pendingFrames()));
   T('and nothing was saved', app.storage._map.size === 1);
   T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+
+  /* Every cut builds geometry for two new pieces, and every roll replaces
+     them all. What was replaced must be disposed, or the GPU fills up a
+     roll at a time. */
+  sub('a hundred rolls later, the GPU holds only what is on screen');
+  const gpu = app.gpu.renderers[0], v3 = c.view3d;
+  c.paintNow();
+  const perPiece = 3;
+  T('the scene holds one set of meshes per piece, and no more', v3.views.length === c.pieces.length &&
+    v3.pieceGroup.children.length === v3.views.length * 2, v3.views.length + ' views, ' + v3.pieceGroup.children.length + ' objects');
+  T('every piece geometry made was disposed, bar those on screen',
+    v3.made.geometries - v3.freed.geometries === v3.views.length * perPiece &&
+    v3.made.materials - v3.freed.materials === v3.views.length * perPiece,
+    JSON.stringify(v3.made) + ' / ' + JSON.stringify(v3.freed));
+  /* The scenery is four shapes: counter, board, plate and the shadow blob. */
+  T('the renderer holds the scenery and the pieces on screen, nothing older',
+    gpu.info.memory.geometries === 4 + v3.views.length * perPiece, String(gpu.info.memory.geometries));
+  T('textures were made once and shared: seven, still', gpu.info.memory.textures === 7, String(gpu.info.memory.textures));
+  T('nothing disposed was ever drawn again', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+  T('the renderer was created once', app.gpu.renderers.length === 1 && app.gpu.constructed === 1);
+
+  sub('an idle scene is not redrawn');
+  for(let t = 0; t < 400 && c.sceneMoving(); t++) advance(app, 50);
+  advance(app, 50);                                // the frame that draws it at rest
+  const drawn = gpu.renders;
+  advance(app, c.TUNING.hintS * 1000 + 3000);
+  T('the hint animates the flat layer, so frames run', c.hint.showing && c.__clock.pendingFrames() === 1);
+  T('but the 3D scene, which has not changed, is not drawn again', gpu.renders === drawn, (gpu.renders - drawn) + ' renders');
 
   sub('100 resets');
   for(let i = 0; i < 100; i++){
@@ -1685,6 +1783,11 @@ function testRhythm(){
   }
   T('no listener was added', listeners(app) === base, listeners(app) + ' vs ' + base);
   T('still at most one frame and one timer', maxFrames <= 1 && maxTimers <= 1, maxFrames + ' / ' + maxTimers);
+  c.paintNow();
+  T('a hundred fresh rolls left the GPU holding only what is on screen',
+    c.view3d.made.geometries - c.view3d.freed.geometries === c.view3d.views.length * 3 &&
+    app.gpu.renderers[0].info.memory.geometries === 4 + c.view3d.views.length * 3 &&
+    app.gpu.renderers[0].info.memory.textures === 7, JSON.stringify(app.gpu.renderers[0].info.memory));
   c.armHint(); c.armHint(); c.armHint();
   T('arming the hint again replaces its timer rather than adding one', c.__clock.liveTimers() === 1,
     String(c.__clock.liveTimers()));
@@ -1730,6 +1833,13 @@ function testLayout(){
       top >= safe.y0 && bottom <= safe.y1, Math.round(top) + '..' + Math.round(bottom));
     T(name + ': the roll is thick enough to aim at with a finger', L.T >= 44, String(Math.round(L.T)));
     T(name + ': the canvas is sharp but never over 2x', stageOf(app).width === Math.round(w * 2));
+    const dome = c.SCENE.endDome * L.view.ppw;
+    T(name + ': the rice bulging from its two ends fits as well',
+      L.cx - widest / 2 - dome >= safe.x0 && L.cx + widest / 2 + dome <= safe.x1);
+    const gl = app.gpu.renderers[0];
+    T(name + ': the 3D scene fills the screen within its pixel budget', gl.width === w && gl.height === h &&
+      gl.pixelRatio <= 2 && w * h * gl.pixelRatio * gl.pixelRatio <= c.SCENE.pixelBudget * 1.0001,
+      w + 'x' + h + ' at ' + gl.pixelRatio.toFixed(2));
   });
 
   sub('rotating mid-roll');
@@ -1828,6 +1938,142 @@ function testMotion(){
   advance(app, 17);
   T('switched off again, cuts spring as before', c.pieces.some(p => p.vel !== 0));
   T('the setting is listened to once, not once per roll', c.__motion.listenerCount() === 1);
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+
+  /* The roll moves as one soft thing. A cut squashes it where the knife
+     went, and the wobble runs along whatever is still joined — never across
+     a cut. The squash is anchored on the board. A second cut adds to the
+     motion rather than restarting it, and everything comes to rest exactly. */
+  sub('the jiggle: one soft roll, parted by every cut');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  const N = c.SCENE.nodes - 1, node = u => Math.round(u * N);
+  stroke(app, guideX(app, 3));                                   // the middle of the roll
+  advance(app, 50);                                              // the first frame after rest moves no time
+  T('a cut squashes the roll where the knife went', c.wobble.active &&
+    c.wobble.s[node(0.5) - 1] < -0.005 && c.wobble.s[node(0.5)] < -0.005,
+    c.wobble.s[node(0.5) - 1].toFixed(4) + ' ' + c.wobble.s[node(0.5)].toFixed(4));
+  T('the two halves tip away from the cut, showing its faces', c.pieces[0].tiltV > 0 && c.pieces[1].tiltV < 0);
+  T('and rock back from the blade', c.pieces.every(p => p.rockV < 0));
+  const farBefore = c.wobble.s[0];
+  advance(app, 500);                               // half the roll at the wobble's speed
+  T('the wobble travels along the half still joined to it, to its far end',
+    Math.abs(farBefore) < 1e-6 && Math.abs(c.wobble.s[0]) > 1e-4, farBefore + ' then ' + c.wobble.s[0]);
+  T('the cut itself stays parted', c.wobble.joined[node(0.5) - 1] === 0 &&
+    [...c.wobble.joined].filter(j => j === 0).length === 1);
+  let floor = Infinity, lowest = -Infinity, overlap = -Infinity;
+  const spans = () => c.view3d.views.map(v => {
+    v.group.updateMatrixWorld(true);
+    const p = v.parts[0].geo.attributes.position.array, m = v.group.matrixWorld.elements;
+    let low = Infinity, left = Infinity, right = -Infinity;
+    for(let i = 0; i < p.length; i += 3){
+      const x = m[0] * p[i] + m[4] * p[i + 1] + m[8] * p[i + 2] + m[12];
+      low = Math.min(low, m[1] * p[i] + m[5] * p[i + 1] + m[9] * p[i + 2] + m[13]);
+      left = Math.min(left, x); right = Math.max(right, x);
+    }
+    return { low, left, right };
+  });
+  const watch = () => {
+    c.paintNow();
+    const s = spans();
+    s.forEach((q, i) => {
+      floor = Math.min(floor, q.low);
+      lowest = Math.max(lowest, q.low);
+      if(i > 0) overlap = Math.max(overlap, s[i - 1].right - q.left);
+    });
+  };
+  for(let t = 0; t < 30; t++){ watch(); advance(app, 16); }
+  T('while it jiggles, no piece sinks into the board', floor > -0.012, floor.toFixed(4));
+  T('and none floats off it: each keeps touching it', lowest < 0.012, lowest.toFixed(4));
+  /* Cut the roll up quickly, out of order, so neighbours tip toward each
+     other at once: none may pass into the piece beside it. (Cutting left to
+     right tips every piece the same way, which would prove nothing.) */
+  const crowd = play(); crowd.ctx.TUNING.pull = 0;
+  [2, 1, 3, 5, 4].forEach(k => { stroke(crowd, guideX(crowd, k), { steps: 2 }); crowd.ctx.__advance(30); });
+  { const save = c; c = crowd.ctx; for(let t = 0; t < 40; t++){ watch(); crowd.ctx.__advance(16); } c = save; }
+  T('and no tipping piece ever passes into its neighbour', overlap < 0.005, overlap.toFixed(4));
+  settleAll(app);                                                // well before the hint's first showing
+  T('it all comes to rest, exactly', !c.wobble.active && c.wobble.s.every(v => v === 0) &&
+    c.pieces.every(p => p.tilt === 0 && p.rock === 0 && p.tiltV === 0 && p.rockV === 0) &&
+    c.__clock.pendingFrames() === 0);
+  pe(app, 'pointerdown', screenX(app, 0.2), yAt(app, 0.5)); pe(app, 'pointerup', screenX(app, 0.2), yAt(app, 0.5));
+  advance(app, 300);
+  T('a tap on one piece jiggles it', c.wobble.active && [...c.wobble.s].slice(0, node(0.5)).some(v => v !== 0));
+  T('and nothing across the cut moves', [...c.wobble.s].slice(node(0.5)).every(v => v === 0) &&
+    c.pieces[1].tilt === 0 && c.pieces[1].rock === 0 && c.pieces[1].off === 0);
+
+  sub('the jiggle: quick cuts blend, never restart');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  stroke(app, guideX(app, 1));
+  advance(app, 40);
+  const s0 = Array.from(c.wobble.s), v0 = Array.from(c.wobble.v), tip0 = c.pieces[0].tilt;
+  stroke(app, guideX(app, 5), { steps: 1 });
+  T('a second cut leaves the shape it found: nothing snaps back', c.wobble.s.every((v, i) => v === s0[i]));
+  T('it only adds its own push, near its own cut',
+    c.wobble.v.every((v, i) => Math.abs(i / N - 5 / 6) < 3 * c.SCENE.kickWidth * 1.4 + 0.01 || near(v, v0[i], 1e-9)));
+  T('and the first cut\'s piece keeps tipping where it was', c.pieces[0].tilt === tip0);
+  for(let i = 0; i < 8; i++){ const t = c.cutTarget(c.roll); if(t) c.keyboardCut(); advance(app, 20); }
+  let peak = 0;
+  for(let t = 0; t < 40; t++){ advance(app, 16); peak = Math.max(peak, ...Array.from(c.wobble.s, Math.abs)); }
+  T('a flurry of cuts stays within the squash limit', peak <= c.SCENE.squashMax + 1e-6, peak.toFixed(3));
+
+  sub('the jiggle is tuned from ?tune, and only there');
+  const timeToRest = (opts) => {
+    const a = play(); Object.assign(a.ctx.TUNING, { pull: 0 }, opts);
+    stroke(a, guideX(a, 3));
+    let t = 0;
+    while((a.ctx.wobble.active || a.ctx.pieces.some(p => p.tilt !== 0)) && t < 20000){ a.ctx.__advance(16); t += 16; }
+    return t;
+  };
+  const firstTurn = (opts) => {
+    const a = play(); Object.assign(a.ctx.TUNING, { pull: 0 }, opts);
+    stroke(a, guideX(a, 3));
+    let t = 0, rising = true, last = 0;
+    while(t < 3000){ a.ctx.__advance(4); t += 4; const s = a.ctx.pieces[0].tilt; if(rising && s < last) return t; last = s; }
+    return t;
+  };
+  T('strength 0 means no jiggle, tip or rock at all', (() => {
+    const a = play(); a.ctx.TUNING.jiggle = 0; a.ctx.TUNING.pull = 0;
+    stroke(a, guideX(a, 3)); a.ctx.__advance(50);
+    return !a.ctx.wobble.active && a.ctx.pieces.every(p => p.tilt === 0 && p.rock === 0) && a.ctx.pieces[0].vel !== 0;
+  })());
+  const quick = timeToRest({ settle: 1 }), slow = timeToRest({ settle: 0 });
+  T('more settling comes to rest sooner', quick < slow && slow < 20000, quick + ' ms vs ' + slow + ' ms');
+  const firm = firstTurn({ soft: 0 }), soft = firstTurn({ soft: 1 });
+  T('softer moves more slowly', soft > firm, firm + ' ms vs ' + soft + ' ms to turn');
+  T('the extremes stay stable and still come to rest',
+    timeToRest({ soft: 1, settle: 0, jiggle: 2 }) < 20000 && timeToRest({ soft: 0, settle: 1, jiggle: 2 }) < 20000);
+  T('the three are ?tune values with one home each',
+    ['jiggle', 'soft', 'settle'].every(k => k in c.TUNING_DEFAULTS && c.TUNING_SPEC.some(s => s.key === k && s.group === 'Jiggle')) &&
+    (js().match(/TUNING\.(jiggle|soft|settle)\b/g) || []).length >= 6);
+
+  /* The finished roll is served inside the same beat as before: the pieces
+     hop, the board slides away beneath them, the plate arrives, and they
+     land on it. Reduced motion puts them straight there. */
+  sub('serving the finished roll, in the same beat');
+  app = play(); c = app.ctx;
+  finishRollByKeys(app);
+  const st = c.serveTiming(), top = c.plateTop(), n = () => c.pieces.length;
+  const lifts = () => c.pieces.map((p, i) => c.liftOf(i, n()));
+  advance(app, st.at - 30);
+  T('until the gather the pieces stay on the board', c.game.phase === 'done' && lifts().every(y => y === 0) &&
+    c.propsAt().board === 0 && c.propsAt().plate === null);
+  advance(app, st.at + st.ms * 0.35 - c.game.phaseT);
+  T('then they hop, one after another', lifts().every(y => y > top) && lifts()[0] > lifts()[n() - 1],
+    lifts().map(y => y.toFixed(2)).join(' '));
+  T('while the board slides out and the plate slides in', c.propsAt().board > 0 && c.propsAt().plate < 0);
+  advance(app, st.at + st.ms + 5 - c.game.phaseT);
+  T('and they land on the plate', lifts().every(y => near(y, top, 1e-9)) &&
+    c.propsAt().board === null && c.propsAt().plate === 0, lifts().join(' '));
+  T('each landing squashes it a little', c.wobble.active);
+  T('the finished-roll beat is as long as ever', c.game.phase === 'done');
+  advance(app, c.TUNING.holdMs - c.game.phaseT + 40);
+  T('then the plate leaves with them', c.game.phase === 'clear' && c.propsAt().plate > 0 && c.propsAt().board === null);
+  app = play({ reducedMotion: true }); c = app.ctx;
+  finishRollByKeys(app);
+  advance(app, c.serveTiming().at + 40);
+  T('with reduced motion they are simply on the plate at the gather', c.game.gathered &&
+    c.pieces.every((p, i) => near(c.liftOf(i, c.pieces.length), top, 1e-9)) &&
+    c.propsAt().plate === 0 && c.propsAt().board === null && !c.wobble.active);
   T('no errors', app.errors.length === 0, app.errors.join(' | '));
 }
 
@@ -2026,8 +2272,12 @@ function testPermanentRules(){
 
   sub('grown-up screens are out of a child\'s reach');
   const outside = html.slice(html.indexOf('<body>'), html.indexOf('<!-- FEEL TUNING'));
-  T('in play, the only control is the developer button, hidden without ?tune',
-    (outside.match(/<button/g) || []).length === 1 && /id="tuneBtn"[\s\S]{0,160}hidden><\/button>/.test(outside));
+  T('in play, the only controls are the developer button, hidden without ?tune, and the scene\'s ' +
+    'try-again button, hidden unless the 3D scene cannot be shown',
+    (outside.match(/<button/g) || []).length === 2 && /id="tuneBtn"[\s\S]{0,160}hidden><\/button>/.test(outside) &&
+    /id="sceneRetry"[\s\S]{0,160}hidden><\/button>/.test(outside));
+  T('in ordinary play both stay hidden', app.dom.document.getElementById('sceneRetry').hidden === true &&
+    H.loadApp().dom.document.getElementById('tuneBtn').hidden === true);
   T('Backup & data and What\'s new open only from inside the tuning sheet',
     (html.match(/onclick="openDataSettings\(\)"/g) || []).length === 1 &&
     (html.match(/onclick="openUpdates\(\)"/g) || []).length === 1 &&
@@ -2035,8 +2285,198 @@ function testPermanentRules(){
   T('no errors', app.errors.length === 0, app.errors.join(' | '));
 }
 
+/* =========================================================
+   CONTRACT 28 — THE 3D SCENE COMES AND GOES SAFELY
+   Loading, a library that cannot load, a device with no WebGL,
+   a GPU that takes the context away and gives it back — or does
+   not. Play waits whenever the food is not on screen, the screen
+   is never blank or frozen, and recovery is bounded.
+   ========================================================= */
+function testSceneLifecycle(){
+  section('CONTRACT 28 — the 3D scene loads, fails and recovers without a blank or frozen screen');
+  const status = app => app.dom.document.getElementById('sceneStatus');
+  const retry = app => app.dom.document.getElementById('sceneRetry');
+
+  sub('while the library loads, play waits');
+  let app = play({ three: 'deferred' }), c = app.ctx;
+  T('the scene is loading, and says so with a spinner', c.view3d.status === 'loading' && status(app).hidden === false &&
+    status(app).getAttribute('data-state') === 'loading');
+  T('play is paused for it', c.pauses.has('scene'));
+  stroke(app, c.layout.cx);
+  c.keyboardCut();
+  T('a swipe or a key meets no invisible food: nothing is cut', c.roll.cuts.length === 0);
+  const hud = stageOf(app).getContext('2d');
+  hud.recording = true; hud.log.length = 0;
+  c.paintNow();
+  hud.recording = false;
+  T('and no marks are drawn over food that is not there', !hud.log.some(e => e.m === 'stroke' || e.m === 'fill'));
+  T('no hint waits and no frame runs', c.__clock.liveTimers() === 0 && c.__clock.pendingFrames() === 0);
+  app.gpu.resolve();
+  T('once it has loaded, the scene draws and play begins', c.view3d.status === 'ready' && c.pauses.size === 0 &&
+    status(app).hidden === true && app.gpu.renderers[0].renders >= 1);
+  stroke(app, guideX(app, 2));
+  T('and the roll cuts', c.roll.cuts.length === 1);
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+
+  sub('a library that cannot load');
+  app = play({ three: 'fail' }); c = app.ctx;
+  T('the scene is unavailable, not blank: a note and a way to try again',
+    c.view3d.status === 'unavailable' && status(app).hidden === false &&
+    app.dom.document.getElementById('sceneNote').textContent.length > 10 && retry(app).hidden === false);
+  T('play stays paused, so nothing unseen is cut', c.pauses.has('scene') && (stroke(app, c.layout.cx), c.roll.cuts.length === 0));
+  T('it is reported for whoever is debugging, and is not a crash', app.errors.length === 0 &&
+    app.logs.some(l => /3D scene is unavailable/.test(l)));
+  let reloads = 0;
+  c.location.reload = () => { reloads++; };
+  c.retryScene();
+  T('trying again reloads the page, since a failed module load is remembered', reloads === 1);
+
+  sub('a device with no WebGL');
+  app = play({ noWebGL: 1 }); c = app.ctx;
+  T('the scene is unavailable and says so', c.view3d.status === 'unavailable' && retry(app).hidden === false &&
+    /3D drawing/.test(app.dom.document.getElementById('sceneNote').textContent));
+  c.retryScene();
+  T('trying again builds a fresh renderer and play begins', c.view3d.status === 'ready' && c.pauses.size === 0 &&
+    app.gpu.constructed === 2 && status(app).hidden === true);
+  stroke(app, guideX(app, 1));
+  T('and the roll cuts', c.roll.cuts.length === 1);
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+
+  sub('the GPU takes the context away mid-stroke, then gives it back');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  const base = listeners(app);
+  const x = guideX(app, 2);
+  pe(app, 'pointerdown', x, yAt(app, -0.8));
+  pe(app, 'pointermove', x, yAt(app, 0.4));
+  const lost = { defaultPrevented: false, preventDefault(){ this.defaultPrevented = true; } };
+  c.sceneEl.dispatch('webglcontextlost', lost);
+  T('the browser is asked to give it back', lost.defaultPrevented === true);
+  T('play pauses and the stroke ends without a cut', c.view3d.status === 'lost' && c.pauses.has('scene') &&
+    c.gesture === null && c.roll.cuts.length === 0);
+  T('a spinner shows while it waits', status(app).hidden === false && status(app).getAttribute('data-state') === 'lost');
+  pe(app, 'pointermove', x, yAt(app, 1.8)); pe(app, 'pointerup', x, yAt(app, 1.8));
+  T('the finger moving on cuts nothing', c.roll.cuts.length === 0);
+  const rendered = app.gpu.renderers[0].renders;
+  advance(app, 1000);
+  T('nothing is drawn meanwhile', app.gpu.renderers[0].renders === rendered);
+  c.sceneEl.dispatch('webglcontextrestored', {});
+  T('given back, the scene draws again and play resumes', c.view3d.status === 'ready' && c.pauses.size === 0 &&
+    app.gpu.renderers[0].renders > rendered && status(app).hidden === true);
+  T('with the same renderer, and no timer left behind', app.gpu.renderers.length === 1 && c.__clock.liveTimers() === 1);
+  stroke(app, guideX(app, 2));
+  T('and the roll cuts', c.roll.cuts.length === 1);
+
+  sub('the GPU never gives it back');
+  c.sceneEl.dispatch('webglcontextlost', { preventDefault(){} });
+  const first = c.sceneEl;
+  advance(app, c.SCENE.recoverMs + 50);
+  T('after a wait, a fresh renderer is tried on a fresh canvas', c.view3d.status === 'ready' &&
+    app.gpu.renderers.length === 2 && c.sceneEl !== first && app.gpu.renderers[0].disposed === true);
+  T('the old canvas is no longer listened to', Object.values(first._listeners).every(l => l.length === 0));
+  T('everything is drawn again on it', app.gpu.renderers[1].renders >= 1 && app.gpu.renderers[1].info.memory.textures === 7);
+  for(let k = 0; k < c.SCENE.rebuilds; k++){
+    c.sceneEl.dispatch('webglcontextlost', { preventDefault(){} });
+    advance(app, c.SCENE.recoverMs + 50);
+  }
+  T('rebuilding is bounded: after ' + c.SCENE.rebuilds + ', the scene says it is unavailable',
+    c.view3d.status === 'unavailable' && app.gpu.renderers.length === 1 + c.SCENE.rebuilds &&
+    retry(app).hidden === false && c.__clock.liveTimers() === 0);
+  T('the last renderer was let go', app.gpu.renderers.every(r => r.disposed));
+  c.retryScene();
+  T('and a grown-up can still try again', c.view3d.status === 'ready' && c.pauses.size === 0);
+  T('no listener was added along the way', listeners(app) === base, listeners(app) + ' vs ' + base);
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+
+  sub('opened in a background tab, with no size yet');
+  app = play({ viewport: { width: 0, height: 0, dpr: 2 } }); c = app.ctx;
+  T('the scene still builds, with its colours', c.view3d.status === 'ready' && !!c.colors.sky && app.errors.length === 0,
+    c.view3d.status + ' ' + c.view3d.why);
+  c.__resize(1024, 768);
+  advance(app, 20);
+  T('given a size, it lays out and draws', !!c.layout && app.gpu.renderers[0].width === 1024 &&
+    app.gpu.renderers[0].renders >= 1);
+  T('and the hint is armed for it', c.__clock.liveTimers() === 1);
+  stroke(app, guideX(app, 1));
+  T('and the roll cuts', c.roll.cuts.length === 1);
+
+  sub('tuning the jiggle while it is moving');
+  app = play({ search: '?tune' }); c = app.ctx; c.TUNING.pull = 0;
+  stroke(app, guideX(app, 3));
+  advance(app, 60);
+  const mid = Array.from(c.wobble.s);
+  c.openTuning(); c.__flush();
+  c.setTuning('soft', 1); c.setTuning('settle', 0); c.setTuning('jiggle', 2);
+  advance(app, 2000);
+  T('the sheet holds the jiggle where it was', c.wobble.s.every((v, i) => v === mid[i]));
+  c.closeTuning(); c.__flush();
+  advance(app, 34);
+  T('closing it carries on from there, with no jump', c.wobble.active &&
+    c.wobble.s.every((v, i) => Math.abs(v - mid[i]) < 0.05));
+  let t = 0;
+  while(c.wobble.active && t < 20000){ advance(app, 100); t += 100; }
+  T('and even at the softest, least settled setting it comes to rest', !c.wobble.active, t + ' ms');
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
+/* =========================================================
+   CONTRACT 29 — THE VENDORED LIBRARY
+   Three.js is the one file the app loads rather than carries. It
+   is pinned, unmodified, licensed, served from the app's own
+   folder, and precached for offline play.
+   ========================================================= */
+function testVendoredLibrary(){
+  section('CONTRACT 29 — Three.js is pinned, unmodified, local and cached');
+  const fs = require('fs'), path = require('path'), crypto = require('crypto');
+  const record = JSON.parse(fs.readFileSync(path.join(H.THREE_DIR, 'package.json'), 'utf8'));
+  const v = record.vendored || {};
+
+  sub('pinned and recorded');
+  T('the version, source and integrity are recorded', /^\d+\.\d+\.\d+$/.test(v.version || '') &&
+    /^https:\/\/registry\.npmjs\.org\/three\/-\/three-/.test(v.source || '') && /^sha512-/.test(v.integrity || ''));
+  const app = play(), c = app.ctx;
+  T('the library the app loads is that version', c.THREE.REVISION === v.revision &&
+    v.version.split('.')[1] === v.revision, c.THREE.REVISION + ' vs ' + v.revision);
+  T('Node reads the folder as ES modules; browsers ignore the file', record.type === 'module');
+
+  sub('unmodified, and licensed');
+  Object.keys(v.sha256 || {}).forEach(file => {
+    const bytes = fs.readFileSync(path.join(H.THREE_DIR, file));
+    T(file + ' is byte for byte the published file',
+      crypto.createHash('sha256').update(bytes).digest('hex') === v.sha256[file]);
+  });
+  T('all three files are recorded', ['three.module.js', 'three.core.js', 'LICENSE'].every(f => f in (v.sha256 || {})));
+  T('its MIT licence travels with it', /MIT License/.test(fs.readFileSync(path.join(H.THREE_DIR, 'LICENSE'), 'utf8')));
+  T('git keeps its bytes as published', /lib\/three\/\*\* -text/.test(fs.readFileSync(path.join(H.ROOT, '.gitattributes'), 'utf8')));
+  T('it is not an npm dependency of the app', !Object.keys(H.readPkg().dependencies || {}).length);
+
+  sub('local, and one import');
+  T('the app loads it from its own folder, never another host',
+    /^\.\/lib\/three\/three\.module\.js$/.test(c.THREE_URL) && app.gpu.imports.length === 1 &&
+    app.gpu.imports[0] === c.THREE_URL);
+  const script = js();
+  T('it is the app\'s only import()', (script.match(/\bimport\s*\(/g) || []).length === 1);
+  T('the module pulls in only its sibling file', (() => {
+    const mod = fs.readFileSync(path.join(H.THREE_DIR, 'three.module.js'), 'utf8');
+    const froms = [...mod.matchAll(/\bfrom\s*'([^']+)'/g)].map(m => m[1]);
+    return froms.length > 0 && froms.every(f => f === './three.core.js');
+  })());
+  T('its core imports nothing further', !/\bfrom\s*'[^']+'|\bimport\s*\(/.test(
+    fs.readFileSync(path.join(H.THREE_DIR, 'three.core.js'), 'utf8')));
+
+  sub('cached for offline play');
+  T('every file the app is made of exists', c.APP_FILES.every(f => f === './' || fs.existsSync(path.join(H.ROOT, f))));
+  T('the library and its core are among them', c.APP_FILES.indexOf(c.THREE_URL) !== -1 &&
+    c.APP_FILES.indexOf('./lib/three/three.core.js') !== -1);
+  const sw = H.readSW();
+  const listed = (sw.match(/APP-FILES-BEGIN([\s\S]*?)APP-FILES-END/) || ['', ''])[1];
+  T('the service worker precaches exactly that list',
+    JSON.stringify((listed.match(/'[^']*'/g) || []).map(s => s.slice(1, -1))) === JSON.stringify(c.APP_FILES), listed);
+  T('and the list is written by config:sync, not by hand', /APP-FILES-BEGIN[\s\S]*const ASSETS[\s\S]*APP-FILES-END/.test(sw));
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
 module.exports = {
-  T, section, sub, results, reset, testPortability,
+  T, section, sub, results, reset, testPortability, testSceneLifecycle, testVendoredLibrary,
   testBoot, testConfig, testStorage, testCollision, testMigration,
   testNavigation, testOverlays, testToast, testConfirmation, testErase,
   testMobile, testDesignSystem, testPWA, testRelease, testStress,

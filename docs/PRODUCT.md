@@ -32,14 +32,15 @@ usable, both orientations**. The manifest allows any orientation.
 ## Visual direction
 
 Soft 3D clay-toy styling: rounded shapes, warm lighting, a miniature diorama, a
-chunky capybara chef and appealing simplified sushi. This describes the look
-that is wanted, not the technology. **The permanent renderer is undecided.**
-Phase 0B uses Canvas 2D as a prototype choice only.
+chunky capybara chef and appealing simplified sushi, after the Notion product
+brief and moodboard. **Since Phase 1A the scene is real 3D, drawn with
+Three.js (WebGL 2)**, vendored locally; the Phase 0B prototype used Canvas 2D.
 
 ## Roadmap
 
 0. Foundations and a slicing prototype. **(0B: gray-box prototype, v0.1.0.)**
 1. One polished roll and counter, with satisfying slicing and chef reactions.
+   **(1A: the first 3D slicing scene, v0.2.0. No chef yet.)**
 2. Customers, orders, more rolls, plating, short shifts.
 3. Rewards, recipes, decorations, outfits, local save.
 4. A small Tokyo neighbourhood.
@@ -78,12 +79,45 @@ What the prototype does:
 Deliberately not in this phase: chef artwork, customers, economy, recipes,
 neighbourhood, sound, haptics, saved progress, final branding and final icons.
 
+## Phase 1A — the first 3D slicing scene
+
+The same slicing, in one polished 3D scene, after the playtest said cutting
+and pacing felt good but the roll was too stiff and too flat.
+
+- One salmon maki roll on a softly bevelled honey-wood board, on a warm
+  cream counter, with a sage-green plate for the finished pieces. A fixed,
+  slightly raised camera; no camera controls in play.
+- The roll is a rounded, slightly lumpy solid: dark green, mostly matte nori
+  with a soft sheen, rice bulging from its two ends, and at every cut a filled
+  face of nori, rice and salmon. Textures belong to the materials and are
+  computed from the design tokens.
+- The roll moves as one soft body. The knife squashes it where it goes in, a
+  wobble travels along whatever is still joined, the two sides of a cut tip
+  apart and rock back, and each separated piece settles on its own. Quick cuts
+  add to the motion rather than restarting it, and it all comes to rest.
+- A finished roll is served inside the same beat as before: the pieces hop,
+  the board slides away under them, the plate slides in, and they land on it.
+- The swipe, its forgiveness and the pace between rolls are unchanged, and so
+  are the rules that keep every roll finishable.
+- `?tune` gains Jiggle strength, softness and settling.
+- Landscape first; portrait still plays. The scene never stretches, respects
+  safe areas, and draws only while something moves, within a pixel budget.
+- If the device cannot start WebGL, or loses its context, the screen says so
+  calmly and recovers, a bounded number of times.
+
+Deliberately not in this phase: the chef, customers, restaurant systems,
+sound, haptics and more recipes.
+
 ## Decisions so far
 
 - APP_ID `capybara-sushi`, name **Capybara Sushi**, short name **Capy Sushi**
   (the home-screen label is limited to 12 characters).
-- The existing web/PWA foundation, Canvas 2D, no new dependencies; touch,
-  mouse and pen through Pointer Events.
+- The existing web/PWA foundation; touch, mouse and pen through Pointer
+  Events. Phase 0B drew with Canvas 2D and no dependencies.
+- Phase 1A, with the user's approval: Three.js r186 (npm `three@0.186.1`),
+  pinned and served from this app's own folder, never from a CDN; no other
+  framework, physics engine or build step. It needs WebGL 2 and, on iPhone
+  and iPad, iOS or iPadOS 16.4 or newer.
 - Gameplay and tuning are kept in memory; nothing is saved.
 - Gray-box visuals and the placeholder icons.
 - Phase 0C, with the user's approval: pushed to `main` and published on GitHub

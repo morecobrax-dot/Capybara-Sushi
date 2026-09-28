@@ -1020,6 +1020,26 @@ const APP_FILES = [
    ========================================================= */
 const APP_UPDATES = [
   {
+    id: 'v0-3-0',
+    version: '0.3.0',
+    title: 'Sushi you can see inside',
+    date: '2026-09-28',
+    summary: 'A three-quarter view that shows the rice and salmon inside, a roll that looks like real ' +
+             'maki, and pieces served with their cut faces showing. Still a development preview for trying by hand.',
+    newFeatures: [
+      'The camera looks from a little to the side, so the end of the roll shows its rice and salmon',
+      'Served pieces turn on the plate so every cut face shows, at their real sizes',
+      'With a phone held upright, the plate waits behind the board and the pieces hop back onto it'
+    ],
+    improvements: [
+      'The nori is deep green and matte, finely textured, with a soft sheen and a seam where it wraps',
+      'The rice shows plump grains, and the salmon is glossy with pale bands, set a little differently in every piece',
+      'Each cut reacts a little differently, and a quick flick snaps harder than a slow drag',
+      'The swipe, its forgiveness and the pace between rolls are the same as before'
+    ],
+    fixes: []
+  },
+  {
     id: 'v0-2-0',
     version: '0.2.0',
     title: 'A real 3D roll',
@@ -1716,7 +1736,6 @@ const SLICE = Object.freeze({
   reach: 0.5,        // a guide attracts cuts within this share of the guide spacing
   slop: 0.25,        // the knife counts from this share of the thickness above and below
   omega: 22,         // spring frequency, rad/s
-  plateGap: 3,       // px between pieces once gathered on the plate
   gatherAt: 0.4,     // how far into the finished-roll hold the pieces gather
   flashMs: 320,      // a cut's two new faces stay lit this long, reduced motion or not
   trailMs: 180,      // the blade trail fades over this
@@ -1740,17 +1759,33 @@ const SCENE = Object.freeze({
   squareness: 2.4,     // its cross-section, from round (2) toward square
   lumps: 0.02,         // how much its girth wanders along its length
   endRound: 0.08,      // the rounding where the roll's two ends meet the nori
-  endDome: 0.38,       // how far the rice bulges out of those two ends, so they show
+  endDome: 0.22,       // how far the rice bulges out of those two ends, so they show
   cutRound: 0.05,      // the soft edge of a cut face
+  band: 0.075,         // the nori's thickness on a face, as a share of the roll's radius
+  faceSpan: 2.3,       // radii of the face's rice and salmon the face texture covers across
   ringStep: 0.15,      // geometry rings along the roll
   segments: 40,        // geometry points around it
   capRings: 6,         // geometry rings across a face
-  texSpan: 6.6,        // world units the nori texture covers before it repeats
-  pitch: 26,           // degrees the camera looks down at the roll
-  distance: 17,        // from the camera to the middle of the roll
+  texSpan: 4,          // world units the nori texture covers along the roll before it repeats
+  seam: -16,           // degrees round from the top where the nori's wrap overlaps itself
+  /* The camera stands to the right of the roll and a little above it, a
+     three-quarter view that shows the roll's near end and each new cut face.
+     Its picture is turned less than the camera itself, as with a shifted
+     lens, so the roll still lies within a few degrees of level for a
+     downward swipe. Degrees; wide screens use `wide`, tall ones `tall`, and
+     the shapes between blend. */
+  wide: Object.freeze({ pitch: 27, yaw: 10, orbit: 38, distance: 24 }),
+  tall: Object.freeze({ pitch: 38, yaw: 10, orbit: 38, distance: 26 }),
+  /* Where the key and fill lights stand; the room the food reflects has its
+     bright window and cooler glow in the same places. */
+  keyLight: Object.freeze([4, 10, 8]),
+  fillLight: Object.freeze([-8, 4, 6]),
   board: Object.freeze({ w: 10.6, d: 4.6, h: 0.5, round: 0.55, bevel: 0.14 }),
-  plate: Object.freeze({ w: 10.2, d: 3.8, h: 0.3, round: 1.3, bevel: 0.15 }),
+  plate: Object.freeze({ w: 11.2, d: 4.0, h: 0.3, round: 1.4, bevel: 0.15 }),
   hop: 1.1,            // how high the pieces hop onto the plate
+  serveTurn: 30,       // degrees each served piece turns, so its face shows
+  plateBack: 8,        // on a tall screen the plate waits this far behind the board
+  serveGap: 0.08,      // between served pieces, along their length
   staggerMs: 22,       // one piece after the other
   nodes: 41,           // points along the roll the jiggle is worked out at
   /* The jiggle is a soft body: a wobble travels along the roll at a wave
@@ -1779,6 +1814,13 @@ const SCENE = Object.freeze({
   tipKick: 2.2,        // rad/s the two sides of a cut tip away from it
   tipMax: 0.12,        // radians a piece may tip when nothing stands beside it
   rockKick: 1.3,       // rad/s the halves rock back from the blade
+  /* No two cuts react quite alike: a quick flick snaps a little harder than a
+     slow drag, and each cut varies a little on its own, while on average the
+     jiggle is as strong as ever. */
+  strokeSlow: 0.4,     // px/ms: a slow drag ...
+  strokeFast: 2,       // ... and a flick
+  recoilRange: 0.3,    // a flick's recoil over a slow drag's, shared either side of 1
+  recoilVary: 0.12,    // and each cut's own variation, either way
   pixelBudget: 3.2e6,  // the most drawing-buffer pixels the scene renders
   maxDpr: 2,           // and never more than this many per CSS pixel
   recoverMs: 2500,     // how long a lost 3D context gets to come back by itself
@@ -1898,25 +1940,72 @@ let layout = null;            // this screen's geometry; null until the stage ha
 let colors = {};              // the layer-4 tokens, read from CSS
 let stageLeft = 0, stageTop = 0;
 
-/* The camera looks down at the roll from the same angle and distance on
-   every screen; only the scale changes, as ppw (pixels per world unit).
-   Every point on the roll's axis is the same depth from the camera, so the
-   roll maps onto the screen at that one scale — which keeps the flat
-   geometry the knife is tested against exact. */
-function viewFor(ppw, px0, py0){
-  const p = SCENE.pitch * Math.PI / 180;
-  return { ppw: ppw, F: ppw * SCENE.distance, px0: px0, py0: py0,
-           sin: Math.sin(p), cos: Math.cos(p), ay: SCENE.halfHeight,
-           cy: SCENE.halfHeight + SCENE.distance * Math.sin(p), cz: SCENE.distance * Math.cos(p) };
+const DEG = Math.PI / 180;
+
+/* The camera for a screen of this shape: SCENE.wide on a landscape screen,
+   SCENE.tall in portrait, and a blend between. `wide` says how far along. */
+function cameraFor(w, h){
+  const k = clamp01((w / h - 0.75) / 0.6), A = SCENE.tall, B = SCENE.wide;
+  const by = key => A[key] + (B[key] - A[key]) * k;
+  return { pitch: by('pitch'), yaw: by('yaw'), orbit: by('orbit'), distance: by('distance'), wide: k };
 }
+
+/* A camera: where it stands (c), which way its picture faces (right r, up u,
+   backward b), and its focal length F in pixels, with the roll's middle
+   shown at stage pixel (sx, sy). ppw is how many pixels one unit of the
+   world covers there. */
+function viewFor(spec, F, sx, sy){
+  const p = spec.pitch * DEG, yi = spec.yaw * DEG, yo = spec.orbit * DEG, D = spec.distance;
+  const cp = Math.cos(p), sp = Math.sin(p);
+  const v = { F: F, px0: 0, py0: 0, ppw: 1,
+              cx: D * cp * Math.sin(yo), cy: SCENE.halfHeight + D * sp, cz: D * cp * Math.cos(yo),
+              rx: Math.cos(yi), rz: -Math.sin(yi),
+              ux: -sp * Math.sin(yi), uy: cp, uz: -sp * Math.cos(yi),
+              bx: cp * Math.sin(yi), by: sp, bz: cp * Math.cos(yi) };
+  const mid = project(v, 0, SCENE.halfHeight, 0);
+  v.px0 = sx - mid.x;
+  v.py0 = sy - mid.y;
+  v.ppw = F / depthOf(v, 0, SCENE.halfHeight, 0);
+  return v;
+}
+function depthOf(v, x, y, z){ return -((x - v.cx) * v.bx + (y - v.cy) * v.by + (z - v.cz) * v.bz); }
 
 /* A point in the world as stage pixels, through that camera. The 3D scene
    is drawn through the same camera; a contract checks the two agree. */
 function project(v, x, y, z){
-  const dy = y - v.cy, dz = z - v.cz;
-  const depth = -v.sin * dy - v.cos * dz;
-  const up = v.cos * dy - v.sin * dz;
-  return { x: v.px0 + v.F * x / depth, y: v.py0 - v.F * up / depth };
+  const dx = x - v.cx, dy = y - v.cy, dz = z - v.cz;
+  const X = dx * v.rx + dz * v.rz, Y = dx * v.ux + dy * v.uy + dz * v.uz;
+  const Z = -(dx * v.bx + dy * v.by + dz * v.bz);
+  return { x: v.px0 + v.F * X / Z, y: v.py0 - v.F * Y / Z };
+}
+
+/* The other way: the point of the roll's upright plane (z = 0, through its
+   axis) — or of the upright plane at depth z0 — that shows at stage pixel
+   (sx, sy), or null if none does. */
+function onRollPlane(v, sx, sy, z0){
+  const a = (sx - v.px0) / v.F, b = (v.py0 - sy) / v.F;
+  const wx = v.rx * a + v.ux * b - v.bx, wy = v.uy * b - v.by, wz = v.rz * a + v.uz * b - v.bz;
+  if(!(wz < -1e-9)) return null;
+  const k = ((z0 || 0) - v.cz) / wz;
+  return { x: v.cx + k * wx, y: v.cy + k * wy };
+}
+
+/* The knife works on that plane, measured in the pixels of the roll's
+   middle: x along the roll from its middle, y down from the board's top.
+   However the camera looks, the roll lies level there, its pieces are plain
+   rectangles, and a straight swipe on the glass is a straight line — so the
+   rules of a cut read the same on every screen. */
+function toRoll(p){
+  const v = layout ? layout.view : null, w = v && p ? onRollPlane(v, p.x, p.y) : null;
+  return w ? { x: w.x * v.ppw, y: -w.y * v.ppw } : null;
+}
+function toStage(x, y){ const v = layout.view; return project(v, x / v.ppw, -y / v.ppw, 0); }
+/* Where a point of the world falls on that plane, along the camera's sight
+   line: a piece lifted or rocked off the plane is hit where it shows. */
+function rollX(v, x, y, z){
+  if(z === 0) return x * v.ppw;
+  const p = project(v, x, y, z), w = onRollPlane(v, p.x, p.y);
+  return w ? w.x * v.ppw : x * v.ppw;
 }
 
 /* The roll's cross-section: a softly squared circle, a little flattened,
@@ -1928,40 +2017,132 @@ function profilePoint(t){
   return { y: SCENE.halfHeight * (1 + c * k), z: s * k };
 }
 
-/* How far above and below its middle the roll shows, at one pixel per unit.
-   The same on every screen, so it is worked out once. */
-let bandCache = null;
-function unitBand(){
-  if(bandCache) return bandCache;
-  const v = viewFor(1, 0, 0);
-  let top = Infinity, bot = -Infinity;
+/* How high and low the roll shows on that plane: where the sight lines that
+   graze its outline meet the plane. The same all along the roll, since the
+   roll is the same all along. */
+function rollBand(v){
+  let hi = -Infinity, lo = Infinity;
   for(let i = 0; i < 180; i++){
-    const q = profilePoint(i / 180 * Math.PI * 2), p = project(v, 0, q.y, q.z);
-    if(p.y < top) top = p.y;
-    if(p.y > bot) bot = p.y;
+    const q = profilePoint(i / 180 * Math.PI * 2);
+    const y = v.cy + v.cz / (v.cz - q.z) * (q.y - v.cy);
+    if(y > hi) hi = y;
+    if(y < lo) lo = y;
   }
-  bandCache = { top: top, bot: bot };
-  return bandCache;
+  return { top: -hi * v.ppw, bot: -lo * v.ppw, hi: hi, lo: lo };
 }
 
-/* The roll is sized so that, fully cut, gaps and all, it still fits in the
-   safe area — on a tablet or a phone held either way — and the camera is
-   placed to show it at exactly that size. */
+/* The camera is placed so that the food fits the safe area — on a tablet or
+   a phone held either way: the roll cut and spread, the hint's swipe across
+   it, the hop, the served row and the finished mark. On a wide screen the
+   whole board and plate show too, as long as that costs the food no more
+   than a twentieth of its size; on a short phone their far edges may run off
+   instead. On a tall screen the board may run off the sides, so the food
+   can be as big as the width allows, and the plate waits in view behind the
+   board (plateZ), filling height that would otherwise be empty counter; the
+   pieces hop back onto it. On a wide screen it slides in. */
 function computeLayout(W, H, ins, n, gapWanted, dpr){
   const margin = Math.max(16, Math.min(W, H) * 0.04);
   const area = { x: ins.left + margin, y: ins.top + margin,
                  w: W - ins.left - ins.right - margin * 2,
                  h: H - ins.top - ins.bottom - margin * 2 };
   if(!(area.w > 40 && area.h > 40)) return null;
-  const gap = Math.min(gapWanted, area.w * 0.14 / Math.max(1, n - 1));
-  const band = unitBand();
-  const thick = (band.bot - band.top) / SCENE.rollLen;      // on-screen thickness per unit of length
-  const L = Math.min(area.w * 0.86, 760, Math.min(160, area.h * 0.34) / thick);
-  const ppw = L / SCENE.rollLen;
-  const cx = area.x + area.w / 2, py0 = area.y + area.h * 0.55;
-  const top = py0 + band.top * ppw, bot = py0 + band.bot * ppw;
-  return { W: W, H: H, dpr: dpr, ins: ins, area: area, L: L, T: bot - top, gap: gap,
-           top: top, bot: bot, mid: (top + bot) / 2, cx: cx, view: viewFor(ppw, cx, py0) };
+  const spec = cameraFor(area.w, area.h), tall = spec.wide < 0.5, plateZ = tall ? -SCENE.plateBack : 0;
+  const unit = viewFor(spec, 1, 0, 0), plateX = tall ? behindMiddle(unit, plateZ) : 0;
+  const frame = frameOf(unit, !tall, plateX, plateZ, n), cap = area.h * 0.34 / frame.thick;
+  const fit = b => Math.min(area.w * 0.96 / (b.x1 - b.x0), area.h * 0.94 / (b.y1 - b.y0), cap);
+  const Ffood = fit(frame.food), Fall = fit(frame.all), whole = Fall >= Ffood * 0.95;
+  const F = whole ? Fall : Ffood, box = whole ? frame.all : frame.food;
+  const view = viewFor(spec, F, area.x + area.w / 2 - F * (box.x0 + box.x1) / 2,
+                                area.y + area.h / 2 - F * (box.y0 + box.y1) / 2);
+  const band = rollBand(view), ppw = view.ppw;
+  const B = SCENE.board, P = SCENE.plate, top = plateTop();
+  const board = [B.w / 2, -B.h, 0, -B.d / 2, B.d / 2];
+  const plate = [P.w / 2, top - P.h, top + 2 * SCENE.halfHeight, plateZ - P.d / 2, plateZ + P.d / 2, plateX];
+  const away = (side, box) => clearDistance(view, W, side, box);
+  return { W: W, H: H, dpr: dpr, ins: ins, area: area, spec: spec, view: view,
+    L: SCENE.rollLen * ppw, gap: Math.min(gapWanted, area.w * 0.14 / Math.max(1, n - 1)),
+    top: band.top, bot: band.bot, mid: (band.top + band.bot) / 2, T: band.bot - band.top, cx: 0,
+    plateX: plateX, plateZ: plateZ,
+    /* How far things travel to leave or enter the stage, in world units:
+       the group as it clears and as the next roll arrives, and on a wide
+       screen the board and plate as they trade places. */
+    exit: tall ? Math.max(away(1, board), away(1, plate)) : away(1, plate),
+    enter: tall ? Math.max(away(-1, board), away(-1, plate)) : away(-1, board),
+    span: Math.max(away(1, board), away(-1, plate)),
+    /* How wide a row of served pieces may be: the plate's top, or on a tall
+       screen what the stage shows at the plate's depth, if less. */
+    serveRoom: Math.min(P.w - 2 * P.bevel - 0.5, visibleWidth(view, W, plateX, top + SCENE.halfHeight, plateZ) - 0.5) };
+}
+
+/* On a tall screen the plate waits behind the board: this is where along
+   the counter it stands to show straight above the roll's middle, since
+   the camera looks at it from the side. */
+function behindMiddle(v, z){
+  const mid = project(v, 0, SCENE.halfHeight, 0), row = project(v, 0, plateTop(), z);
+  const w = onRollPlane(v, mid.x, row.y, z);
+  return w ? w.x : 0;
+}
+
+/* The bounds, through a camera with F = 1, of the food — what must show —
+   and of everything, the whole board and plate as well; and the roll's
+   thickness there. */
+function frameOf(v, wide, plateX, plateZ, n){
+  const B = SCENE.board, P = SCENE.plate, h2 = 2 * SCENE.halfHeight, top = plateTop();
+  const half = SCENE.rollLen * 0.56;
+  const food = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+  const all = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+  const add = (box, xs, ys, zs) => xs.forEach(x => ys.forEach(y => zs.forEach(z => {
+    const p = project(v, x, y, z);
+    box.x0 = Math.min(box.x0, p.x); box.x1 = Math.max(box.x1, p.x);
+    box.y0 = Math.min(box.y0, p.y); box.y1 = Math.max(box.y1, p.y);
+  })));
+  const both = (xs, ys, zs) => { add(food, xs, ys, zs); add(all, xs, ys, zs); };
+  both([-half, half], [0, h2], [-1, 1]);                 // the roll, cut and spread
+  both([0], [top + h2 + SCENE.hop], [0]);                // the hop, and the mark above it
+  /* The hint's swipe, from above the roll to below it, as far along as a
+     guide of this roll can be, spread; its dot may use the margin. */
+  const band = rollBand(v), T = band.hi - band.lo, reach = SCENE.rollLen * (0.53 - 1 / Math.max(2, n));
+  both([-reach, reach], [band.hi + 0.75 * T, band.lo - 0.45 * T], [0]);
+  if(wide){
+    const row = P.w / 2 - P.bevel;
+    both([-row, row], [top, top + h2], [-1.7, 1.7]);    // the served row
+    add(all, [-B.w / 2, B.w / 2], [-B.h, 0], [-B.d / 2, B.d / 2]);
+    add(all, [-P.w / 2, P.w / 2], [top - P.h, top], [-P.d / 2, P.d / 2]);
+  } else {
+    both([plateX - half * 0.9, plateX + half * 0.9], [top - P.h, top + h2 + SCENE.hop], [plateZ - P.d / 2, plateZ + P.d / 2]);
+  }
+  return { food: food, all: all, thick: project(v, 0, band.lo, 0).y - project(v, 0, band.hi, 0).y };
+}
+
+/* How far a box on the counter must slide to be clear of the stage, in
+   world units: `side` 1 to the right, −1 to the left. The box is given as
+   [half its width, its lowest y, its highest y, its nearest z, its farthest,
+   and where along the counter its middle stands]. */
+function clearDistance(v, W, side, b){
+  const at = b[5] || 0;
+  const seen = s => {
+    for(const x of [at + s * side - b[0], at + s * side + b[0]]){
+      for(const y of [b[1], b[2]]){
+        for(const z of [b[3], b[4]]){
+          if(depthOf(v, x, y, z) < 0.5) continue;
+          const px = project(v, x, y, z).x;
+          if(side > 0 ? px < W + 2 : px > -2) return true;
+        }
+      }
+    }
+    return false;
+  };
+  let lo = 0, hi = 90;
+  if(seen(hi)) return hi;
+  for(let i = 0; i < 32; i++){ const m = (lo + hi) / 2; if(seen(m)) lo = m; else hi = m; }
+  return hi;
+}
+
+/* The world's width the stage shows at height y and depth z, either side
+   of x: the smaller half, doubled. */
+function visibleWidth(v, W, x, y, z){
+  const mid = project(v, x, y, z), l = onRollPlane(v, 6, mid.y, z), r = onRollPlane(v, W - 6, mid.y, z);
+  return l && r ? 2 * Math.min(x - l.x, r.x - x) : SCENE.rollLen;
 }
 
 /* The canvas cannot read env(). The probe carries the insets as padding. */
@@ -2012,16 +2193,19 @@ function relayout(){
   if(stageEl.width !== bw) stageEl.width = bw;
   if(stageEl.height !== bh) stageEl.height = bh;
   colors = readColors();
-  const changed = !before || ['W', 'H', 'dpr', 'L', 'T', 'gap', 'top', 'cx'].some(k => before[k] !== layout[k]);
+  const changed = !before || ['W', 'H', 'dpr', 'L', 'T', 'gap', 'top'].some(k => before[k] !== layout[k]) ||
+                  ['F', 'px0', 'py0', 'cx', 'cz'].some(k => before.view[k] !== layout.view[k]);
   if(changed) applyView();
   return changed;
 }
 
 /* ---------- GEOMETRY ---------- */
 /* One function says where every piece is. The 3D scene places each piece
-   from exactly these poses and the knife is tested against their
-   projection, so a piece is always cut where it appears, moving or not. */
-function playGap(){ return game.gathered ? SLICE.plateGap : (layout ? layout.gap : 0); }
+   from exactly these poses, and the knife is tested against the same poses
+   seen through the same camera, so a piece is always cut where it appears,
+   moving or not. Positions along the board are in the knife's pixels
+   (see toRoll), from the roll's middle. */
+function playGap(){ return layout ? layout.gap : 0; }
 
 function restLefts(){
   const pcs = piecesOf(roll), g = playGap();
@@ -2029,38 +2213,83 @@ function restLefts(){
   return pcs.map((p, i) => left + p.u0 * layout.L + i * g);
 }
 
-/* Each piece's left end from its slide alone, in stage pixels. The tip and
-   the hop are drawn on top of this and never fed back into it. */
+/* Each piece's left end from its slide alone. The tip and the hop are drawn
+   on top of this and never fed back into it. */
 function slideLefts(){
   return restLefts().map((x, i) => x + (pieces[i] ? pieces[i].off : 0));
 }
 
+/* Each piece as the knife meets it: the stretch of the roll's plane its
+   axis covers, as seen through the camera, with the band the knife counts
+   in, and its pose in the world. */
 function pieceRects(){
   if(!layout) return [];
-  const pcs = piecesOf(roll), lefts = slideLefts(), v = layout.view;
+  const pcs = piecesOf(roll), lefts = slideLefts(), v = layout.view, n = pcs.length;
+  const spots = game.gathered ? plateSpots(pcs.map(p => (p.u1 - p.u0) * SCENE.rollLen), layout.serveRoom) : null;
   return pcs.map((p, i) => {
     const s = pieces[i] || AT_REST;
     const len = (p.u1 - p.u0) * SCENE.rollLen;
-    const pose = poseOf((lefts[i] + gx - layout.cx) / v.ppw, len, tipShown(i, lefts), s.rock,
-                        liftOf(i, pcs.length));
-    const a = project(v, pose.ax, pose.ay, pose.az), b = project(v, pose.bx, pose.by, pose.bz);
-    return { index: i, u0: p.u0, u1: p.u1, x: a.x, y: layout.top, w: b.x - a.x, h: layout.T, pose: pose };
+    let pose = poseOf((lefts[i] + gx - layout.cx) / v.ppw, len, tipShown(i, lefts), s.rock, liftOf(i, n));
+    if(spots) pose = servedPose(pose, spots[i], i, n);
+    const a = rollX(v, pose.ax, pose.ay, pose.az), b = rollX(v, pose.bx, pose.by, pose.bz);
+    return { index: i, u0: p.u0, u1: p.u1, x: a, y: layout.top, w: b - a, h: layout.T, pose: pose };
   });
 }
 
-/* A piece's pose in the world: its bottom middle, how it is turned, and
-   where its axis runs. It tips about the bottom edge it leans over, so it
-   neither leaves the board nor sinks into it, and it rocks about the line
-   it rests on. */
+/* A piece's pose on the board: its bottom middle, and how it leans. It tips
+   about the bottom edge it leans over, so it neither leaves the board nor
+   sinks into it, and it rocks about the line it rests on. */
 function poseOf(x0, len, tip, rock, lift){
   const ox = x0 + len / 2, pivot = tip > 0 ? x0 : x0 + len;
   const c = Math.cos(tip), s = Math.sin(tip);
-  const qx = pivot + (ox - pivot) * c, qy = lift + (ox - pivot) * s;
-  const ay = SCENE.halfHeight * Math.cos(rock), az = SCENE.halfHeight * Math.sin(rock);
-  const h = len / 2;
-  return { x: qx, y: qy, tip: tip, rock: rock, len: len,
-           ax: qx - h * c - ay * s, ay: qy - h * s + ay * c, az: az,
-           bx: qx + h * c - ay * s, by: qy + h * s + ay * c, bz: az };
+  return placePose(pivot + (ox - pivot) * c, lift + (ox - pivot) * s, 0, len, tip, rock, 0);
+}
+/* Any pose: the bottom middle at (x, y, z), rocked, then tipped, then turned
+   about its upright axis — the order the scene applies them in — and where
+   its axis then runs. */
+function placePose(x, y, z, len, tip, rock, turn){
+  const c = Math.cos(tip), s = Math.sin(tip), ct = Math.cos(turn), st = Math.sin(turn);
+  const ay = SCENE.halfHeight * Math.cos(rock), az = SCENE.halfHeight * Math.sin(rock), h = len / 2;
+  const ex = -h * c - ay * s, fx = h * c - ay * s;
+  return { x: x, y: y, z: z, tip: tip, rock: rock, turn: turn, len: len,
+           ax: x + ex * ct + az * st, ay: y - h * s + ay * c, az: z - ex * st + az * ct,
+           bx: x + fx * ct + az * st, by: y + h * s + ay * c, bz: z - fx * st + az * ct };
+}
+
+/* On its way to the plate, and on it: from where it stood on the board to
+   its spot on the plate, turning as it hops. The plate's own place moves
+   with the group as it clears. */
+function servedPose(board, spot, i, n){
+  const e = easeInOut(hopT(i, n)), home = gx / layout.view.ppw + layout.plateX + spot.x;
+  return placePose(board.x + (home - board.x) * e, board.y, (layout.plateZ + spot.z) * e, board.len,
+                   board.tip, board.rock, spot.turn * e);
+}
+
+/* Where each piece sits on the plate, from its middle: in one row, in the
+   order they were cut and at their real sizes, lying on their sides, each
+   turned the same way so the end toward the camera — rice and salmon —
+   shows. Each stands beside the last along its own length, so turning
+   never makes two touch. The turn is SCENE.serveTurn, or less where the row
+   would not fit `room` across or the plate from front to back. */
+function plateSpots(lens, room){
+  const n = lens.length, g = SCENE.serveGap, deep = SCENE.plate.d / 2 - SCENE.plate.bevel - 0.1;
+  const longest = Math.max.apply(null, lens);
+  const lay = turn => {
+    const c = Math.cos(turn), s = Math.sin(turn), xs = [0];
+    for(let i = 1; i < n; i++) xs.push(xs[i - 1] + ((lens[i - 1] + lens[i]) / 2 + g) / c);
+    let lo = Infinity, hi = -Infinity;
+    xs.forEach((x, i) => { const e = lens[i] / 2 * c + s; lo = Math.min(lo, x - e); hi = Math.max(hi, x + e); });
+    return { xs: xs, lo: lo, hi: hi, fits: hi - lo <= room && longest / 2 * s + c <= deep };
+  };
+  let turn = SCENE.serveTurn * DEG, row = lay(turn);
+  if(!row.fits){
+    let a = 0, b = turn;
+    for(let k = 0; k < 24; k++){ const m = (a + b) / 2; if(lay(m).fits) a = m; else b = m; }
+    turn = a;
+    row = lay(turn);
+  }
+  const mid = (row.lo + row.hi) / 2;
+  return row.xs.map(x => ({ x: x - mid, z: 0, turn: -turn }));
 }
 
 /* How far piece i may tip toward a neighbour without touching it: half the
@@ -2110,14 +2339,17 @@ function settleSprings(){
    A stroke makes at most one cut. */
 let gesture = null;
 let strokeSeq = 0;
-let healing = [];             // unfinished incisions closing: { ax, ay, bx, by, left }
-let trail = [];               // recent blade points: { x, y, age, s }
+let healing = [];             // unfinished incisions closing, on the roll's plane: { ax, ay, bx, by, left }
+let trail = [];               // recent blade points, on the glass: { x, y, age, s }
 
+/* The band the knife counts in, and everything a stroke is measured by, are
+   on the roll's plane (toRoll): the finger is followed through the camera,
+   so a swipe down the drawn roll crosses it wherever the camera stands. */
 function bandTop(){ return layout.top - layout.T * SLICE.slop; }
 function bandBot(){ return layout.bot + layout.T * SLICE.slop; }
 function clampToRoll(y){ return Math.max(layout.top, Math.min(layout.bot, y)); }
 function stagePoint(ev){
-  return { x: (Number(ev.clientX) || 0) - stageLeft, y: (Number(ev.clientY) || 0) - stageTop };
+  return { x: (Number(ev.clientX) || 0) - stageLeft, y: (Number(ev.clientY) || 0) - stageTop, t: Number(ev.timeStamp) };
 }
 function lerpPoint(a, b, t){ return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
 
@@ -2136,10 +2368,11 @@ function xAtY(a, b, y){
   return a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y);
 }
 
-/* A visit is one pass of the knife through the roll's band. */
+/* A visit is one pass of the knife through the roll's band, and the fastest
+   the finger moved on the glass while in it. */
 function openVisit(p){
   const y = clampToRoll(p.y);
-  return { ax: p.x, ay: p.y, bx: p.x, by: p.y, minY: y, maxY: y, crossX: null, dead: false };
+  return { ax: p.x, ay: p.y, bx: p.x, by: p.y, minY: y, maxY: y, crossX: null, dead: false, speed: 0 };
 }
 function healVisit(v){
   if(!v || v.maxY - v.minY < 1 || motionReduced()) return;
@@ -2164,17 +2397,21 @@ function addTrail(p, s){
   if(trail.length > SLICE.trailMax) trail.shift();
 }
 
-/* One sample from the pointer that owns the knife. */
+/* One sample from the pointer that owns the knife, on the glass. Its trail
+   and its travel are measured there; the cut is measured on the roll's
+   plane, where a straight segment of the swipe is still straight. */
 function feed(g, p){
   const a = g.last;
   g.last = p;
   g.travel += Math.hypot(p.x - a.x, p.y - a.y);
   addTrail(p, g.seq);
   if(g.spent || !layout || game.phase !== 'ready' || g.rollId !== roll.id) return;
-  const part = clipToBand(a, p, bandTop(), bandBot());
+  const qa = toRoll(a), q = toRoll(p);
+  const part = qa && q ? clipToBand(qa, q, bandTop(), bandBot()) : null;
   if(!part){ if(g.visit) closeVisit(g); return; }
   if(!g.visit){ g.visit = openVisit(part.a); touchFood(part.a); }
   const v = g.visit;
+  if(p.t > a.t) v.speed = Math.max(v.speed, Math.hypot(p.x - a.x, p.y - a.y) / (p.t - a.t));
   [part.a, part.b].forEach(q => {
     const y = clampToRoll(q.y);
     if(y < v.minY) v.minY = y;
@@ -2184,7 +2421,7 @@ function feed(g, p){
   v.bx = part.b.x;
   v.by = part.b.y;
   tryCut(g);
-  if(!g.spent && g.visit && (p.y < bandTop() || p.y > bandBot())) closeVisit(g);
+  if(!g.spent && g.visit && (q.y < bandTop() || q.y > bandBot())) closeVisit(g);
 }
 
 /* Cut the moment a pass qualifies, not when the finger lifts. */
@@ -2206,6 +2443,7 @@ function tryCut(g){
 }
 
 function commitCut(index, u, g){
+  const force = recoilForce(g && g.visit ? g.visit.speed : 0);
   const drawn = slideLefts();
   const splitAt = drawn[index] + (u - piecesOf(roll)[index].u0) * layout.L;
   const parent = pieces[index] || newPieceState();
@@ -2228,7 +2466,7 @@ function commitCut(index, u, g){
      so pieces already cut never bump into each other. */
   if(!motionReduced()){
     pieces.forEach((p, i) => { p.vel += (i <= index ? -1 : 1) * TUNING.pop; });
-    recoil(index, u);
+    recoil(index, u, force);
   }
   const remaining = roll.n - 1 - roll.cuts.length;
   announce(remaining > 0 ? 'Cut. ' + remaining + ' to go.' : 'Roll finished. Here comes another.');
@@ -2269,14 +2507,14 @@ function onStageDown(ev){
   }
   if(type === 'mouse' && ev.button !== 0) return;
   if(isPaused() || !layout || game.phase !== 'ready') return;
-  const p = stagePoint(ev);
+  const p = stagePoint(ev), q = toRoll(p);
   gesture = { id: ev.pointerId, type: type, seq: ++strokeSeq, rollId: roll.id,
               last: p, travel: 0, visit: null, spent: false };
   try{ if(stageEl.setPointerCapture) stageEl.setPointerCapture(ev.pointerId); }catch(e){}
   if(typeof ev.preventDefault === 'function') ev.preventDefault();
   hideHint();
   addTrail(p, gesture.seq);
-  if(p.y >= bandTop() && p.y <= bandBot()){ gesture.visit = openVisit(p); touchFood(p); }
+  if(q && q.y >= bandTop() && q.y <= bandBot()){ gesture.visit = openVisit(q); touchFood(q); }
   requestFrame();
 }
 
@@ -2307,13 +2545,14 @@ function onStageCancel(ev){
 
 /* A tap is noticed, never punished: the piece under it squashes and jiggles. */
 function tapWobble(p){
-  if(motionReduced() || !layout || p.y < layout.top || p.y > layout.bot) return;
-  const rect = pieceAt(p.x);
+  const q = toRoll(p);
+  if(motionReduced() || !layout || !q || q.y < layout.top || q.y > layout.bot) return;
+  const rect = pieceAt(q.x);
   if(!rect || !pieces[rect.index]) return;
   const s = pieces[rect.index];
-  s.vel += (p.x < rect.x + rect.w / 2 ? 1 : -1) * SLICE.tapKick;
+  s.vel += (q.x < rect.x + rect.w / 2 ? 1 : -1) * SLICE.tapKick;
   s.rockV -= SCENE.rockKick * 0.5 * TUNING.jiggle;
-  kick(uAt(rect, p.x), -SCENE.kickTap, SCENE.kickWidth * 1.6);
+  kick(uAt(rect, q.x), -SCENE.kickTap, SCENE.kickWidth * 1.6);
 }
 
 /* Space, Enter or the down arrow cut at the next guide. Never while a sheet
@@ -2476,19 +2715,30 @@ function kickPiece(index, amount){
 }
 
 /* A cut squashes the roll where the knife went, tips the two new ends away
-   from each other, and rocks both halves back from the blade. */
-function recoil(index, u){
+   from each other, and rocks both halves back from the blade — by `force`,
+   from how fast the knife went, and by a little of the cut's own, so no two
+   cuts look alike. The same cut always reacts the same way. */
+function recoil(index, u, force){
   const j = TUNING.jiggle;
   if(!(j > 0)) return;
-  kick(u, -SCENE.kickCut, SCENE.kickWidth);
+  const r = seeded((roll.id * 9973 + Math.round(u * 1e6)) >>> 0), own = () => 1 + SCENE.recoilVary * (2 * r() - 1);
+  const f = force > 0 ? force : 1;
+  kick(u, -SCENE.kickCut * f * own(), SCENE.kickWidth);
   const pcs = piecesOf(roll);
   [index, index + 1].forEach((i, side) => {
     const p = pieces[i], pc = pcs[i];
     if(!p || !pc) return;
     const len = (pc.u1 - pc.u0) * SCENE.rollLen;
-    p.tiltV += (side === 0 ? 1 : -1) * SCENE.tipKick * j / Math.sqrt(Math.max(0.5, len) / 2);
-    p.rockV -= SCENE.rockKick * j;
+    p.tiltV += (side === 0 ? 1 : -1) * SCENE.tipKick * j * f * own() / Math.sqrt(Math.max(0.5, len) / 2);
+    p.rockV -= SCENE.rockKick * j * f * own();
   });
+}
+/* How hard a stroke at this speed (px/ms on the glass) makes a cut recoil:
+   1 when the speed is unknown, as for a key. */
+function recoilForce(speed){
+  if(!(speed > 0)) return 1;
+  const k = clamp01((speed - SCENE.strokeSlow) / (SCENE.strokeFast - SCENE.strokeSlow));
+  return 1 + SCENE.recoilRange * (k - 0.5);
 }
 
 /* A new roll slides to a stop on the board: it settles with a small squash
@@ -2521,13 +2771,9 @@ function stepPhase(ms){
   gx = groupOffset();
 }
 
-/* The finished roll is shown together: the pieces close up, imperfect sizes
-   and all, and are served on the plate. */
-function gather(){
-  const drawn = slideLefts();
-  game.gathered = true;
-  holdInPlace(drawn);
-}
+/* The finished roll is served together: from wherever they were cut,
+   imperfect sizes and all, the pieces go to their spots on the plate. */
+function gather(){ game.gathered = true; }
 
 /* Serving happens inside the finished-roll beat, so the pace between rolls
    is unchanged. From the gather, the pieces hop one after another, the board
@@ -2576,25 +2822,30 @@ function liftOf(i, n){
 function easeInOut(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(2 - 2 * t, 2) / 2; }
 
 /* Where the board and the plate are along the counter, or null when out of
-   the scene. Everything flows one way, left to right: a roll arrives on its
-   board, the plate pushes the board out as the pieces are served, and the
-   plate leaves with them. */
+   the scene, and how far back the plate stands. Everything flows one way,
+   left to right: a roll arrives on its board, the plate pushes the board out
+   as the pieces are served, and the plate leaves with them. On a tall
+   screen the plate waits behind the board instead, and the two come and go
+   together. */
 function propsAt(){
-  if(!layout) return { board: 0, plate: null };
+  if(!layout) return { board: 0, plate: null, z: 0 };
   const g = gx / layout.view.ppw;
-  if(game.phase === 'clear') return { board: null, plate: g };
-  if(game.phase !== 'done' || !game.gathered) return { board: g, plate: null };
-  const span = SCENE.board.w / 2 + 1.15 * layout.W / layout.view.ppw;
+  if(layout.plateZ !== 0) return { board: g, plate: g + layout.plateX, z: layout.plateZ };
+  if(game.phase === 'clear') return { board: null, plate: g, z: 0 };
+  if(game.phase !== 'done' || !game.gathered) return { board: g, plate: null, z: 0 };
   const e = easeInOut(serveProgress());
-  return { board: e >= 1 ? null : e * span, plate: (e - 1) * span };
+  return { board: e >= 1 ? null : e * layout.span, plate: (e - 1) * layout.span, z: 0 };
 }
 
+/* The whole group's slide, in the knife's pixels: off to the right as it
+   clears, in from the left as the next roll arrives — each far enough,
+   through this camera, to leave or enter the stage completely. */
 function groupOffset(){
   if(!layout || motionReduced()) return 0;
   const len = phaseLength();
   const t = len > 0 && isFinite(len) ? Math.min(1, game.phaseT / len) : 1;
-  if(game.phase === 'clear') return t * t * t * layout.W;
-  if(game.phase === 'enter'){ const k = 1 - t; return -k * k * k * (layout.cx + layout.L); }
+  if(game.phase === 'clear') return t * t * t * layout.exit * layout.view.ppw;
+  if(game.phase === 'enter'){ const k = 1 - t; return -k * k * k * layout.enter * layout.view.ppw; }
   return 0;
 }
 
@@ -2724,7 +2975,9 @@ function announce(text){
 /* ---------- HUD ---------- */
 /* The flat layer over the scene: the knife's trail and incision, the guide
    ticks, the hint and the finished-roll mark. The stage canvas carries it
-   and owns every touch; the 3D canvas beneath takes none. */
+   and owns every touch; the 3D canvas beneath takes none. Everything on
+   the roll is placed on the roll's plane first and drawn through the same
+   camera as the scene (toStage), so what is drawn is where the knife cuts. */
 let stageEl = null;
 let ctx2d = null;
 
@@ -2745,7 +2998,9 @@ function draw(rects){
   if(hint.showing && game.phase === 'ready' && !gesture) drawHint(c, list);
 }
 
-/* Subtle ticks above and below the roll, only where a cut can still go. */
+/* Subtle ticks above and below the roll, only where a cut can still go. Each
+   pair lies on the line a cut there follows, as the camera shows it, so a
+   swipe from one tick to the other cuts right there. */
 function drawGuides(c, rects){
   const C = colors, L = layout;
   const tick = Math.max(6, L.T * 0.14);
@@ -2758,9 +3013,11 @@ function drawGuides(c, rects){
     const range = r ? legalRange(r, roll.n) : null;
     if(!range || g < range.lo || g > range.hi) return;
     const x = xAt(r, g);
+    const a = toStage(x, L.top - tick - 4), b = toStage(x, L.top - 4);
+    const d = toStage(x, L.bot + 4), e = toStage(x, L.bot + tick + 4);
     c.beginPath();
-    c.moveTo(x, L.top - tick - 4); c.lineTo(x, L.top - 4);
-    c.moveTo(x, L.bot + 4); c.lineTo(x, L.bot + tick + 4);
+    c.moveTo(a.x, a.y); c.lineTo(b.x, b.y);
+    c.moveTo(d.x, d.y); c.lineTo(e.x, e.y);
     c.stroke();
   });
 }
@@ -2774,16 +3031,21 @@ function drawIncisions(c, rects){
   const C = colors;
   c.save();
   c.beginPath();
-  rects.forEach(r => c.rect(r.x, r.y, r.w, r.h));
+  rects.forEach(r => {
+    const q = [toStage(r.x, r.y), toStage(r.x + r.w, r.y), toStage(r.x + r.w, r.y + r.h), toStage(r.x, r.y + r.h)];
+    c.moveTo(q[0].x, q[0].y); c.lineTo(q[1].x, q[1].y); c.lineTo(q[2].x, q[2].y); c.lineTo(q[3].x, q[3].y);
+    c.closePath();
+  });
   c.clip();
   c.strokeStyle = C.incision;
   c.lineWidth = 3;
   c.lineCap = 'round';
   const line = (s, alpha) => {
+    const a = toStage(s.ax, clampToRoll(s.ay)), b = toStage(s.bx, clampToRoll(s.by));
     c.globalAlpha = alpha;
     c.beginPath();
-    c.moveTo(s.ax, clampToRoll(s.ay));
-    c.lineTo(s.bx, clampToRoll(s.by));
+    c.moveTo(a.x, a.y);
+    c.lineTo(b.x, b.y);
     c.stroke();
   };
   if(live) line(live, 1);
@@ -2813,12 +3075,16 @@ function drawTrail(c){
   c.globalAlpha = 1;
 }
 
-/* The finished roll is marked with a shape as well as a colour. */
+/* The finished roll is marked with a shape as well as a colour, above the
+   middle of the served row. */
 function drawDoneMark(c, rects){
   if(!rects.length) return;
   const L = layout, C = colors;
-  const x0 = rects[0].x, x1 = rects[rects.length - 1].x + rects[rects.length - 1].w;
-  const cx = (x0 + x1) / 2, cy = L.top - L.T * 0.55, r = L.T * 0.2;
+  let x0 = Infinity, x1 = -Infinity, y = -Infinity, z = 0;
+  rects.forEach(q => { const p = q.pose;
+    x0 = Math.min(x0, p.ax, p.bx); x1 = Math.max(x1, p.ax, p.bx); y = Math.max(y, p.ay, p.by); z += p.z / rects.length; });
+  const at = project(L.view, (x0 + x1) / 2, y + SCENE.halfHeight, z);
+  const cx = at.x, cy = at.y - L.T * 0.55, r = L.T * 0.2;
   c.globalAlpha = 1;
   c.fillStyle = C.doneDisc;
   c.beginPath(); c.arc(cx, cy, r * 1.25, 0, Math.PI * 2); c.fill();
@@ -2842,20 +3108,26 @@ function drawHint(c, rects){
   const x = xAt(r, target.u);
   const y0 = L.top - L.T * 0.75, y1 = L.bot + L.T * 0.45;
   const dot = Math.max(12, L.T * 0.15);
+  const from = toStage(x, y0), to = toStage(x, y1);        // the swipe, down the line a cut there follows
   c.lineCap = 'round';
   c.lineJoin = 'round';
   if(motionReduced()){
     /* A still picture of the same swipe: where to start, the path, the way. */
+    const len = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+    const dx = (to.x - from.x) / len, dy = (to.y - from.y) / len;
     [[C.hudShade, 6], [C.hint, 3]].forEach(pass => {
       c.globalAlpha = 1;
       c.strokeStyle = pass[0];
       c.lineWidth = pass[1];
       c.setLineDash([6, 8]);
-      c.beginPath(); c.moveTo(x, y0 + dot); c.lineTo(x, y1 - dot * 0.6); c.stroke();
+      c.beginPath(); c.moveTo(from.x + dx * dot, from.y + dy * dot);
+      c.lineTo(to.x - dx * dot * 0.6, to.y - dy * dot * 0.6); c.stroke();
       c.setLineDash([]);
-      c.beginPath(); c.arc(x, y0, dot, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.arc(from.x, from.y, dot, 0, Math.PI * 2); c.stroke();
       c.beginPath();
-      c.moveTo(x - dot * 0.7, y1 - dot * 0.9); c.lineTo(x, y1); c.lineTo(x + dot * 0.7, y1 - dot * 0.9);
+      c.moveTo(to.x - dx * dot * 0.9 - dy * dot * 0.7, to.y - dy * dot * 0.9 + dx * dot * 0.7);
+      c.lineTo(to.x, to.y);
+      c.lineTo(to.x - dx * dot * 0.9 + dy * dot * 0.7, to.y - dy * dot * 0.9 - dx * dot * 0.7);
       c.stroke();
     });
     return;
@@ -2863,17 +3135,17 @@ function drawHint(c, rects){
   const t = (hint.t % (SLICE.hintMoveMs + SLICE.hintRestMs)) / SLICE.hintMoveMs;
   if(t > 1) return;                                     // resting between demonstrations
   const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(2 - 2 * t, 2) / 2;
-  const y = y0 + (y1 - y0) * e;
+  const at = toStage(x, y0 + (y1 - y0) * e);
   const fade = Math.min(1, t * 6, (1 - t) * 6);
   c.globalAlpha = 0.55 * fade;
   c.strokeStyle = C.hint;
   c.lineWidth = 4;
-  c.beginPath(); c.moveTo(x, y0); c.lineTo(x, y); c.stroke();
+  c.beginPath(); c.moveTo(from.x, from.y); c.lineTo(at.x, at.y); c.stroke();
   c.globalAlpha = fade;
   c.fillStyle = C.hint;
   c.strokeStyle = C.hudShade;
   c.lineWidth = 2;
-  c.beginPath(); c.arc(x, y, dot, 0, Math.PI * 2); c.fill(); c.stroke();
+  c.beginPath(); c.arc(at.x, at.y, dot, 0, Math.PI * 2); c.fill(); c.stroke();
   c.globalAlpha = 1;
 }
 
@@ -3084,13 +3356,13 @@ function retryIcon(s){ return svg('<path d="M13.3 8.6A5.3 5.3 0 1 1 11.6 4"/><pa
    does not draw more than it needs. */
 function applyView(){
   if(view3d.status !== 'ready' || !layout || !view3d.camera || !view3d.renderer) return;
-  const L = layout, v = L.view, cam = view3d.camera;
+  const L = layout, v = L.view, cam = view3d.camera, T3 = THREE;
   const fullW = 2 * Math.max(v.px0, L.W - v.px0), fullH = 2 * Math.max(v.py0, L.H - v.py0);
   cam.fov = 2 * Math.atan(fullH / 2 / v.F) * 180 / Math.PI;
   cam.aspect = fullW / fullH;
-  cam.position.set(0, v.cy, v.cz);
-  cam.up.set(0, 1, 0);
-  cam.lookAt(0, v.ay, 0);
+  cam.position.set(v.cx, v.cy, v.cz);
+  cam.quaternion.setFromRotationMatrix(new T3.Matrix4().makeBasis(
+    new T3.Vector3(v.rx, 0, v.rz), new T3.Vector3(v.ux, v.uy, v.uz), new T3.Vector3(v.bx, v.by, v.bz)));
   cam.setViewOffset(fullW, fullH, fullW / 2 - v.px0, fullH / 2 - v.py0, L.W, L.H);
   cam.updateMatrixWorld();
   const ratio = sceneRatio(L.W, L.H), size = L.W + 'x' + L.H + '@' + ratio;
@@ -3114,15 +3386,19 @@ function buildWorld(){
   if(view3d.scene) return;
   const T3 = THREE, C = colors;
   const scene = new T3.Scene();
-  scene.fog = new T3.Fog(new T3.Color(C.sky), SCENE.distance + 6, SCENE.distance + 46);
+  scene.fog = new T3.Fog(new T3.Color(C.sky), SCENE.wide.distance + 8, SCENE.wide.distance + 50);
   const camera = new T3.PerspectiveCamera(30, 1, 0.5, 140);
-  const sky = new T3.HemisphereLight(new T3.Color(C.skyLight), new T3.Color(C.groundLight), 1.25);
-  const key = new T3.DirectionalLight(new T3.Color(C.keyLight), 2.6);
-  key.position.set(-5, 9, 7);
-  const fill = new T3.DirectionalLight(new T3.Color(C.fillLight), 0.55);
-  fill.position.set(6, 3, 5);
-  const rim = new T3.DirectionalLight(new T3.Color(C.keyLight), 1.4);
-  rim.position.set(2, 6, -8);
+  /* The key light stands on the camera's side, high and to the right, so the
+     faces the camera sees are lit and the nori catches one broad, soft
+     highlight; a cool fill from the left keeps the shadow side readable, and
+     a warm rim from behind separates the food from the counter. */
+  const sky = new T3.HemisphereLight(new T3.Color(C.skyLight), new T3.Color(C.groundLight), 1.0);
+  const key = new T3.DirectionalLight(new T3.Color(C.keyLight), 2.3);
+  key.position.fromArray(SCENE.keyLight);
+  const fill = new T3.DirectionalLight(new T3.Color(C.fillLight), 0.6);
+  fill.position.fromArray(SCENE.fillLight);
+  const rim = new T3.DirectionalLight(new T3.Color(C.keyLight), 1.1);
+  rim.position.set(-4, 6, -9);
   scene.add(sky, key, fill, rim);
   view3d.scene = scene;
   view3d.camera = camera;
@@ -3138,7 +3414,7 @@ function buildWorld(){
 function makeKit(C){
   const T3 = THREE, caps = view3d.renderer.capabilities;
   const aniso = Math.max(1, Math.min(4, caps && typeof caps.getMaxAnisotropy === 'function' ? caps.getMaxAnisotropy() : 1));
-  const nori = noriTextures(C), cap = capTextures(C);
+  const nori = noriTextures(C), cap = capTextures(C), room = roomTexture(C);
   const wood = woodTexture(C), counter = counterTexture(C), blob = shadowTexture();
   wood.anisotropy = counter.anisotropy = aniso;
   wood.repeat.set(1 / SCENE.board.w, 1 / SCENE.board.d);
@@ -3147,15 +3423,20 @@ function makeKit(C){
   const blobGeo = new T3.PlaneGeometry(1, 1);
   blobGeo.rotateX(-Math.PI / 2);
   return {
-    textures: [nori.colour, nori.surface, cap.colour, cap.surface, wood, counter, blob],
-    nori: new T3.MeshStandardMaterial({ map: nori.colour, bumpMap: nori.surface, bumpScale: 1.4,
-                                        roughnessMap: nori.surface, roughness: 1, metalness: 0 }),
-    cap: new T3.MeshStandardMaterial({ map: cap.colour, bumpMap: cap.surface, bumpScale: 2,
+    textures: [nori.colour, nori.surface, cap.colour, cap.surface, wood, counter, blob, room],
+    room: room,
+    /* Only the food reflects the room: that is where the sheen shows, and
+       the counter, which fills most of the screen, stays cheap to draw. */
+    nori: new T3.MeshStandardMaterial({ map: nori.colour, bumpMap: nori.surface, bumpScale: 1.6,
+                                        roughnessMap: nori.surface, roughness: 1, metalness: 0,
+                                        envMap: room, envMapIntensity: 0.45 }),
+    cap: new T3.MeshStandardMaterial({ map: cap.colour, bumpMap: cap.surface, bumpScale: 2.2,
                                        roughnessMap: cap.surface, roughness: 1, metalness: 0,
+                                       envMap: room, envMapIntensity: 0.45,
                                        emissive: new T3.Color(C.flash), emissiveIntensity: 0 }),
     wood: new T3.MeshStandardMaterial({ map: wood, roughness: 0.72, metalness: 0 }),
-    counter: new T3.MeshStandardMaterial({ map: counter, roughness: 0.9, metalness: 0 }),
-    plate: new T3.MeshStandardMaterial({ color: new T3.Color(C.plate), roughness: 0.5, metalness: 0 }),
+    counter: new T3.MeshLambertMaterial({ map: counter }),
+    plate: new T3.MeshStandardMaterial({ color: new T3.Color(C.plate), roughness: 0.42, metalness: 0 }),
     shadow: new T3.MeshBasicMaterial({ color: new T3.Color(C.shadow), alphaMap: blob, transparent: true,
                                        depthWrite: false, opacity: 0.6, fog: false }),
     blobGeo: blobGeo
@@ -3289,44 +3570,67 @@ function paintTextures(w, h, surface, pixel){
   return { colour: colour, surface: bumps };
 }
 
-/* The nori: dark green, mostly matte, with a soft sheen. Gently mottled at
-   a large scale and finely grained, both low in contrast, so it reads as
-   pressed seaweed rather than as stripes or seeds. It tiles both ways, so
-   the wrap has no seam. */
+/* The nori: deep green and mostly matte. Its colour wanders only a little,
+   in broad patches; its surface carries the fine, irregular crinkle of a
+   pressed sheet and a few soft creases, with the odd faintly glossier fleck,
+   so the light breaks up across it instead of sliding off a smooth tube.
+   One seam runs along the roll where the wrap overlaps itself: a slight
+   step with a lit edge. It tiles along the roll; round it, it goes exactly
+   once, so there is one seam. */
 function noriTextures(C){
   const base = rgbOf(C.nori), dark = rgbOf(C.noriDark), light = rgbOf(C.noriLight), mix = mixRgb;
-  const mottle = layeredNoise(3, 3, 3, 4), grain = layeredNoise(5, 40, 40, 2);
-  const tmp = [0, 0, 0], N = 256;
-  const px = paintTextures(N, N, true, (u, v, c, s) => {
-    const m = mottle(u, v), g = grain(u, v);
-    mix(base, m > 0.5 ? light : dark, (m > 0.5 ? m - 0.5 : 0.5 - m) * 0.9, tmp);
-    const k = 0.965 + 0.07 * g;
-    c[0] = tmp[0] * k; c[1] = tmp[1] * k; c[2] = tmp[2] * k;
-    s[0] = 118 + 50 * g + 20 * m;
-    s[1] = 110 + 50 * m;
+  const N = 384, R = SCENE.texSpan / 6.3;            // round the roll is about 6.3 units: keep features round
+  const mottle = layeredNoise(3, 3, Math.round(3 / R), 2), fine = layeredNoise(5, 56, Math.round(56 / R), 2);
+  const crease = layeredNoise(7, 9, Math.round(9 / R), 2), fleck = valueNoise(11, 90, Math.round(90 / R));
+  const seam = ((SCENE.seam % 360) + 360) % 360 / 360, px1 = 1 / N;
+  const abs = Math.abs, tmp = [0, 0, 0];
+  const out = paintTextures(N, N, true, (u, v, c, s) => {
+    const m = mottle(u, v), f = fine(u, v), k = crease(u, v), fl = fleck(u, v);
+    mix(base, m > 0.5 ? light : dark, abs(m - 0.5) * 0.55, tmp);
+    const ridge = 1 - abs(2 * k - 1), cr = ridge * ridge * ridge;      // thin soft creases
+    const flick = fl > 0.8 ? (fl - 0.8) * 5 : 0;                       // sparse glossier flecks
+    const tone = 0.97 + 0.12 * (f - 0.5) + 0.04 * cr + 0.08 * flick;
+    c[0] = tmp[0] * tone; c[1] = tmp[1] * tone; c[2] = tmp[2] * tone;
+    let bump = 118 + 60 * (f - 0.5) + 34 * cr;
+    /* The seam: past its edge the outer sheet lies a touch higher, its edge
+       catches the light, and a hairline of shadow runs beside it. */
+    let dv = v - seam;
+    if(dv < -0.5) dv += 1;
+    if(dv > 0.5) dv -= 1;
+    const t = dv / px1;
+    if(t > -3 && t < 22){
+      bump += t < 0 ? 0 : 16 * Math.min(1, t / 2) * (1 - t / 22);
+      const lit = t > 0 && t < 2.5 ? 1 - abs(t - 1.2) / 1.3 : 0, shade = t > -3 && t <= 0 ? 1 + t / 3 : 0;
+      mix(c, light, 0.28 * lit, c);
+      mix(c, dark, 0.35 * shade, c);
+    }
+    s[0] = bump;
+    s[1] = 255 * (0.58 + 0.1 * (f - 0.5) - 0.12 * flick + 0.06 * cr);  // roughness: satin, not gloss
   });
-  return { colour: dataTexture(px.colour, N, N, true), surface: dataTexture(px.surface, N, N, false) };
+  return { colour: dataTexture(out.colour, N, N, true), surface: dataTexture(out.surface, N, N, false) };
 }
 
-/* Rice grains on a jittered grid, for the cut face. */
-function riceGrains(cell, seed){
-  const r = seeded(seed), cols = Math.ceil(2.4 / cell), list = [];
+/* Short grains of rice: one on each cell of a jittered grid, each turned
+   every which way, plump and a little apart from its neighbours. */
+function riceGrains(cell, span, seed){
+  const r = seeded(seed), cols = Math.ceil(span / cell) + 2, list = [];
   for(let gy = 0; gy < cols; gy++){
     for(let gx2 = 0; gx2 < cols; gx2++){
       const ang = r() * Math.PI;
-      list.push({ x: -1.2 + (gx2 + 0.2 + r() * 0.6) * cell, y: -1.2 + (gy + 0.2 + r() * 0.6) * cell,
+      list.push({ x: -span / 2 + (gx2 - 1 + 0.2 + r() * 0.6) * cell, y: -span / 2 + (gy - 1 + 0.2 + r() * 0.6) * cell,
                   c: Math.cos(ang), s: Math.sin(ang),
-                  len: cell * (0.62 + r() * 0.12), wid: cell * (0.36 + r() * 0.06), tone: r() });
+                  len: cell * (0.66 + r() * 0.1), wid: cell * (0.4 + r() * 0.06), tone: r() });
     }
   }
-  return { cell: cell, cols: cols, list: list, e: 9, tone: 0 };
+  return { cell: cell, cols: cols, lo: -span / 2 - cell, list: list, e: 9, tone: 0 };
 }
-/* Find the grain nearest (a, b): afterwards G.e below 1 means inside it. */
+/* The grain nearest (a, b), measured in its own shape: afterwards G.e below
+   1 means inside it. */
 function grainFinder(G){
-  const floor = Math.floor, cell = G.cell, cols = G.cols, list = G.list;
+  const floor = Math.floor, cell = G.cell, cols = G.cols, list = G.list, lo = G.lo;
   return (a, b) => {
-    const cx = floor((a + 1.2) / cell), cy = floor((b + 1.2) / cell);
-    G.e = 9;
+    const cx = floor((a - lo) / cell), cy = floor((b - lo) / cell);
+    let e = 9, tone = 0;
     for(let dy = -1; dy <= 1; dy++){
       const y = cy + dy;
       if(y < 0 || y >= cols) continue;
@@ -3336,61 +3640,112 @@ function grainFinder(G){
         const g = list[y * cols + x];
         const px = a - g.x, py = b - g.y;
         const p = (px * g.c + py * g.s) / g.len, q = (py * g.c - px * g.s) / g.wid;
-        const e = p * p + q * q;
-        if(e < G.e){ G.e = e; G.tone = g.tone; }
+        const d = p * p + q * q;
+        if(d < e){ e = d; tone = g.tone; }
       }
     }
+    G.e = e; G.tone = tone;
   };
 }
 
-/* The inside of the roll, as every cut face shows it: a thin ring of nori,
-   soft rice with a restrained grain, and a core of salmon with its pale
-   stripes and a gentle sheen. Mapped so the disc fills each face exactly. */
+/* The inside of the roll, as every cut face shows it: short-grain rice,
+   warm and soft — plump grains, each a little rounded and a touch glossy,
+   with more grains showing between them, deeper and in shade — and near
+   the middle, a little off it, a softly squared piece of salmon, warm
+   orange, with a few pale bands of fat and a sheen. The rice fills the whole
+   square, so a face can be turned and nudged (see faceOf) without running
+   out; the nori round the edge of a face is the nori's own, not painted here. */
 function capTextures(C){
-  const m = SCENE.squareness, N = 256;
-  const nori = rgbOf(C.nori), noriDark = rgbOf(C.noriDark);
+  const N = 384, SPAN = SCENE.faceSpan;               // the face's radius is 1
   const rice = rgbOf(C.rice), riceShade = rgbOf(C.riceShade), riceLight = rgbOf(C.riceLight);
   const salmon = rgbOf(C.salmon), deep = rgbOf(C.salmonDeep), fat = rgbOf(C.salmonFat);
-  const grains = riceGrains(0.11, 17), findGrain = grainFinder(grains);
-  const wiggle = valueNoise(21, 6, 6), tint = valueNoise(23, 12, 12);
+  const top = riceGrains(0.15, SPAN, 17), under = riceGrains(0.15, SPAN, 29);
+  const findTop = grainFinder(top), findUnder = grainFinder(under);
+  const wiggle = valueNoise(21, 7, 7), tint = valueNoise(23, 11, 11);
   const mix = mixRgb, pow = Math.pow, abs = Math.abs, sqrt = Math.sqrt, round = Math.round, sin = Math.sin;
   const clamp = x => x < 0 ? 0 : x > 1 ? 1 : x;
-  const tmp = [0, 0, 0];
-  const px = paintTextures(N, N, true, (u, v, c, s) => {
-    const a = u * 2 - 1, b = v * 2 - 1;
-    const rho = pow(pow(abs(a), m) + pow(abs(b), m), 1 / m);
-    if(rho > 0.955){
-      mix(nori, noriDark, 0.3 + 0.3 * wiggle(u, v), c);
-      s[0] = 128; s[1] = 170;
-      return;
-    }
-    const ca = (a - 0.02) / 0.34, cb = (b - 0.07) / 0.31;
-    const core = pow(pow(abs(ca), 3.2) + pow(abs(cb), 3.2), 1 / 3.2) + 0.07 * (wiggle(u, v) - 0.5);
-    if(core < 1){
-      const st = (ca * 0.72 + cb * 0.69) * 2.6 + 0.3 * sin(cb * 2.8 + 0.9);
-      const d = abs(st - round(st));
-      const fatAmt = clamp((0.11 - d) / 0.07) * 0.78;
-      mix(salmon, fat, fatAmt, tmp);
-      mix(tmp, deep, clamp((core - 0.7) / 0.3) * 0.45 + (tint(u, v) - 0.5) * 0.2, c);
-      s[0] = 150 - 40 * fatAmt;
-      s[1] = 92 + 60 * fatAmt;
-      return;
-    }
-    findGrain(a, b);
-    if(grains.e < 1){
-      const dome = sqrt(1 - grains.e);
-      mix(rice, riceLight, 0.25 + 0.5 * dome * (0.6 + 0.4 * grains.tone), c);
-      s[0] = 110 + 120 * dome;
-      s[1] = 214;
+  const rot = 0.2, cr = Math.cos(rot), sr = Math.sin(rot);
+  const tmp = [0, 0, 0], grainC = [0, 0, 0];
+  const out = paintTextures(N, N, true, (u, v, c, s) => {
+    const a = (u - 0.5) * SPAN, b = (v - 0.5) * SPAN;
+    /* The rice: a grain on top, or one beneath showing between them, or the
+       shade between. */
+    let bump, rough;
+    findTop(a, b);
+    if(top.e < 1){
+      const dome = sqrt(1 - top.e), edge = 1 - dome;
+      mix(rice, riceLight, 0.2 + 0.6 * dome * (0.8 + 0.2 * top.tone), grainC);
+      mix(grainC, riceShade, 0.55 * edge * edge * edge, grainC);
+      bump = 150 + 100 * dome;
+      rough = 0.42 + 0.25 * edge;
     } else {
-      mix(rice, riceShade, 0.55, c);
-      s[0] = 72;
-      s[1] = 232;
+      findUnder(a, b);
+      if(under.e < 1){
+        const dome = sqrt(1 - under.e);
+        mix(riceShade, rice, 0.3 + 0.45 * dome, grainC);
+        bump = 90 + 60 * dome;
+        rough = 0.7;
+      } else {
+        mix(riceShade, rice, 0.12, grainC);
+        bump = 70;
+        rough = 0.9;
+      }
     }
-    const nearNori = clamp((rho - 0.8) / 0.155), nearCore = clamp(1 - (core - 1) / 0.12);
-    mix(c, riceShade, 0.35 * nearNori * nearNori + 0.3 * nearCore * nearCore, c);
+    /* The salmon: a softly squared block, a little turned, its edge not quite
+       straight, and off the middle toward the front of the roll: the side
+       the camera sees through a gap, and on a served piece the side its
+       neighbour leaves in view. */
+    const sa = ((a - 0.26) * cr + (b - 0.07) * sr) / 0.45, sb = ((b - 0.07) * cr - (a - 0.26) * sr) / 0.36;
+    const r = pow(pow(abs(sa), 3.2) + pow(abs(sb), 3.2), 1 / 3.2) + 0.06 * (wiggle(u, v) - 0.5);
+    const inside = clamp((1.02 - r) / 0.05);
+    if(inside > 0){
+      const st = (sa * 0.5 + sb * 0.86) * 1.45 + 0.16 * sin(sa * 2.4 + 0.7);
+      const band = clamp((0.075 - abs(st - round(st))) / 0.045);
+      const sheen = clamp(1 - ((sa + 0.3) * (sa + 0.3) + (sb - 0.38) * (sb - 0.38)) / 0.45);
+      mix(salmon, deep, clamp((r - 0.6) / 0.4) * 0.55 + (tint(u, v) - 0.5) * 0.14, tmp);
+      mix(tmp, fat, 0.6 * band + 0.22 * sheen, tmp);
+      mix(grainC, tmp, inside, c);
+      bump = bump * (1 - inside) + (140 + 60 * clamp(1 - r * r) - 12 * band) * inside;
+      rough = rough * (1 - inside) + (0.28 + 0.12 * band) * inside;
+    } else {
+      c[0] = grainC[0]; c[1] = grainC[1]; c[2] = grainC[2];
+    }
+    /* A hairline of shade where rice meets the salmon. */
+    const rim = r > 0.97 && r < 1.12 ? 1 - abs(r - 1.03) / 0.09 : 0;
+    if(rim > 0) mix(c, riceShade, 0.4 * rim * (1 - inside * 0.6), c);
+    s[0] = bump;
+    s[1] = 255 * rough;
   });
-  return { colour: dataTexture(px.colour, N, N, true), surface: dataTexture(px.surface, N, N, false) };
+  return { colour: dataTexture(out.colour, N, N, true), surface: dataTexture(out.surface, N, N, false) };
+}
+
+/* The room the food reflects: a warm ceiling, a bright soft window high on
+   the camera's side where the key light comes from, a cooler glow on the
+   left, and the warm counter below. It gives the nori its broad, soft sheen
+   and the salmon and rice their gloss, and lights the shadow side gently.
+   Three.js blurs it for each roughness, on the GPU, and again by itself
+   after a lost context, since this texture is kept here. */
+function roomTexture(C){
+  const sky = rgbOf(C.skyLight), ground = rgbOf(C.groundLight), key = rgbOf(C.keyLight), fill = rgbOf(C.fillLight);
+  const W = 128, H = 64, mix = mixRgb, cos = Math.cos, sin = Math.sin, max = Math.max, pow = Math.pow;
+  const unit = p => { const k = Math.hypot(p[0], p[1], p[2]); return [p[0] / k, p[1] / k, p[2] / k]; };
+  const [kx, ky, kz] = unit(SCENE.keyLight), [fx, fy, fz] = unit(SCENE.fillLight);
+  const out = paintTextures(W, H, false, (u, v, c) => {
+    const phi = (u - 0.5) * Math.PI * 2, el = (v - 0.5) * Math.PI;
+    const x = cos(el) * cos(phi), y = sin(el), z = cos(el) * sin(phi);
+    if(y >= 0) mix(ground, sky, 0.55 + 0.45 * pow(y, 0.4), c);
+    else { const dim = 0.8 + 0.2 * (1 + y); c[0] = ground[0] * dim; c[1] = ground[1] * dim; c[2] = ground[2] * dim; }
+    const k = pow(max(0, x * kx + y * ky + z * kz), 18), f = pow(max(0, x * fx + y * fy + z * fz), 10);
+    mix(c, key, 0.9 * k, c);
+    c[0] += 60 * k; c[1] += 60 * k; c[2] += 60 * k;
+    mix(c, fill, 0.35 * f, c);
+  });
+  const t = dataTexture(out.colour, W, H, true);
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  t.minFilter = THREE.LinearFilter;
+  return t;
 }
 
 /* The board's wood: grain lines along its length, gently wavering. */
@@ -3417,15 +3772,17 @@ function counterTexture(C){
   return dataTexture(px.colour, 256, 256, true);
 }
 
-/* A soft, rounded blob for contact shadows: its green channel is the alpha. */
+/* A soft, rounded blob for contact shadows: a darker core where the thing
+   touches down, fading wide and soft. Its green channel is the alpha. */
 function shadowTexture(){
   const pow = Math.pow, abs = Math.abs;
-  const px = paintTextures(64, 64, false, (u, v, c) => {
+  const out = paintTextures(64, 64, false, (u, v, c) => {
     const a = abs(u * 2 - 1), b = abs(v * 2 - 1);
     const r = 1 - pow(pow(a, 3) + pow(b, 3), 1 / 3);
-    c[0] = c[1] = c[2] = r > 0 ? 255 * pow(r, 1.25) : 0;
+    const soft = r > 0 ? pow(r, 1.25) : 0, core = r > 0.35 ? pow((r - 0.35) / 0.65, 0.7) : 0;
+    c[0] = c[1] = c[2] = 255 * Math.min(1, 0.62 * soft + 0.5 * core);
   });
-  const t = dataTexture(px.colour, 64, 64, false);
+  const t = dataTexture(out.colour, 64, 64, false);
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
 }
@@ -3444,6 +3801,21 @@ function lumpsFor(id){
   const a1 = SCENE.lumps * (0.6 + 0.4 * r()), a2 = SCENE.lumps * 0.5 * r();
   const f1 = 1 + r(), f2 = 2.5 + 2 * r(), p1 = r() * Math.PI * 2, p2 = r() * Math.PI * 2;
   return u => 1 + a1 * Math.sin(Math.PI * 2 * f1 * u + p1) + a2 * Math.sin(Math.PI * 2 * f2 * u + p2);
+}
+
+/* What a face at u shows, for this roll: how the edge of its rice wanders
+   inside the nori, and how its rice and salmon sit — turned a little and
+   nudged off the middle, so no two faces are stamped alike. The two faces of
+   one cut are the same cut seen from either side, so they share it. */
+function faceOf(id, u){
+  const r = seeded((id * 104729 + Math.round(u * 1e6) * 7) >>> 0);
+  const S = SCENE.segments, edge = new Float32Array(S + 1);
+  const a1 = r(), a2 = r(), p1 = r() * Math.PI * 2, p2 = r() * Math.PI * 2;
+  for(let j = 0; j <= S; j++){
+    const t = j / S * Math.PI * 2;
+    edge[j] = 1 - SCENE.band * (1 + 0.28 * a1 * Math.sin(3 * t + p1) + 0.2 * a2 * Math.sin(5 * t + p2));
+  }
+  return { edge: edge, turn: (r() - 0.5) * 0.6, dx: (r() - 0.5) * 0.06, dy: (r() - 0.5) * 0.06 };
 }
 
 /* The cross-section's points and outward normals, once. */
@@ -3483,16 +3855,18 @@ function finishPart(pos, nrm, uv, us, idx, span){
 
 /* The nori side, x along the roll (centred on the piece), y up from the
    board, z toward the camera. Rings along its length; a quarter-round at
-   each end, generous at the roll's own ends and slight at a cut. */
-function sideGeometry(u0, u1, lump){
+   each end, generous at the roll's own ends and slight at a cut; and at
+   each end the nori's own thickness, a band round the face's edge, whose
+   inner edge wanders as `faceL` and `faceR` say. */
+function sideGeometry(u0, u1, lump, faceL, faceR){
   const S = SCENE.segments, len = (u1 - u0) * SCENE.rollLen, h = len / 2, EDGE = 4;
   const bL = u0 <= 0 ? SCENE.endRound : SCENE.cutRound, bR = u1 >= 1 ? SCENE.endRound : SCENE.cutRound;
-  const rings = [];
+  const rings = [{ x: -h, q: faceL.edge, qs: 1 - bL, nx: -1, at: u0, band: -1 }];
   for(let k = 0; k <= EDGE; k++){
     const al = (1 - k / EDGE) * Math.PI / 2;
     rings.push({ x: -h + bL * (1 - Math.sin(al)), q: 1 - bL + bL * Math.cos(al), nx: -Math.sin(al) });
   }
-  rings[0].at = u0;                      // the rims sit exactly where the faces do
+  rings[1].at = u0;                      // the rims sit exactly where the faces do
   const mid = len - bL - bR, steps = Math.max(1, Math.ceil(mid / SCENE.ringStep));
   for(let k = 1; k < steps; k++) rings.push({ x: -h + bL + mid * k / steps, q: 1, nx: 0 });
   for(let k = 0; k <= EDGE; k++){
@@ -3500,15 +3874,18 @@ function sideGeometry(u0, u1, lump){
     rings.push({ x: h - bR * (1 - Math.sin(al)), q: 1 - bR + bR * Math.cos(al), nx: Math.sin(al) });
   }
   rings[rings.length - 1].at = u1;
+  rings.push({ x: h, q: faceR.edge, qs: 1 - bR, nx: 1, at: u1, band: 1 });
   const ring = profileRing(), pos = [], nrm = [], uv = [], us = [], idx = [];
+  const tex = SCENE.rollLen / SCENE.texSpan;
   rings.forEach(r => {
     const u = r.at !== undefined ? r.at : u0 + (r.x + h) / SCENE.rollLen;
     const L = lump(u), ca = Math.sqrt(1 - r.nx * r.nx);
     for(let j = 0; j <= S; j++){
-      const p = ring[j];
-      pos.push(r.x, L * (SCENE.halfHeight + (p.y - SCENE.halfHeight) * r.q), p.z * L * r.q);
+      const p = ring[j], q = r.band ? r.qs * r.q[j] : r.q;
+      pos.push(r.x, L * (SCENE.halfHeight + (p.y - SCENE.halfHeight) * q), p.z * L * q);
       nrm.push(r.nx, p.ny * ca, p.nz * ca);
-      uv.push(u * SCENE.rollLen / SCENE.texSpan, j / S);
+      /* The band continues the nori over the edge, a sliver of it inward. */
+      uv.push((u - (r.band || 0) * SCENE.band * 0.12) * tex, j / S);
       us.push(u);
     }
   });
@@ -3522,29 +3899,34 @@ function sideGeometry(u0, u1, lump){
   return finishPart(pos, nrm, uv, us, idx, nodeSpan(u0, u1));
 }
 
-/* A face: the left one (side −1) or the right (side 1). Concentric rings
-   from its rim to its centre. At the roll's own ends it bulges a little,
-   the way the rice does; at a cut it is flat. */
-function capGeometry(u0, u1, lump, side){
+/* A face: the left one (side −1) or the right (side 1): the rice and salmon
+   inside the nori's band, as concentric rings from the band's inner edge to
+   the middle, sharing that edge with the band point for point. At the
+   roll's own ends it bulges a little, the way the rice does; at a cut it is
+   flat. Its texture is turned and nudged as `face` says. */
+function capGeometry(u0, u1, lump, side, face){
   const S = SCENE.segments, K = SCENE.capRings, len = (u1 - u0) * SCENE.rollLen, h = len / 2;
   const atEnd = side < 0 ? u0 <= 0 : u1 >= 1;
   const qe = 1 - (atEnd ? SCENE.endRound : SCENE.cutRound), dome = atEnd ? SCENE.endDome : 0;
   const u = side < 0 ? u0 : u1, L = lump(u);
+  const ct = Math.cos(face.turn), st = Math.sin(face.turn), SPAN = SCENE.faceSpan;
   const ring = profileRing(), pos = [], nrm = [], uv = [], us = [], idx = [];
   for(let k = 0; k < K; k++){
-    const f = 1 - k / K, q = qe * f, slope = 2 * dome * f;
+    const f = 1 - k / K, slope = 2 * dome * f;
     for(let j = 0; j <= S; j++){
-      const p = ring[j], ry = (p.y - SCENE.halfHeight) / SCENE.halfHeight, rz = p.z;
+      const p = ring[j], q = qe * face.edge[j] * f;
+      const ry = (p.y - SCENE.halfHeight) / SCENE.halfHeight, rz = p.z;
       pos.push(side * (h + dome * (1 - f * f)), L * (SCENE.halfHeight + (p.y - SCENE.halfHeight) * q), p.z * L * q);
       const nl = 1 / Math.sqrt(1 + slope * slope * (ry * ry + rz * rz));
       nrm.push(side * nl, slope * ry * nl, slope * rz * nl);
-      uv.push(0.5 + 0.4925 * rz * f, 0.5 + 0.4925 * ry * f);
+      const a = rz * q, b = ry * q;
+      uv.push(0.5 + (a * ct - b * st) / SPAN + face.dx, 0.5 + (b * ct + a * st) / SPAN + face.dy);
       us.push(u);
     }
   }
   pos.push(side * (h + dome), L * SCENE.halfHeight, 0);
   nrm.push(side, 0, 0);
-  uv.push(0.5, 0.5);
+  uv.push(0.5 + face.dx, 0.5 + face.dy);
   us.push(u);
   const W = S + 1, centre = K * W;
   for(let k = 0; k < K - 1; k++){
@@ -3562,10 +3944,12 @@ function capGeometry(u0, u1, lump, side){
 
 function makeView(u0, u1, key){
   const T3 = THREE, K = view3d.kit, lump = lumpsFor(roll.id);
-  const parts = [sideGeometry(u0, u1, lump), capGeometry(u0, u1, lump, -1), capGeometry(u0, u1, lump, 1)];
+  const faceL = faceOf(roll.id, u0), faceR = faceOf(roll.id, u1);
+  const parts = [sideGeometry(u0, u1, lump, faceL, faceR),
+                 capGeometry(u0, u1, lump, -1, faceL), capGeometry(u0, u1, lump, 1, faceR)];
   const capL = K.cap.clone(), capR = K.cap.clone();
   const group = new T3.Group();
-  group.rotation.order = 'ZYX';           // rock about the line it rests on, then tip
+  group.rotation.order = 'YZX';           // rock about the line it rests on, tip, then turn
   [K.nori, capL, capR].forEach((mat, i) => {
     const mesh = new T3.Mesh(parts[i].geo, mat);
     mesh.frustumCulled = false;           // it deforms, so a stored bounding box would go stale
@@ -3627,14 +4011,15 @@ function glow(ms){ return ms > 0 ? 0.45 * (motionReduced() ? 1 : ms / SLICE.flas
 
 function poseView(v, q, s, i, n, deform){
   const p = q.pose, g = v.group;
-  g.position.set(p.x, p.y, 0);
-  g.rotation.set(p.rock, 0, p.tip);
+  g.position.set(p.x, p.y, p.z);
+  g.rotation.set(p.rock, p.turn, p.tip);
   if(deform) deformView(v);
   v.capL.emissiveIntensity = glow(s.flashL);
   v.capR.emissiveIntensity = glow(s.flashR);
   /* Its shadow lies on whatever it stands on, and fades as it hops. */
   const floor = plateTop() * hopT(i, n), up = clamp01((p.y - floor) / SCENE.hop);
-  v.shadow.position.set((p.ax + p.bx) / 2, floor + 0.004, p.az * 0.5);
+  v.shadow.position.set((p.ax + p.bx) / 2, floor + 0.004, p.z + ((p.az + p.bz) / 2 - p.z) * 0.5);
+  v.shadow.rotation.y = p.turn;
   v.shadow.scale.set(v.len + 1.1 - 0.4 * up, 1, 3.3 - 0.8 * up);
   v.shadow.material.opacity = 0.72 * (1 - 0.75 * up);
 }
@@ -3644,7 +4029,10 @@ function placeProps(){
   P.board.visible = P.boardShadow.visible = at.board !== null;
   P.plate.visible = P.plateShadow.visible = at.plate !== null;
   if(at.board !== null){ P.board.position.x = at.board; P.boardShadow.position.x = at.board; }
-  if(at.plate !== null){ P.plate.position.x = at.plate; P.plateShadow.position.x = at.plate; }
+  if(at.plate !== null){
+    P.plate.position.set(at.plate, plateTop(), at.z);
+    P.plateShadow.position.set(at.plate, P.plateShadow.position.y, at.z);
+  }
 }
 
 /* Is anything in the scene itself moving? The hint, the trail and the

@@ -31,22 +31,32 @@ None of this is done. It is listed so nothing here reads as finished.
   a note instead). If they matter, an older Three.js release would need a
   deliberate decision.
 
-## Known limits (Phase 1A)
+## Known limits (Phase 1B)
 
 - Cuts are straight. A slanted swipe cuts straight down at the point where it
   crossed the middle of the roll.
 - Every feel value is a starting hypothesis (see the README table) until it
   has been judged on a device, the Jiggle values included.
-- The camera looks straight across the roll, so cut faces show only in the
-  gaps, when the pieces tip, and at the edges of the screen. The finished
-  pieces lie on the plate in a row rather than standing to show their faces;
-  a long, imperfect piece would make a very tall tower.
-- Portrait works but leaves a lot of empty counter above and below the roll.
-- Shadows are soft contact blobs, not cast shadows, and there are no
-  reflections: both would cost far more to draw. The plate is a simple glazed
-  slab.
-- The textures are computed at load (about 40 ms on a desktop) and are
-  deliberately soft; there is no normal-mapped rice.
+- At rest, each gap between pieces shows its cut face as a sliver of rice:
+  the gap is 10 px, and the salmon only shows at the roll's near end, while
+  pieces tip apart, and on the plate. A larger "Gap after a cut" in `?tune`
+  shows more of each face.
+- Seeing the end costs some length: the roll is shorter on the glass for its
+  thickness than in 0.2.0. An ideal piece is about 44 px wide on a
+  390-px-wide phone held upright (51 px in 0.2.0) and 69 px on a phone held
+  sideways (79 px); tablets are unchanged or larger.
+- Portrait stands the plate behind the board, but there is still empty
+  counter above the food on tall phones.
+- With very uneven cuts the served row turns its pieces less, so it fits the
+  plate, and their faces show less.
+- Shadows are soft contact blobs, not cast shadows. Only the food reflects a
+  small computed room, for its sheen; nothing reflects anything real, and the
+  counter is plain matte, which keeps the frame time where 0.2.0 had it.
+- The textures are computed at load (about 70 ms on a desktop, 40 ms in
+  0.2.0) and are deliberately soft; the rice grains are painted, not modelled.
+- On Windows, Three.js repeats a Direct3D compiler precision note when it
+  builds the reflection's shaders. It is harmless and does not happen on
+  Apple devices.
 - The Three.js files are unminified (2.1 MB, about 0.45 MB compressed); the
   published package ships no minified build at this version.
 - The 3D scene draws at most 2 device pixels per CSS pixel, and at most about

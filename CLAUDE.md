@@ -198,12 +198,16 @@ prototype. Each carries its reason; keep the reason with the rule.
     food. Release, cancel and lost capture never undo a cut and never add one.
     The release point can complete a crossing only if the stroke has not cut.
 36. **One geometry.** `pieceRects()` is the only answer to "where is the food".
-    Each piece's pose (slide, tip, rock, hop) is projected through the layout's
-    camera into its rectangle; the 3D scene places the piece's meshes from that
-    same pose and the knife is tested against the rectangle, so a moving piece
-    is cut where it appears. The Three.js camera is set from the layout's
-    camera, and contract 22 checks the two agree. A gap holds no food. A cut is
-    refused rather than leave a piece under `SLICE.minShare` of an ideal piece.
+    Each piece's pose (slide, tip, rock, hop, and once served its spot and
+    turn) is seen through the layout's camera on the roll's own upright plane,
+    as a rectangle there; the 3D scene places the piece's meshes from that same
+    pose, the finger is carried onto that plane through the same camera
+    (`toRoll()`) and the knife is tested there, and the flat layer draws
+    through the same camera (`toStage()`). So a moving piece is cut where it
+    appears, and a guide is where it cuts. The Three.js camera is set from the
+    layout's camera, and contracts 22 and 30 check they agree. A gap holds no
+    food. A cut is refused rather than leave a piece under `SLICE.minShare` of
+    an ideal piece.
 37. **Every roll can be finished.** `SLICE.minShare` stays at or below 0.5. The
     proof is in `cutTarget()`'s comment, and contract 20 plays thousands of
     random rolls against it. Changing the cutting rules means keeping this
@@ -212,9 +216,9 @@ prototype. Each carries its reason; keep the reason with the rule.
     way to a guide, and only toward a guide in the same piece.
 39. **Essential feedback survives reduced motion; decoration does not.** A cut
     always shows its gap and lit faces. A finished roll always shows its plate
-    and mark. Springs, overshoot, the jiggle, tipping and rocking, the hop onto
-    the plate, sliding and the moving hint are decoration, and stop, live,
-    when motion is reduced.
+    and mark. Springs, overshoot, the jiggle, tipping and rocking, the hop and
+    turn onto the plate, sliding and the moving hint are decoration, and stop,
+    live, when motion is reduced: the pieces are simply on their spots.
 40. **Frames only while something moves.** `requestFrame()` keeps at most one
     frame waiting, and none at rest. One clock drives everything, capped at
     50 ms a frame and restarted after any pause, so coming back from the
@@ -255,6 +259,24 @@ prototype. Each carries its reason; keep the reason with the rule.
     every one; scene tokens are hex, because textures are computed from them
     pixel by pixel. Textures belong to their materials, so they squash and move
     with the food. None is downloaded.
+51. **The camera is a three-quarter view, and nothing may assume it is not.**
+    It stands to the right of the roll and above it, with its picture turned
+    less than itself (a shifted lens): that shows the roll's near end and its
+    cut faces while keeping the roll within about 5–7 degrees of level. On the
+    glass the roll is neither level nor evenly scaled, so never compare a
+    stage pixel with a position on the roll's plane, and never draw or hit-test
+    in stage pixels what belongs to the roll. Contract 30 swipes on the glass,
+    through the drawn guides and at the near, middle and far parts of the roll.
+52. **Served pieces show their faces, keep their sizes, and never touch.**
+    `plateSpots()` lays them in one row in cut order, each on its side and
+    turned by at most `SCENE.serveTurn`, standing beside the last along its
+    own length; the turn shrinks rather than let the row leave the plate or
+    the stage. No towers, no stacking. Contract 31 checks a thousand uneven
+    rolls and every moment of the hop.
+53. **Only the food reflects the room.** The counter fills most of the
+    screen: giving it reflections and full shading pushed a modest GPU from
+    12 to 18 ms a frame. It is plain matte, the board and plate have no
+    reflection, and contract 22 keeps it that way.
 
 ## Development
 

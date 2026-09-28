@@ -35,12 +35,16 @@ Soft 3D clay-toy styling: rounded shapes, warm lighting, a miniature diorama, a
 chunky capybara chef and appealing simplified sushi, after the Notion product
 brief and moodboard. **Since Phase 1A the scene is real 3D, drawn with
 Three.js (WebGL 2)**, vendored locally; the Phase 0B prototype used Canvas 2D.
+Since Phase 1B it is seen three-quarters on, so the food's inside shows: soft
+rounded forms, warm light, matte nori, gently textured rice and glossy,
+simplified fish.
 
 ## Roadmap
 
 0. Foundations and a slicing prototype. **(0B: gray-box prototype, v0.1.0.)**
 1. One polished roll and counter, with satisfying slicing and chef reactions.
-   **(1A: the first 3D slicing scene, v0.2.0. No chef yet.)**
+   **(1A: the first 3D slicing scene, v0.2.0. 1B: appearance, camera and
+   motion, v0.3.0. No chef yet.)**
 2. Customers, orders, more rolls, plating, short shifts.
 3. Rewards, recipes, decorations, outfits, local save.
 4. A small Tokyo neighbourhood.
@@ -108,6 +112,45 @@ and pacing felt good but the roll was too stiff and too flat.
 Deliberately not in this phase: the chef, customers, restaurant systems,
 sound, haptics and more recipes.
 
+## Phase 1B — sushi you can see inside
+
+The playtest liked the cutting and the pace but found the first 3D scene
+stiff and flat; a review of it found the side-on camera hid the rice and
+salmon, the nori looked smooth and uniform, and a long green cylinder filled
+the picture. Phase 1B keeps the interaction and changes how the food looks
+and moves. None of it is approved until it has been seen on a device.
+
+- **A three-quarter camera.** It stands to the right of the roll and above
+  it, and its picture is turned less than the camera itself (a shifted
+  lens), so the roll's near end shows its rice and salmon and every cut face
+  can be seen, while the roll lies within about 5–7 degrees of level for the
+  same downward swipe. No camera controls, shake or dramatic perspective.
+- **The knife follows the camera.** Every touch is carried through the
+  camera onto the roll's own upright plane, where the rules of a cut are
+  measured as before; guides, the hint and the incision are drawn through
+  the same camera, so what is drawn is where the knife cuts, near, middle
+  or far.
+- **Framing.** Landscape shows the food large and, where it costs the food
+  little, the whole board and plate. Portrait makes the food as large as the
+  width allows and stands the plate behind the board, where the pieces hop
+  back onto it, instead of leaving most of the screen as empty counter.
+- **The food.** Deep green, matte nori with a fine irregular texture, a soft
+  broad sheen and a wrap seam; the nori's own band round every face; plump
+  short-grain rice with deeper grains between; a softly squared, glossy
+  salmon with restrained pale bands, set a little differently in every
+  piece. The proportions stay: a piece is about 0.7 of its width long, a
+  chunky clay maki, with room for six comfortable cuts.
+- **Motion.** The soft-body jiggle is unchanged in strength and timing; each
+  cut now reacts a little differently, and a quick flick snaps a little
+  harder than a slow drag.
+- **Serving.** Finished pieces go to the plate in one row, in cut order, at
+  their real sizes, each on its side and turned so its face shows; no
+  towers, no stacking, and no two ever touch.
+
+The swipe, its forgiveness, the pace between rolls and every tuning value
+are unchanged. Deliberately not in this phase: the chef, customers,
+restaurant systems, sound, haptics and more recipes.
+
 ## Decisions so far
 
 - APP_ID `capybara-sushi`, name **Capybara Sushi**, short name **Capy Sushi**
@@ -118,6 +161,9 @@ sound, haptics and more recipes.
   pinned and served from this app's own folder, never from a CDN; no other
   framework, physics engine or build step. It needs WebGL 2 and, on iPhone
   and iPad, iOS or iPadOS 16.4 or newer.
+- Phase 1B: a three-quarter camera with a shifted picture, and hit testing
+  on the roll's own plane through that camera; the plate waits behind the
+  board in portrait. No new dependency.
 - Gameplay and tuning are kept in memory; nothing is saved.
 - Gray-box visuals and the placeholder icons.
 - Phase 0C, with the user's approval: pushed to `main` and published on GitHub

@@ -1,4 +1,4 @@
-# Device QA — Phase 1A, the 3D slicing scene
+# Device QA — Phase 1B, sushi you can see inside
 
 **Status: not done on a device.** Nothing on this list has been tried on a
 real phone or tablet. Browser QA ran in headless Edge on Windows, on an Intel
@@ -19,7 +19,7 @@ on the device for offline play.
   and `?tune` on the end for tuning. It uses HTTPS, so the service worker,
   offline play and home-screen install all work there. Pages can take up to
   10 minutes to show a new push. The identity panel in `?tune` shows which
-  version a device is running (0.2.0 for this phase).
+  version a device is running (0.3.0 for this phase).
 - **Same Wi-Fi, for quick feel testing.** On the PC, run
   `npx --yes http-server -p 8395 -c-1 .` in the repository. On the device,
   open `http://<the PC's local IP>:8395/`. A plain-http address is not a
@@ -31,7 +31,7 @@ on the device for offline play.
 Play at least five rolls for each line, first as you normally would, then as
 a young child might.
 
-The slicing, which should feel as it did in 0.1.0:
+The slicing, which should feel as it did in 0.1.0 and 0.2.0:
 
 - [ ] A slow, deliberate drag cuts at the moment the finger crosses, and a
       quick flick cuts every time.
@@ -42,6 +42,10 @@ The slicing, which should feel as it did in 0.1.0:
       aim, including on a piece that is still tipping.
 - [ ] The pace between rolls (finished roll shown, clear, next roll) still
       feels like a reward and not a wait.
+- [ ] The three-quarter view does not make aiming harder: swipe straight down
+      through the guides at the far (left) end, the middle and the near
+      (right) end, slowly and as a flick. Each cut lands where the finger
+      crossed the roll, on a phone held either way as well as a tablet.
 
 The new movement and look:
 
@@ -53,9 +57,18 @@ The new movement and look:
       restart.
 - [ ] Nothing floats above the board or sinks into it, and no piece passes
       into its neighbour.
-- [ ] The roll looks like appetising food: dark green nori, rice at the ends,
-      and a clearly filled face of nori, rice and salmon at every cut.
-- [ ] The hop onto the plate and the plate leaving feel like serving.
+- [ ] The roll looks like appetising sushi at a glance: the near end shows
+      rice and salmon; the nori is deep green and matte with a fine texture
+      and a soft sheen, not a smooth plastic tube; the rice reads as grains,
+      not foam or gravel; the salmon is warm, glossy and clearly salmon.
+- [ ] Every cut shows its faces as the pieces part, and each served piece
+      shows its face on the plate. The pieces' proportions look like maki.
+- [ ] No two cuts look stamped alike: a quick flick snaps a little harder
+      than a slow drag, and the jiggle is no stronger than in 0.2.0.
+- [ ] The hop onto the plate and the plate leaving feel like serving. With a
+      phone held upright, the plate waits behind the board and the pieces hop
+      back onto it: does that read well, and is there still too much empty
+      counter?
 - [ ] The food is large enough to enjoy and easy to aim at on a phone, held
       either way.
 - [ ] With Reduce Motion on, a cut (its gap and lit faces) and a finished
@@ -70,7 +83,9 @@ values you prefer the new defaults.
       Mode. Warmth and battery after ten minutes of play, on the oldest device
       you have.
 - [ ] How the lighting, textures and colours look on an Apple screen: the
-      desktop GPU and colour pipeline are not Safari's.
+      desktop GPU and colour pipeline are not Safari's. The nori's sheen and
+      the salmon's gloss come from a reflection that only an Apple GPU can
+      show as it will really look.
 - [ ] How long the kitchen takes to appear on the first visit over mobile data
       (the 3D library is about 0.45 MB compressed), and on later visits.
 - [ ] Leave the app in the background for a few minutes, or lock the device,
@@ -90,6 +105,6 @@ values you prefer the new defaults.
 - [ ] Apple Pencil.
 - [ ] Home-screen install, standalone launch, and an offline launch after
       one online visit; storage and cache names `capybara-sushi.` and
-      `capybara-sushi-v0.2.0` (the identity panel in `?tune` shows them).
+      `capybara-sushi-v0.3.0` (the identity panel in `?tune` shows them).
 - [ ] If you have a device on iOS older than 16.4: it shows the note and
       the try-again button, not a blank screen.

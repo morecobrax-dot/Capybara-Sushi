@@ -1,6 +1,6 @@
 {
   "name": "capybara-sushi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "A cozy sushi-slicing game. Development preview.",
   "scripts": {

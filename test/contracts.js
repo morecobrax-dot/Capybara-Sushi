@@ -1179,22 +1179,29 @@ function pe(app, type, x, y, o){
   stageOf(app).dispatch(type, ev);
   return ev;
 }
+/* Contracts describe a stroke where the knife measures it: on the roll's
+   own upright plane (toRoll in the app), x along the roll from its middle
+   and y down from the board's top, in the pixels of the roll's middle. pr()
+   dispatches the event at the stage pixel the app's camera shows that
+   point at, so every stroke goes through the same camera as a finger. */
 /* Heights in roll thicknesses: 0 is the roll's top edge, 1 its bottom. */
 function yAt(app, f){ const L = app.ctx.layout; return L.top + L.T * f; }
+/* A pointer event at a point of the roll's plane. */
+function pr(app, type, x, y, o){ const p = app.ctx.toStage(x, y); return pe(app, type, p.x, p.y, o); }
 /* A straight stroke at x, from `from` to `to` (in thicknesses), in `steps`
    moves. Returns how many cuts the roll had just before release. */
 function stroke(app, x, o){
   const s = Object.assign({ from: -0.8, to: 1.8, steps: 12, dx: 0, id: 1, type: 'touch', release: 'pointerup' }, o || {});
   const who = { pointerId: s.id, pointerType: s.type };
-  pe(app, 'pointerdown', x, yAt(app, s.from), who);
+  pr(app, 'pointerdown', x, yAt(app, s.from), who);
   for(let i = 1; i <= s.steps; i++){
-    pe(app, 'pointermove', x + s.dx * i / s.steps, yAt(app, s.from + (s.to - s.from) * i / s.steps), who);
+    pr(app, 'pointermove', x + s.dx * i / s.steps, yAt(app, s.from + (s.to - s.from) * i / s.steps), who);
   }
   const before = app.ctx.roll.cuts.length;
-  if(s.release) pe(app, s.release, x + s.dx, yAt(app, s.to), who);
+  if(s.release) pr(app, s.release, x + s.dx, yAt(app, s.to), who);
   return before;
 }
-/* Where on screen the roll's point u is drawn right now. */
+/* Where along the roll's plane the roll's point u is right now. */
 function screenX(app, u){
   const c = app.ctx;
   const r = c.pieceRects().find(q => u > q.u0 && u < q.u1);
@@ -1335,8 +1342,8 @@ function testStrokes(){
   T('a flick seen as just two samples cuts before release', stroke(app, guideX(app, 2), { steps: 1 }) === 2);
   settleAll(app);
   const x3 = guideX(app, 3);
-  pe(app, 'pointerdown', x3, yAt(app, -0.8));
-  pe(app, 'pointerup', x3, yAt(app, 1.8));
+  pr(app, 'pointerdown', x3, yAt(app, -0.8));
+  pr(app, 'pointerup', x3, yAt(app, 1.8));
   T('a flick seen only at press and release still cuts, once', c.roll.cuts.length === 3);
   settleAll(app);
 
@@ -1344,9 +1351,9 @@ function testStrokes(){
   app = play(); c = app.ctx; c.TUNING.pull = 0;
   const L = c.layout, x0 = c.layout.cx - 150;
   /* 45 degrees: equal travel across and down. */
-  pe(app, 'pointerdown', x0, yAt(app, -0.6));
-  for(let i = 1; i <= 16; i++) pe(app, 'pointermove', x0 + L.T * 2.2 * i / 16, yAt(app, -0.6 + 2.2 * i / 16));
-  pe(app, 'pointerup', x0 + L.T * 2.2, yAt(app, 1.6));
+  pr(app, 'pointerdown', x0, yAt(app, -0.6));
+  for(let i = 1; i <= 16; i++) pr(app, 'pointermove', x0 + L.T * 2.2 * i / 16, yAt(app, -0.6 + 2.2 * i / 16));
+  pr(app, 'pointerup', x0 + L.T * 2.2, yAt(app, 1.6));
   const expectU = c.uAt(c.pieceRects()[0], x0 + L.T * (0.5 + 0.6));
   T('a 45-degree stroke cuts, where it crosses the middle', c.roll.cuts.length === 1 && near(c.roll.cuts[0], expectU, 1e-3),
     c.roll.cuts.join(',') + ' vs ' + expectU);
@@ -1362,26 +1369,37 @@ function testStrokes(){
   T('nor does one just past the allowed slant', steep.ctx.roll.cuts.length === 0);
   stroke(steep, steep.ctx.layout.cx - run / 8, { dx: run / 4 });   // about 34 degrees: allowed
   T('a stroke within the allowed slant cuts', steep.ctx.roll.cuts.length === 1);
-  pe(app, 'pointerdown', c.layout.cx - 200, yAt(app, 0.5));
-  for(let i = 1; i <= 10; i++) pe(app, 'pointermove', c.layout.cx - 200 + 40 * i, yAt(app, 0.5 + 0.02 * i));
-  pe(app, 'pointerup', c.layout.cx + 200, yAt(app, 0.7));
+  pr(app, 'pointerdown', c.layout.cx - 200, yAt(app, 0.5));
+  for(let i = 1; i <= 10; i++) pr(app, 'pointermove', c.layout.cx - 200 + 40 * i, yAt(app, 0.5 + 0.02 * i));
+  pr(app, 'pointerup', c.layout.cx + 200, yAt(app, 0.7));
   T('a swipe along the roll cuts nothing', c.roll.cuts.length === before);
 
   sub('incomplete strokes and taps cut nothing and cost nothing');
   app = play(); c = app.ctx; c.TUNING.pull = 0;
   const xm = guideX(app, 2);
-  pe(app, 'pointerdown', xm, yAt(app, 0.5)); pe(app, 'pointerup', xm, yAt(app, 0.5));
+  pr(app, 'pointerdown', xm, yAt(app, 0.5)); pr(app, 'pointerup', xm, yAt(app, 0.5));
   T('a tap cuts nothing', c.roll.cuts.length === 0);
   T('it is still noticed: the tapped piece jiggles', c.pieces[0].vel !== 0);
   settleAll(app);
+  /* The piece under the finger is found through the camera, as a cut is:
+     a tap on the narrow far-end piece, just short of its cut, jiggles that
+     piece and leaves its neighbour be. There the glass and the roll's plane
+     disagree most, so reading the tap on the glass would pick the wrong one. */
+  const tapped = play(), tc = tapped.ctx; tc.TUNING.pull = 0;
+  stroke(tapped, guideX(tapped, 1));
+  settleAll(tapped);
+  const far = tc.pieceRects()[0], xn = tc.xAt(far, far.u1 - 0.045);
+  pr(tapped, 'pointerdown', xn, yAt(tapped, 0.5)); pr(tapped, 'pointerup', xn, yAt(tapped, 0.5));
+  T('a tap jiggles the piece under the finger, and only that one', tc.pieces[0].vel !== 0 && tc.pieces[1].vel === 0,
+    tc.pieces.map(p => p.vel.toFixed(2)).join(' / '));
   stroke(app, xm, { from: -0.8, to: 0.4 });
   T('a stroke that stops 40% of the way in cuts nothing', c.roll.cuts.length === 0);
   T('and its incision heals', c.healing.length === 1);
   advance(app, 400);
   T('closed within the heal time', c.healing.length === 0);
-  pe(app, 'pointerdown', xm, yAt(app, -0.8));
-  [-0.2, 0.2, 0.45, 0.2, -0.2, -0.8].forEach(f => pe(app, 'pointermove', xm, yAt(app, f)));
-  pe(app, 'pointerup', xm, yAt(app, -0.8));
+  pr(app, 'pointerdown', xm, yAt(app, -0.8));
+  [-0.2, 0.2, 0.45, 0.2, -0.2, -0.8].forEach(f => pr(app, 'pointermove', xm, yAt(app, f)));
+  pr(app, 'pointerup', xm, yAt(app, -0.8));
   T('a stroke that goes in and backs out cuts nothing', c.roll.cuts.length === 0);
   stroke(app, xm, { from: 0.5, to: 1.8 });
   T('starting halfway down the roll is not deep enough', c.roll.cuts.length === 0);
@@ -1393,21 +1411,21 @@ function testStrokes(){
   sub('one gesture, one result');
   app = play(); c = app.ctx; c.TUNING.pull = 0;
   const xa = guideX(app, 1), xb = guideX(app, 3), xc = guideX(app, 5);
-  pe(app, 'pointerdown', xa, yAt(app, -0.8));
-  [[xa, 1.8], [xb, -0.8], [xb, 1.8], [xc, -0.8], [xc, 1.8]].forEach(p => pe(app, 'pointermove', p[0], yAt(app, p[1])));
-  pe(app, 'pointerup', xc, yAt(app, 1.8));
+  pr(app, 'pointerdown', xa, yAt(app, -0.8));
+  [[xa, 1.8], [xb, -0.8], [xb, 1.8], [xc, -0.8], [xc, 1.8]].forEach(p => pr(app, 'pointermove', p[0], yAt(app, p[1])));
+  pr(app, 'pointerup', xc, yAt(app, 1.8));
   T('a zigzag crossing the roll again and again makes one cut', c.roll.cuts.length === 1);
   settleAll(app);
   const x2 = guideX(app, 2);
-  pe(app, 'pointerdown', x2, yAt(app, -0.8));
-  pe(app, 'pointerdown', x2, yAt(app, -0.8));                   // the same press, reported twice
-  pe(app, 'pointermove', x2, yAt(app, 0.5));
-  pe(app, 'pointermove', x2, yAt(app, 0.5));                    // the same move, reported twice
-  pe(app, 'pointermove', x2, yAt(app, 1.8));
-  pe(app, 'pointermove', x2, yAt(app, 1.8));
+  pr(app, 'pointerdown', x2, yAt(app, -0.8));
+  pr(app, 'pointerdown', x2, yAt(app, -0.8));                   // the same press, reported twice
+  pr(app, 'pointermove', x2, yAt(app, 0.5));
+  pr(app, 'pointermove', x2, yAt(app, 0.5));                    // the same move, reported twice
+  pr(app, 'pointermove', x2, yAt(app, 1.8));
+  pr(app, 'pointermove', x2, yAt(app, 1.8));
   T('duplicated events still make one cut', c.roll.cuts.length === 2);
-  pe(app, 'pointerup', x2, yAt(app, 1.8));
-  pe(app, 'pointerup', x2, yAt(app, 1.8));
+  pr(app, 'pointerup', x2, yAt(app, 1.8));
+  pr(app, 'pointerup', x2, yAt(app, 1.8));
   T('a duplicated release neither undoes it nor adds another', c.roll.cuts.length === 2);
   settleAll(app);
   ['pointercancel', 'lostpointercapture'].forEach((ending, k) => {
@@ -1415,7 +1433,7 @@ function testStrokes(){
     const n0 = c.roll.cuts.length;
     stroke(app, xe, { release: ending });
     T('a cut stays cut when ' + ending + ' follows it', c.roll.cuts.length === n0 + 1);
-    T('and ' + ending + ' adds nothing more', (() => { pe(app, 'pointerup', xe, yAt(app, 1.8)); return c.roll.cuts.length === n0 + 1; })());
+    T('and ' + ending + ' adds nothing more', (() => { pr(app, 'pointerup', xe, yAt(app, 1.8)); return c.roll.cuts.length === n0 + 1; })());
     settleAll(app);
   });
   T('no errors through any of it', app.errors.length === 0, app.errors.join(' | '));
@@ -1423,14 +1441,14 @@ function testStrokes(){
   sub('mouse: only a pressed left button cuts');
   app = play(); c = app.ctx; c.TUNING.pull = 0;
   const mx = guideX(app, 1), mouse = { pointerType: 'mouse' };
-  for(let i = 0; i <= 12; i++) pe(app, 'pointermove', mx, yAt(app, -0.8 + 2.6 * i / 12), Object.assign({ buttons: 0 }, mouse));
+  for(let i = 0; i <= 12; i++) pr(app, 'pointermove', mx, yAt(app, -0.8 + 2.6 * i / 12), Object.assign({ buttons: 0 }, mouse));
   T('hovering across the roll cuts nothing', c.roll.cuts.length === 0);
-  pe(app, 'pointerdown', mx, yAt(app, -0.8), Object.assign({ button: 2, buttons: 2 }, mouse));
-  for(let i = 1; i <= 12; i++) pe(app, 'pointermove', mx, yAt(app, -0.8 + 2.6 * i / 12), Object.assign({ buttons: 2 }, mouse));
-  pe(app, 'pointerup', mx, yAt(app, 1.8), Object.assign({ button: 2 }, mouse));
+  pr(app, 'pointerdown', mx, yAt(app, -0.8), Object.assign({ button: 2, buttons: 2 }, mouse));
+  for(let i = 1; i <= 12; i++) pr(app, 'pointermove', mx, yAt(app, -0.8 + 2.6 * i / 12), Object.assign({ buttons: 2 }, mouse));
+  pr(app, 'pointerup', mx, yAt(app, 1.8), Object.assign({ button: 2 }, mouse));
   T('a right-button drag cuts nothing', c.roll.cuts.length === 0);
-  pe(app, 'pointerdown', mx, yAt(app, -0.8), Object.assign({ button: 2, buttons: 2 }, mouse));
-  pe(app, 'pointerup', mx, yAt(app, 1.8), Object.assign({ button: 2 }, mouse));
+  pr(app, 'pointerdown', mx, yAt(app, -0.8), Object.assign({ button: 2, buttons: 2 }, mouse));
+  pr(app, 'pointerup', mx, yAt(app, 1.8), Object.assign({ button: 2 }, mouse));
   T('nor a right-button press released on the far side', c.roll.cuts.length === 0);
   const menu = { defaultPrevented: false, preventDefault(){ this.defaultPrevented = true; } };
   stageOf(app).dispatch('contextmenu', menu);
@@ -1438,9 +1456,9 @@ function testStrokes(){
   T('a left-button drag cuts', stroke(app, mx, { type: 'mouse' }) >= 0 && c.roll.cuts.length === 1);
   settleAll(app);
   const mx2 = guideX(app, 2);
-  pe(app, 'pointerdown', mx2, yAt(app, -0.8), mouse);
-  pe(app, 'pointermove', mx2, yAt(app, 0.3), mouse);
-  pe(app, 'pointermove', mx2, yAt(app, 1.8), Object.assign({ buttons: 0 }, mouse));
+  pr(app, 'pointerdown', mx2, yAt(app, -0.8), mouse);
+  pr(app, 'pointermove', mx2, yAt(app, 0.3), mouse);
+  pr(app, 'pointermove', mx2, yAt(app, 1.8), Object.assign({ buttons: 0 }, mouse));
   T('a button released out of sight ends the stroke instead of cutting', c.roll.cuts.length === 1 && c.gesture === null);
   settleAll(app);
   stroke(app, guideX(app, 3), { type: 'pen' });
@@ -1449,40 +1467,40 @@ function testStrokes(){
   sub('one finger owns the knife until it truly lets go');
   app = play(); c = app.ctx; c.TUNING.pull = 0;
   const own = guideX(app, 2), other = guideX(app, 4);
-  pe(app, 'pointerdown', own, yAt(app, -0.8));
+  pr(app, 'pointerdown', own, yAt(app, -0.8));
   advance(app, 3000);
   T('holding still for three seconds keeps the knife', c.gesture && c.gesture.id === 1);
   advance(app, 6000);
   T('and no hint interrupts a held finger', c.hint.showing === false);
   const extra = { pointerId: 2, isPrimary: false };
-  pe(app, 'pointerdown', other, yAt(app, -0.8), extra);
-  pe(app, 'pointermove', other, yAt(app, 1.8), extra);
+  pr(app, 'pointerdown', other, yAt(app, -0.8), extra);
+  pr(app, 'pointermove', other, yAt(app, 1.8), extra);
   T('a second finger crossing the roll cuts nothing', c.roll.cuts.length === 0);
   T('and takes nothing from the first', c.gesture && c.gesture.id === 1);
-  pe(app, 'pointerup', other, yAt(app, 1.8), extra);
+  pr(app, 'pointerup', other, yAt(app, 1.8), extra);
   T('its release does not end the first finger\'s stroke', c.gesture && c.gesture.id === 1);
-  pe(app, 'pointermove', own, yAt(app, 0.4));
-  pe(app, 'pointermove', own, yAt(app, 1.8));
+  pr(app, 'pointermove', own, yAt(app, 0.4));
+  pr(app, 'pointermove', own, yAt(app, 1.8));
   T('after the long pause, the first finger carries on and cuts', c.roll.cuts.length === 1);
-  pe(app, 'pointerup', own, yAt(app, 1.8));
+  pr(app, 'pointerup', own, yAt(app, 1.8));
   settleAll(app);
-  pe(app, 'pointerdown', own, yAt(app, -0.8), { pointerId: 7 });
-  pe(app, 'pointerdown', other, yAt(app, -0.8), { pointerId: 8, isPrimary: true });
+  pr(app, 'pointerdown', own, yAt(app, -0.8), { pointerId: 7 });
+  pr(app, 'pointerdown', other, yAt(app, -0.8), { pointerId: 8, isPrimary: true });
   T('a new primary touch means the browser saw the old one lift', c.gesture && c.gesture.id === 8);
-  pe(app, 'pointerup', other, yAt(app, -0.8), { pointerId: 8 });
+  pr(app, 'pointerup', other, yAt(app, -0.8), { pointerId: 8 });
 
   sub('cancellation ends a stroke and never cuts');
   [['pointercancel', () => pe(app, 'pointercancel', 0, 0)],
    ['lostpointercapture', () => pe(app, 'lostpointercapture', 0, 0)],
    ['window blur', () => c.window.dispatch('blur', {})]].forEach(([label, interrupt]) => {
     const n0 = c.roll.cuts.length, x = screenX(app, c.cutTarget(c.roll).u);
-    pe(app, 'pointerdown', x, yAt(app, -0.8));
-    pe(app, 'pointermove', x, yAt(app, 0.4));
+    pr(app, 'pointerdown', x, yAt(app, -0.8));
+    pr(app, 'pointermove', x, yAt(app, 0.4));
     interrupt();
     T(label + ' mid-stroke leaves no cut', c.roll.cuts.length === n0 && c.gesture === null);
     T(label + ' gives the pointer back', !stageOf(app).hasPointerCapture(1));
-    pe(app, 'pointermove', x, yAt(app, 1.8));
-    pe(app, 'pointerup', x, yAt(app, 1.8));
+    pr(app, 'pointermove', x, yAt(app, 1.8));
+    pr(app, 'pointerup', x, yAt(app, 1.8));
     T('the same finger moving on afterwards cuts nothing', c.roll.cuts.length === n0);
   });
   T('no errors', app.errors.length === 0, app.errors.join(' | '));
@@ -1506,7 +1524,8 @@ function testGeometry(){
   const painted = JSON.stringify(c.paint.rects), live = JSON.stringify(c.pieceRects());
   T('the last frame drew the rectangles hit testing uses', painted === live);
   /* Through the real Three.js camera, not the game's own arithmetic: each
-     piece's meshes, as placed in the scene graph, project onto its rectangle. */
+     piece's meshes, as placed in the scene graph and seen on the glass, fall
+     on the stretch of the roll's plane the knife tests for that piece. */
   const onScreen = (cam, v) => {
     const p = v.clone().project(cam);
     return { x: (p.x + 1) / 2 * c.layout.W, y: (1 - p.y) / 2 * c.layout.H };
@@ -1517,9 +1536,9 @@ function testGeometry(){
     if(!view) return false;
     view.group.updateMatrixWorld(true);
     const h = view.len / 2, y = c.SCENE.halfHeight;
-    const a = onScreen(cam, view.group.localToWorld(new T3.Vector3(-h, y, 0)));
-    const b = onScreen(cam, view.group.localToWorld(new T3.Vector3(h, y, 0)));
-    return near(a.x, r.x, 0.5) && near(b.x, r.x + r.w, 0.5);
+    const a = c.toRoll(onScreen(cam, view.group.localToWorld(new T3.Vector3(-h, y, 0))));
+    const b = c.toRoll(onScreen(cam, view.group.localToWorld(new T3.Vector3(h, y, 0))));
+    return a && b && near(a.x, r.x, 0.5) && near(b.x, r.x + r.w, 0.5);
   });
   T('each piece\'s meshes sit exactly on its rectangle, seen through the scene\'s camera', placed);
   T('there is one set of meshes per piece, in order', c.view3d.views.length === c.pieceRects().length &&
@@ -1559,9 +1578,14 @@ function testGeometry(){
     return Math.abs(px[0] - t[0]) + Math.abs(px[1] - t[1]) + Math.abs(px[2] - t[2]) <= tol; };
   const lum = px => px[0] * 0.3 + px[1] * 0.59 + px[2] * 0.11;
   const salmony = px => ['salmon', 'salmonDeep', 'salmonFat'].some(k => closeTo(px, k, 120));
-  T('the middle of a face is salmon', salmony(texel(0.51, 0.54)), texel(0.51, 0.54).join(','));
-  T('between the salmon and the rim is rice', lum(texel(0.5, 0.2)) > 170, texel(0.5, 0.2).join(','));
-  T('and the rim is nori', lum(texel(0.5, 0.005)) < 90, texel(0.5, 0.005).join(','));
+  /* The salmon sits off the middle toward the front of the roll: the side a
+     gap shows, and the side a served piece's neighbour leaves in view. */
+  const sx = 0.5 + 0.26 / c.SCENE.faceSpan, sy = 0.5 + 0.07 / c.SCENE.faceSpan;
+  T('a face is salmon a little off its middle, toward the front', salmony(texel(sx, sy)) && sx > 0.55, texel(sx, sy).join(','));
+  const orange = px => ['salmon', 'salmonDeep'].some(k => closeTo(px, k, 120));
+  T('round the salmon is rice, all the way to the edge', [[0.5, 0.2], [0.93, 0.5], [0.5, 0.8], [0.2, 0.5], [0.02, 0.02]]
+    .every(([u, v]) => lum(texel(u, v)) > 150 && !orange(texel(u, v))),
+    [[0.5, 0.2], [0.93, 0.5], [0.5, 0.8], [0.2, 0.5], [0.02, 0.02]].map(([u, v]) => texel(u, v).join(',')).join(' | '));
   /* Checked on the rest shape; the jiggle moves a face and its rim together. */
   const view = c.view3d.views[0];
   const [side, capL, capR] = view.parts;
@@ -1571,6 +1595,14 @@ function testGeometry(){
   const joined = (a, b) => a.every((p, i) => near(p[0], b[i][0], 1e-5) && near(p[1], b[i][1], 1e-5) && near(p[2], b[i][2], 1e-5));
   T('each face closes the nori exactly: its rim is the side\'s last ring, point for point',
     joined(faceRim(ring(capL)), leftEnd) && joined(faceRim(ring(capR)), rightEnd));
+  /* The nori has a thickness: at each face a band of it, in the face's own
+     plane, runs from the rounded rim in to where the rice begins — so a face
+     is rimmed by the nori itself, not by paint. */
+  const rimL = sidePts.slice(S, 2 * S), rimR = sidePts.slice(sidePts.length - 2 * S, sidePts.length - S);
+  const radius = (pts, k) => Math.hypot(pts[k][1] - c.SCENE.halfHeight, pts[k][2]);
+  T('each face is rimmed by a band of the nori itself, in the face\'s plane',
+    [[leftEnd, rimL], [rightEnd, rimR]].every(([inner, rim]) => inner.every((p, k) =>
+      near(p[0], rim[k][0], 1e-9) && radius(inner, k) < radius(rim, k) - 0.02)));
   T('and the jiggle moves a face with its rim: they follow the same points of the roll',
     [0, 1].every(k => { const cap = k ? capR : capL, off = k ? side.na.length - S : 0;
       for(let j = 0; j < S; j++) if(cap.na[j] !== side.na[off + j] || cap.nb[j] !== side.nb[off + j] ||
@@ -1592,6 +1624,21 @@ function testGeometry(){
     return true;
   };
   T('every triangle of the nori and of both faces faces outward', view.parts.every(outward));
+  /* Two faces of one cut are that cut seen from either side, so they match;
+     faces of different cuts do not, so no two are stamped alike. */
+  const f1 = c.faceOf(3, 0.4), f2 = c.faceOf(3, 0.4), f3 = c.faceOf(3, 0.55), f4 = c.faceOf(4, 0.4);
+  T('the two faces of one cut show the same rice and salmon', JSON.stringify(f1) === JSON.stringify(f2));
+  T('but faces of other cuts, or of another roll, sit differently',
+    [f3, f4].every(f => f.turn !== f1.turn && f.dx !== f1.dx && [...f.edge].some((e, k) => e !== f1.edge[k])));
+  T('the rice\'s edge wanders inside the nori, gently, never through it',
+    [f1, f3, f4].every(f => [...f.edge].every(e => e < 1 - c.SCENE.band * 0.4 && e > 1 - c.SCENE.band * 1.6)));
+  /* The counter fills most of the screen: it is drawn with plain matte
+     shading, and only the food reflects the room, which is what keeps the
+     frame time where Phase 1A had it on a modest GPU. */
+  const K = c.view3d.kit;
+  T('only the food reflects the room; the counter stays cheap to draw',
+    K.counter.isMeshLambertMaterial === true && K.nori.envMap === K.room && K.cap.envMap === K.room &&
+    !K.wood.envMap && !K.plate.envMap && !c.view3d.scene.environment);
   T('a face is a full disc, not a ring: it reaches the middle',
     [capL, capR].every(part => { const p = part.rest, k = p.length - 3;
       return near(p[k + 2], 0, 1e-9) && near(p[k + 1] / c.SCENE.halfHeight, 1, 0.05); }));
@@ -1625,7 +1672,8 @@ function testGeometry(){
   T('a swipe right beside a cut is refused rather than leaving a sliver', c.roll.cuts.length === 1);
   stroke(app, left.x + left.w - 1);
   T('nor on the very edge of a piece', c.roll.cuts.length === 1);
-  stroke(app, 0, { steps: 1, from: -0.8, to: 1.8 });
+  const edgeX = c.toRoll({ x: 1, y: c.toStage(0, c.layout.mid).y }).x;
+  stroke(app, edgeX, { steps: 1, from: -0.8, to: 1.8 });
   T('nor at the stage\'s edge', c.roll.cuts.length === 1);
 
   /* Strokes anywhere, at any moment, while pieces fly: whatever is accepted
@@ -1636,9 +1684,13 @@ function testGeometry(){
   let bad = 0, cuts = 0;
   for(let i = 0; i < 300; i++){
     const n0 = c.roll.cuts.length, roll0 = c.roll.id;
-    const x = c.layout.area.x + rand() * c.layout.area.w;
     const drawn = c.pieceRects();
-    stroke(app, x, { steps: 1 + Math.floor(rand() * 20), dx: (rand() - 0.5) * c.layout.T * 0.8 });
+    /* On the glass, not on the roll's plane: anywhere, any slant, any speed. */
+    const A = c.layout.area, x0 = A.x + rand() * A.w, y0 = A.y + rand() * A.h * 0.6;
+    const x1 = x0 + (rand() - 0.5) * A.w * 0.3, y1 = y0 + A.h * (0.1 + rand() * 0.5), steps = 1 + Math.floor(rand() * 20);
+    pe(app, 'pointerdown', x0, y0);
+    for(let k = 1; k <= steps; k++) pe(app, 'pointermove', x0 + (x1 - x0) * k / steps, y0 + (y1 - y0) * k / steps);
+    pe(app, 'pointerup', x1, y1);
     if(c.roll.id === roll0 && c.roll.cuts.length === n0 + 1){
       cuts++;
       const u = c.roll.cuts.find(v => drawn.every(r => !(near(v, r.u0, 1e-12) || near(v, r.u1, 1e-12))));
@@ -1666,8 +1718,8 @@ function testRhythm(){
   sub('the finished roll');
   for(let k = 1; k <= 4; k++){ stroke(app, guideX(app, k)); settleAll(app); }
   const last = guideX(app, 5);
-  pe(app, 'pointerdown', last, yAt(app, -0.8));
-  pe(app, 'pointermove', last, yAt(app, 1.8));
+  pr(app, 'pointerdown', last, yAt(app, -0.8));
+  pr(app, 'pointermove', last, yAt(app, 1.8));
   T('the fifth cut finishes the roll at once', c.game.phase === 'done' && c.roll.cuts.length === 5);
   T('the knife is lifted before anything else happens', c.gesture === null);
   T('and the finger is let go', !stageOf(app).hasPointerCapture(1));
@@ -1675,10 +1727,10 @@ function testRhythm(){
   T('the pieces are shown together on a plate', c.game.gathered === true);
   settleAll(app);
   T('then the next roll is ready', c.game.phase === 'ready' && c.game.rolls === 1 && c.roll.cuts.length === 0);
-  pe(app, 'pointermove', last, yAt(app, -0.8));
-  pe(app, 'pointermove', last, yAt(app, 1.8));
+  pr(app, 'pointermove', last, yAt(app, -0.8));
+  pr(app, 'pointermove', last, yAt(app, 1.8));
   T('the finger still held from the last cut cannot cut the new roll', c.roll.cuts.length === 0);
-  pe(app, 'pointerup', last, yAt(app, 1.8));
+  pr(app, 'pointerup', last, yAt(app, 1.8));
   stroke(app, guideX(app, 1));
   T('lifting and swiping again cuts it', c.roll.cuts.length === 1);
 
@@ -1760,7 +1812,10 @@ function testRhythm(){
   /* The scenery is four shapes: counter, board, plate and the shadow blob. */
   T('the renderer holds the scenery and the pieces on screen, nothing older',
     gpu.info.memory.geometries === 4 + v3.views.length * perPiece, String(gpu.info.memory.geometries));
-  T('textures were made once and shared: seven, still', gpu.info.memory.textures === 7, String(gpu.info.memory.textures));
+  /* Eight: the nori's two maps, the face's two, the wood, the counter, the
+     shadow's blob and the room the food reflects. */
+  T('textures were made once and shared: the kit\'s eight, still', c.view3d.kit.textures.length === 8 &&
+    gpu.info.memory.textures === c.view3d.kit.textures.length, String(gpu.info.memory.textures));
   T('nothing disposed was ever drawn again', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
   T('the renderer was created once', app.gpu.renderers.length === 1 && app.gpu.constructed === 1);
 
@@ -1787,7 +1842,7 @@ function testRhythm(){
   T('a hundred fresh rolls left the GPU holding only what is on screen',
     c.view3d.made.geometries - c.view3d.freed.geometries === c.view3d.views.length * 3 &&
     app.gpu.renderers[0].info.memory.geometries === 4 + c.view3d.views.length * 3 &&
-    app.gpu.renderers[0].info.memory.textures === 7, JSON.stringify(app.gpu.renderers[0].info.memory));
+    app.gpu.renderers[0].info.memory.textures === c.view3d.kit.textures.length, JSON.stringify(app.gpu.renderers[0].info.memory));
   c.armHint(); c.armHint(); c.armHint();
   T('arming the hint again replaces its timer rather than adding one', c.__clock.liveTimers() === 1,
     String(c.__clock.liveTimers()));
@@ -1818,24 +1873,42 @@ function testLayout(){
     const app = play({ viewport: { width: w, height: h, dpr: 3, insets } });
     const c = app.ctx, L = c.layout;
     const ins = Object.assign({ top: 0, right: 0, bottom: 0, left: 0 }, insets);
-    const n = c.roll.n;
-    const widest = L.L + (n - 1) * L.gap;
+    const n = c.roll.n, v = L.view, h2 = 2 * c.SCENE.halfHeight;
     const safe = { x0: ins.left, x1: w - ins.right, y0: ins.top, y1: h - ins.bottom };
-    /* The tallest things drawn: the hint's ghost finger above and below the
-       roll (its path ends plus its radius), which also covers the counter,
-       the plate and the finished-roll mark. */
+    const inside = pts => pts.every(p => p.x >= safe.x0 - 0.5 && p.x <= safe.x1 + 0.5 && p.y >= safe.y0 - 0.5 && p.y <= safe.y1 + 0.5);
+    const span = pts => Math.round(Math.min(...pts.map(p => p.x))) + '..' + Math.round(Math.max(...pts.map(p => p.x))) + ' x ' +
+      Math.round(Math.min(...pts.map(p => p.y))) + '..' + Math.round(Math.max(...pts.map(p => p.y)));
+    /* The roll fully cut, gaps and the rice bulging from its ends and all,
+       as the camera shows it. */
+    const half = (L.L + (n - 1) * L.gap) / 2 / v.ppw + c.SCENE.endDome;
+    const rollPts = [];
+    [-half, half].forEach(x => [0, h2].forEach(y => [-1, 1].forEach(z => rollPts.push(c.project(v, x, y, z)))));
+    T(name + ': fully cut, the roll and its ends fit inside the safe area', inside(rollPts), span(rollPts) + ' in ' + JSON.stringify(safe));
+    /* The hint's ghost finger, above and below the roll. */
     const dot = Math.max(12, L.T * 0.15);
-    const top = L.top - L.T * 0.75 - dot, bottom = L.bot + L.T * 0.45 + dot;
-    T(name + ': fully cut, the roll fits inside the safe area',
-      L.cx - widest / 2 >= safe.x0 && L.cx + widest / 2 <= safe.x1,
-      Math.round(L.cx - widest / 2) + '..' + Math.round(L.cx + widest / 2) + ' in ' + safe.x0 + '..' + safe.x1);
-    T(name + ': so do the hint, the plate and the finished mark',
-      top >= safe.y0 && bottom <= safe.y1, Math.round(top) + '..' + Math.round(bottom));
-    T(name + ': the roll is thick enough to aim at with a finger', L.T >= 44, String(Math.round(L.T)));
+    const hintPts = [c.toStage(-L.L / 2, L.top - L.T * 0.75), c.toStage(L.L / 2, L.top - L.T * 0.75),
+                     c.toStage(-L.L / 2, L.bot + L.T * 0.45), c.toStage(L.L / 2, L.bot + L.T * 0.45)]
+      .map((p, k) => ({ x: p.x, y: p.y + (k < 2 ? -dot : dot) }));
+    T(name + ': so does the hint\'s swipe', inside(hintPts), span(hintPts));
+    const tall = c.toStage(0, L.bot).y - c.toStage(0, L.top).y;
+    T(name + ': the roll is thick enough to aim at with a finger', tall >= 44, String(Math.round(tall)));
     T(name + ': the canvas is sharp but never over 2x', stageOf(app).width === Math.round(w * 2));
-    const dome = c.SCENE.endDome * L.view.ppw;
-    T(name + ': the rice bulging from its two ends fits as well',
-      L.cx - widest / 2 - dome >= safe.x0 && L.cx + widest / 2 + dome <= safe.x1);
+    /* Served: every piece on the plate, and the finished mark above them. */
+    finishRollByKeys(app);
+    advance(app, c.TUNING.holdMs * 0.95);
+    const served = [];
+    c.pieceRects().forEach(r => { const p = r.pose, ct = Math.cos(p.turn), st = Math.sin(p.turn);
+      [-p.len / 2, p.len / 2].forEach(lx => [-1, 1].forEach(lz => [p.y, p.y + h2].forEach(y =>
+        served.push(c.project(v, p.x + lx * ct + lz * st, y, p.z - lx * st + lz * ct))))); });
+    T(name + ': served, every piece is on the stage', inside(served), span(served));
+    const ctx2 = stageOf(app).getContext('2d');
+    ctx2.recording = true; ctx2.log = [];
+    c.paintNow();
+    ctx2.recording = false;
+    const mark = ctx2.log.filter(e => e.m === 'arc');
+    T(name + ': and so is the finished mark', mark.length > 0 && mark.every(e =>
+      e.args[0] - e.args[2] >= safe.x0 && e.args[0] + e.args[2] <= safe.x1 && e.args[1] - e.args[2] >= safe.y0 &&
+      e.args[1] + e.args[2] <= safe.y1), mark.map(e => e.args.slice(0, 3).map(Math.round).join(',')).join(' '));
     const gl = app.gpu.renderers[0];
     T(name + ': the 3D scene fills the screen within its pixel budget', gl.width === w && gl.height === h &&
       gl.pixelRatio <= 2 && w * h * gl.pixelRatio * gl.pixelRatio <= c.SCENE.pixelBudget * 1.0001,
@@ -1848,22 +1921,22 @@ function testLayout(){
   stroke(app, guideX(app, 1)); stroke(app, guideX(app, 3));
   advance(app, 30);
   const cuts = c.roll.cuts.slice();
-  pe(app, 'pointerdown', guideX(app, 5), yAt(app, -0.8));
-  pe(app, 'pointermove', guideX(app, 5), yAt(app, 0.4));
+  pr(app, 'pointerdown', guideX(app, 5), yAt(app, -0.8));
+  pr(app, 'pointermove', guideX(app, 5), yAt(app, 0.4));
   c.__resize(768, 1024, { top: 24, bottom: 20 });
   T('the cuts are the same cuts', JSON.stringify(c.roll.cuts) === JSON.stringify(cuts));
   T('every piece keeps its share of the roll',
     c.pieceRects().every(r => near(r.w / c.layout.L, r.u1 - r.u0, 1e-9)));
   T('everything in motion comes to rest in the new geometry', c.pieces.every(p => p.off === 0 && p.vel === 0));
   T('the stroke in progress ends', c.gesture === null);
-  pe(app, 'pointermove', 400, yAt(app, 1.8));
-  pe(app, 'pointerup', 400, yAt(app, 1.8));
+  pr(app, 'pointermove', 400, yAt(app, 1.8));
+  pr(app, 'pointerup', 400, yAt(app, 1.8));
   T('and cannot cut afterwards', c.roll.cuts.length === 2);
   const x = guideX(app, 5);
-  pe(app, 'pointerdown', x, yAt(app, -0.8));
+  pr(app, 'pointerdown', x, yAt(app, -0.8));
   c.__resize(768, 1024, { top: 24, bottom: 20 });
   T('a resize that changes nothing does not end a stroke', c.gesture !== null);
-  pe(app, 'pointermove', x, yAt(app, 1.8)); pe(app, 'pointerup', x, yAt(app, 1.8));
+  pr(app, 'pointermove', x, yAt(app, 1.8)); pr(app, 'pointerup', x, yAt(app, 1.8));
   T('which then cuts normally', c.roll.cuts.length === 3);
   c.__resize(844, 390, { left: 47, right: 47, bottom: 21 });
   T('a notch moving to the side moves the roll clear of it',
@@ -1905,7 +1978,7 @@ function testMotion(){
   T('the gap is there at once, so the cut still reads', near(r2.x - (l2.x + l2.w), c.layout.gap));
   T('and the new faces are lit', c.pieces[0].flashR > 0 && c.pieces[1].flashL > 0);
   T('the trail went with the finger', c.trail.length === 0);
-  pe(app, 'pointerdown', r2.x + r2.w * 0.5, yAt(app, 0.5)); pe(app, 'pointerup', r2.x + r2.w * 0.5, yAt(app, 0.5));
+  pr(app, 'pointerdown', r2.x + r2.w * 0.5, yAt(app, 0.5)); pr(app, 'pointerup', r2.x + r2.w * 0.5, yAt(app, 0.5));
   T('a tap does not jiggle anything', c.pieces.every(p => p.vel === 0));
   finishRollByKeys(app);
   advance(app, 17);
@@ -1978,7 +2051,9 @@ function testMotion(){
     s.forEach((q, i) => {
       floor = Math.min(floor, q.low);
       lowest = Math.max(lowest, q.low);
-      if(i > 0) overlap = Math.max(overlap, s[i - 1].right - q.left);
+      /* On the board, where they stand in a row; served pieces turn toward
+         the camera and are checked as turned shapes (contract 31). */
+      if(i > 0 && !c.game.gathered) overlap = Math.max(overlap, s[i - 1].right - q.left);
     });
   };
   for(let t = 0; t < 30; t++){ watch(); advance(app, 16); }
@@ -1995,7 +2070,7 @@ function testMotion(){
   T('it all comes to rest, exactly', !c.wobble.active && c.wobble.s.every(v => v === 0) &&
     c.pieces.every(p => p.tilt === 0 && p.rock === 0 && p.tiltV === 0 && p.rockV === 0) &&
     c.__clock.pendingFrames() === 0);
-  pe(app, 'pointerdown', screenX(app, 0.2), yAt(app, 0.5)); pe(app, 'pointerup', screenX(app, 0.2), yAt(app, 0.5));
+  pr(app, 'pointerdown', screenX(app, 0.2), yAt(app, 0.5)); pr(app, 'pointerup', screenX(app, 0.2), yAt(app, 0.5));
   advance(app, 300);
   T('a tap on one piece jiggles it', c.wobble.active && [...c.wobble.s].slice(0, node(0.5)).some(v => v !== 0));
   T('and nothing across the cut moves', [...c.wobble.s].slice(node(0.5)).every(v => v === 0) &&
@@ -2049,6 +2124,37 @@ function testMotion(){
   /* The finished roll is served inside the same beat as before: the pieces
      hop, the board slides away beneath them, the plate arrives, and they
      land on it. Reduced motion puts them straight there. */
+  /* A flick snaps a little harder than a slow drag, each cut varies a little
+     on its own, the same cut always reacts the same way, and on average the
+     jiggle is as strong as before. Strokes carry the browser's timestamps. */
+  sub('no two cuts react quite alike');
+  const timed = (steps, stepMs) => {
+    const a = play(), ac = a.ctx; ac.TUNING.pull = 0;
+    const x = guideX(a, 3), who = { pointerId: 1 };
+    let t = 1000;
+    pr(a, 'pointerdown', x, yAt(a, -0.8), Object.assign({ timeStamp: t }, who));
+    for(let i = 1; i <= steps; i++){ t += stepMs; pr(a, 'pointermove', x, yAt(a, -0.8 + 2.6 * i / steps), Object.assign({ timeStamp: t }, who)); }
+    return { tilt: ac.pieces[0].tiltV, rock: ac.pieces[1].rockV };
+  };
+  const dragged = timed(40, 16), flick = timed(1, 16), again = timed(40, 16);
+  T('a quick flick recoils harder than a slow drag', flick.tilt > dragged.tilt * 1.1 && flick.rock < dragged.rock * 1.1,
+    flick.tilt.toFixed(3) + ' vs ' + dragged.tilt.toFixed(3));
+  T('the same cut, made the same way, reacts exactly the same', again.tilt === dragged.tilt && again.rock === dragged.rock);
+  const squash = [], ac = play().ctx;
+  for(let k = 0; k < 120; k++){
+    ac.startRoll();                                 // a fresh roll, and so a fresh pattern of cuts
+    const u = 0.15 + 0.7 * (k / 120), idx = 0, at = ac.planCut(ac.roll, idx, u, 0);
+    if(at === null) continue;
+    ac.commitCut(idx, at, null);
+    const node = Math.round(at * (ac.SCENE.nodes - 1));
+    squash.push(-ac.wobble.v[node] / (ac.SCENE.kickCut * ac.TUNING.jiggle));
+  }
+  const mean = squash.reduce((x, y) => x + y, 0) / squash.length;
+  T('each cut squashes the roll a little differently', new Set(squash.map(v => v.toFixed(4))).size > squash.length * 0.9);
+  T('within a small range either way', squash.every(v => v > 1 - c.SCENE.recoilVary - 0.03 && v < 1 + c.SCENE.recoilVary + 0.03),
+    Math.min(...squash).toFixed(3) + '..' + Math.max(...squash).toFixed(3));
+  T('and on average as strongly as before', Math.abs(mean - 1) < 0.03, mean.toFixed(3));
+
   sub('serving the finished roll, in the same beat');
   app = play(); c = app.ctx;
   finishRollByKeys(app);
@@ -2090,16 +2196,16 @@ function testLifecycle(){
 
   sub('backgrounded mid-stroke');
   const x = guideX(app, 2);
-  pe(app, 'pointerdown', x, yAt(app, -0.8));
-  pe(app, 'pointermove', x, yAt(app, 0.4));
+  pr(app, 'pointerdown', x, yAt(app, -0.8));
+  pr(app, 'pointermove', x, yAt(app, 0.4));
   hide(app);
   T('the stroke ends without a cut', c.gesture === null && c.roll.cuts.length === 0);
   T('no frame waits and no timer runs', c.__clock.pendingFrames() === 0 && c.__clock.liveTimers() === 0);
-  pe(app, 'pointermove', x, yAt(app, 1.8));
+  pr(app, 'pointermove', x, yAt(app, 1.8));
   T('the finger moving on while hidden cuts nothing', c.roll.cuts.length === 0);
   show(app);
   T('coming back re-arms the hint and draws', c.__clock.liveTimers() === 1 && c.__clock.pendingFrames() === 1);
-  pe(app, 'pointerup', x, yAt(app, 1.8));
+  pr(app, 'pointerup', x, yAt(app, 1.8));
   T('the old stroke does not resume', c.roll.cuts.length === 0);
 
   sub('backgrounded during the finished-roll show');
@@ -2130,8 +2236,8 @@ function testLifecycle(){
   c.TUNING.pull = 0;
   const base = listeners(app);
   const tx = guideX(app, 2);
-  pe(app, 'pointerdown', tx, yAt(app, -0.8));
-  pe(app, 'pointermove', tx, yAt(app, 0.45));
+  pr(app, 'pointerdown', tx, yAt(app, -0.8));
+  pr(app, 'pointermove', tx, yAt(app, 0.45));
   c.openTuning(); c.__flush();
   T('the sheet opens', app.dom.document.getElementById('tuneOverlay').classList.contains('open'));
   T('the stroke is cancelled without a cut', c.gesture === null && c.roll.cuts.length === 0);
@@ -2346,15 +2452,15 @@ function testSceneLifecycle(){
   app = play(); c = app.ctx; c.TUNING.pull = 0;
   const base = listeners(app);
   const x = guideX(app, 2);
-  pe(app, 'pointerdown', x, yAt(app, -0.8));
-  pe(app, 'pointermove', x, yAt(app, 0.4));
+  pr(app, 'pointerdown', x, yAt(app, -0.8));
+  pr(app, 'pointermove', x, yAt(app, 0.4));
   const lost = { defaultPrevented: false, preventDefault(){ this.defaultPrevented = true; } };
   c.sceneEl.dispatch('webglcontextlost', lost);
   T('the browser is asked to give it back', lost.defaultPrevented === true);
   T('play pauses and the stroke ends without a cut', c.view3d.status === 'lost' && c.pauses.has('scene') &&
     c.gesture === null && c.roll.cuts.length === 0);
   T('a spinner shows while it waits', status(app).hidden === false && status(app).getAttribute('data-state') === 'lost');
-  pe(app, 'pointermove', x, yAt(app, 1.8)); pe(app, 'pointerup', x, yAt(app, 1.8));
+  pr(app, 'pointermove', x, yAt(app, 1.8)); pr(app, 'pointerup', x, yAt(app, 1.8));
   T('the finger moving on cuts nothing', c.roll.cuts.length === 0);
   const rendered = app.gpu.renderers[0].renders;
   advance(app, 1000);
@@ -2373,7 +2479,8 @@ function testSceneLifecycle(){
   T('after a wait, a fresh renderer is tried on a fresh canvas', c.view3d.status === 'ready' &&
     app.gpu.renderers.length === 2 && c.sceneEl !== first && app.gpu.renderers[0].disposed === true);
   T('the old canvas is no longer listened to', Object.values(first._listeners).every(l => l.length === 0));
-  T('everything is drawn again on it', app.gpu.renderers[1].renders >= 1 && app.gpu.renderers[1].info.memory.textures === 7);
+  T('everything is drawn again on it', app.gpu.renderers[1].renders >= 1 &&
+    app.gpu.renderers[1].info.memory.textures === c.view3d.kit.textures.length);
   for(let k = 0; k < c.SCENE.rebuilds; k++){
     c.sceneEl.dispatch('webglcontextlost', { preventDefault(){} });
     advance(app, c.SCENE.recoverMs + 50);
@@ -2475,6 +2582,259 @@ function testVendoredLibrary(){
   T('no errors', app.errors.length === 0, app.errors.join(' | '));
 }
 
+/* =========================================================
+   CONTRACT 30 — THE THREE-QUARTER CAMERA
+   The camera looks from the right and above, so the roll's near end
+   and its cut faces show, while the roll stays broadly level. The
+   knife follows the finger through that same camera: whatever the
+   guides and the hint draw is exactly where a swipe cuts, near,
+   middle or far, slow or flicked, straight or forgivingly slanted.
+   These strokes are dispatched on the glass, never on the roll's plane.
+   ========================================================= */
+function testCamera(){
+  section('CONTRACT 30 — the three-quarter camera: what is drawn is where the knife cuts');
+  const screens = [['tablet landscape', 1180, 820], ['tablet portrait', 820, 1180], ['phone landscape', 844, 390],
+                   ['phone portrait', 390, 844]];
+  screens.forEach(([name, w, h]) => {
+    const app = play({ viewport: { width: w, height: h, dpr: 2 } }), c = app.ctx, L = c.layout, v = L.view;
+    const hh = c.SCENE.halfHeight, end = c.SCENE.rollLen / 2;
+    const toCam = (x, y, z) => { const d = [v.cx - x, v.cy - y, v.cz - z], k = Math.hypot(d[0], d[1], d[2]); return d.map(q => q / k); };
+    T(name + ': the roll\'s near end faces the camera, so its filling shows', toCam(end, hh, 0)[0] > 0.3,
+      toCam(end, hh, 0)[0].toFixed(2));
+    T(name + ': and a cut face anywhere along it does too', [-0.8, -0.3, 0.3, 0.8].every(k => toCam(k * end, hh, 0)[0] > 0.3));
+    const a = c.project(v, -end, hh, 0), b = c.project(v, end, hh, 0);
+    const tilt = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+    T(name + ': the roll still lies broadly level', Math.abs(tilt) <= 8, tilt.toFixed(1) + ' degrees');
+    const thick = x => c.project(v, x, 0, 0).y - c.project(v, x, 2 * hh, 0).y;
+    T(name + ': with no dramatic perspective: its two ends look the same size', Math.abs(thick(end) / thick(-end) - 1) < 0.12,
+      (thick(end) / thick(-end)).toFixed(3));
+    /* The roll's outline where it crosses x = 0, as drawn: its highest and
+       lowest points on the glass, carried onto the roll's plane, are the
+       band's edges. */
+    const outline = [];
+    for(let t = 0; t < 360; t++){ const q = c.profilePoint(t / 360 * Math.PI * 2); outline.push(c.project(v, 0, q.y, q.z)); }
+    const hi = outline.reduce((a, p) => p.y < a.y ? p : a), lo = outline.reduce((a, p) => p.y > a.y ? p : a);
+    T(name + ': the band the knife counts in is the roll as drawn', near(c.toRoll(hi).y, L.top, 0.2) &&
+      near(c.toRoll(lo).y, L.bot, 0.2), c.toRoll(hi).y.toFixed(2) + ' vs ' + L.top.toFixed(2));
+    const rand = H.mulberry32(11);
+    let worst = 0;
+    for(let i = 0; i < 200; i++){
+      const p = { x: rand() * w, y: rand() * h }, q = c.toRoll(p), back = q ? c.toStage(q.x, q.y) : { x: Infinity, y: 0 };
+      worst = Math.max(worst, Math.hypot(back.x - p.x, back.y - p.y));
+    }
+    T(name + ': the glass and the roll\'s plane are one map, both ways', worst < 1e-6, worst.toExponential(2));
+    if(L.plateZ !== 0){
+      /* On a tall screen the plate waits behind the board: the camera looks
+         from the side, so it stands where it shows above the roll's middle. */
+      const plate = c.project(v, c.propsAt().plate, c.plateTop(), L.plateZ), mid = c.project(v, 0, hh, 0);
+      T(name + ': the waiting plate shows straight above the roll, not off to one side',
+        Math.abs(plate.x - mid.x) < w * 0.02 && plate.y < mid.y, Math.round(plate.x) + ' vs ' + Math.round(mid.x));
+    }
+    T(name + ': no errors', app.errors.length === 0, app.errors.join(' | '));
+  });
+
+  /* A swipe on the glass, from (x0, y0) to (x1, y1), in `steps` moves. */
+  const swipe = (app, x0, y0, x1, y1, steps) => {
+    pe(app, 'pointerdown', x0, y0);
+    for(let k = 1; k <= steps; k++) pe(app, 'pointermove', x0 + (x1 - x0) * k / steps, y0 + (y1 - y0) * k / steps);
+    pe(app, 'pointerup', x1, y1);
+  };
+  /* Where a straight swipe on the glass crosses the middle of the roll: the
+     knife works on the roll's plane, where a straight swipe is still straight. */
+  const crossing = (c, x0, y0, x1, y1) => {
+    const a = c.toRoll({ x: x0, y: y0 }), b = c.toRoll({ x: x1, y: y1 }), m = c.layout.mid;
+    const x = a.x + (b.x - a.x) * (m - a.y) / (b.y - a.y);
+    const r = c.pieceRects().find(q => x > q.x && x < q.x + q.w);
+    return r ? c.uAt(r, x) : NaN;
+  };
+
+  sub('the guides are drawn on the line a cut follows, and a swipe along them cuts there');
+  let app = play({ viewport: { width: 1180, height: 820, dpr: 2 } }), c = app.ctx;
+  c.TUNING.pull = 0;
+  const ctx = stageOf(app).getContext('2d');
+  ctx.recording = true; ctx.log = [];
+  c.paintNow();
+  ctx.recording = false;
+  const ticks = [];
+  for(let i = 0; i + 1 < ctx.log.length; i++){
+    const e = ctx.log[i], f = ctx.log[i + 1];
+    if(e.m === 'moveTo' && f.m === 'lineTo' && e.strokeStyle === c.colors.guide) ticks.push([e.args, f.args]);
+  }
+  T('five guides, a tick above and below the roll for each', ticks.length === 10, String(ticks.length));
+  const pairs = [];
+  for(let k = 0; k < ticks.length; k += 2) pairs.push({ top: ticks[k][0], bottom: ticks[k + 1][1] });
+  T('the ticks of a guide lie on one line through the roll, not a screen column: the camera is turned',
+    pairs.every(p => Math.abs(p.top[0] - p.bottom[0]) > 1) && pairs.every(p => {
+      const g = c.toRoll({ x: p.top[0], y: p.top[1] }), d = c.toRoll({ x: p.bottom[0], y: p.bottom[1] });
+      return near(g.x, d.x, 1e-6);
+    }));
+  const cutsAlong = pairs.map((p, k) => {
+    const a = play({ viewport: { width: 1180, height: 820, dpr: 2 } });
+    a.ctx.TUNING.pull = 0;
+    const dx = p.bottom[0] - p.top[0], dy = p.bottom[1] - p.top[1];
+    swipe(a, p.top[0] - dx * 0.3, p.top[1] - dy * 0.3, p.bottom[0] + dx * 0.3, p.bottom[1] + dy * 0.3, 12);
+    return a.ctx.roll.cuts.length === 1 && near(a.ctx.roll.cuts[0], (k + 1) / 6, 1e-6);
+  });
+  T('a swipe down a guide\'s drawn line, on the glass, cuts exactly on that guide', cutsAlong.every(Boolean), JSON.stringify(cutsAlong));
+
+  sub('near, middle and far: a swipe cuts where it crosses the roll as drawn');
+  [['far end', 0.13], ['middle', 0.5], ['near end', 0.87]].forEach(([where, u]) => {
+    [['a slow drag', 40], ['a two-sample flick', 1]].forEach(([how, steps]) => {
+      const a = play({ viewport: { width: 1180, height: 820, dpr: 2 } }), ac = a.ctx;
+      ac.TUNING.pull = 0;
+      const r = ac.pieceRects()[0], at = ac.toStage(ac.xAt(r, u), ac.layout.mid);
+      const top = ac.toStage(ac.xAt(r, u), ac.layout.top - ac.layout.T), bot = ac.toStage(ac.xAt(r, u), ac.layout.bot + ac.layout.T);
+      /* Straight down the glass, not along the roll's slant. */
+      const want = crossing(ac, at.x, top.y, at.x, bot.y);
+      swipe(a, at.x, top.y, at.x, bot.y, steps);
+      T(where + ', ' + how + ' straight down the glass cuts where it crossed the roll',
+        ac.roll.cuts.length === 1 && near(ac.roll.cuts[0], want, 1e-9), ac.roll.cuts.join(',') + ' vs ' + want.toFixed(5));
+    });
+  });
+
+  sub('slanted swipes are forgiven as before, measured on the roll');
+  [[30, 1], [-40, 1], [70, 0], [-65, 0]].forEach(([deg, expect]) => {
+    const a = play({ viewport: { width: 1180, height: 820, dpr: 2 } }), ac = a.ctx, Lb = ac.layout;
+    ac.TUNING.pull = 0;
+    const mid = ac.toStage(0, Lb.mid), len = (ac.toStage(0, Lb.bot).y - ac.toStage(0, Lb.top).y) * 2.6;
+    const dx = Math.sin(deg * Math.PI / 180) * len / 2, dy = Math.cos(deg * Math.PI / 180) * len / 2;
+    swipe(a, mid.x - dx, mid.y - dy, mid.x + dx, mid.y + dy, 16);
+    T('a swipe ' + Math.abs(deg) + ' degrees off vertical on the glass ' + (expect ? 'cuts' : 'cuts nothing'),
+      ac.roll.cuts.length === expect, String(ac.roll.cuts.length));
+  });
+
+  sub('the hint shows the swipe down the line a cut there follows');
+  app = play({ viewport: { width: 1180, height: 820, dpr: 2 }, reducedMotion: true }); c = app.ctx;
+  advance(app, c.TUNING.hintS * 1000 + 50);
+  const hctx = stageOf(app).getContext('2d');
+  hctx.recording = true; hctx.log = [];
+  c.paintNow();
+  hctx.recording = false;
+  const circle = hctx.log.find(e => e.m === 'arc' && e.strokeStyle === c.colors.hint);
+  const target = c.cutTarget(c.roll), tr = c.pieceRects()[target.index], tx = c.xAt(tr, target.u);
+  const start = c.toStage(tx, c.layout.top - c.layout.T * 0.75);
+  T('its still picture starts on the next cut\'s line, above the roll', !!circle && near(circle.args[0], start.x, 1e-6) &&
+    near(circle.args[1], start.y, 1e-6));
+  T('no errors', app.errors.length === 0, app.errors.join(' | '));
+}
+
+/* =========================================================
+   CONTRACT 31 — SERVED SO THE FACES SHOW
+   A finished roll goes to the plate in one row, in the order it was
+   cut and at the pieces' real sizes, each lying on its side and
+   turned so its face — rice and salmon — faces the camera. However
+   uneven the cutting, no piece stands on end, none leaves the plate,
+   and no two ever touch, on the plate or on the way to it.
+   ========================================================= */
+function testServing(){
+  section('CONTRACT 31 — served pieces show their faces, keep their sizes, and never touch');
+  const h2 = 2 * 0.96;
+  /* A turned piece's footprint on the counter: its corners in x and z. */
+  const foot = (x, z, len, turn) => { const ct = Math.cos(turn), st = Math.sin(turn), out = [];
+    [-len / 2, len / 2].forEach(lx => [-1, 1].forEach(lz => out.push([x + lx * ct + lz * st, z - lx * st + lz * ct])));
+    return [out[0], out[1], out[3], out[2]]; };
+  /* Separating axes for two convex footprints: true when they overlap. */
+  const overlaps = (A, B) => [A, B].every(P => P.every((p, i) => {
+    const q = P[(i + 1) % P.length], ax = [q[1] - p[1], p[0] - q[0]];
+    const pa = A.map(v => v[0] * ax[0] + v[1] * ax[1]), pb = B.map(v => v[0] * ax[0] + v[1] * ax[1]);
+    return Math.max(...pa) > Math.min(...pb) + 1e-9 && Math.max(...pb) > Math.min(...pa) + 1e-9;
+  }));
+
+  sub('the arrangement, for a thousand ways of cutting a roll');
+  const app = play(), c = app.ctx, P = c.SCENE.plate;
+  const rand = H.mulberry32(31);
+  let touching = 0, offPlate = 0, reordered = 0, resized = 0, standing = 0, rolls = 0, flatTurns = 0;
+  for(let i = 0; i < 1000; i++){
+    const n = 4 + Math.floor(rand() * 5), r = c.newRoll(n);
+    for(let k = 0; k < 40 && !c.rollComplete(r); k++){
+      const pcs = c.piecesOf(r), pi = Math.floor(rand() * pcs.length), u = pcs[pi].u0 + rand() * (pcs[pi].u1 - pcs[pi].u0);
+      const at = c.planCut(r, pi, u, rand());
+      if(at !== null) c.addCut(r, at);
+    }
+    while(!c.rollComplete(r)){ const t = c.cutTarget(r); c.addCut(r, t.u); }
+    rolls++;
+    const lens = c.piecesOf(r).map(q => (q.u1 - q.u0) * c.SCENE.rollLen);
+    const room = i % 2 ? P.w - 2 * P.bevel - 0.5 : 8.6 + rand() * 1.8;
+    const spots = c.plateSpots(lens, room);
+    const feet = spots.map((sp, k) => foot(sp.x, sp.z, lens[k], sp.turn));
+    for(let a = 0; a < feet.length; a++) for(let b = a + 1; b < feet.length; b++) if(overlaps(feet[a], feet[b])) touching++;
+    if(feet.some(f => f.some(([x, z]) => Math.abs(x) > P.w / 2 - P.bevel + 1e-9 || Math.abs(z) > P.d / 2 - P.bevel + 1e-9))) offPlate++;
+    if(spots.some((sp, k) => k > 0 && sp.x <= spots[k - 1].x)) reordered++;
+    if(spots.length !== lens.length) resized++;
+    if(spots.some(sp => !(sp.turn <= 0 && sp.turn >= -c.SCENE.serveTurn * Math.PI / 180 - 1e-12))) standing++;
+    if(room >= P.w - 2 * P.bevel - 0.5 && spots[0].turn > -0.2) flatTurns++;
+  }
+  T('no two served pieces ever touch', touching === 0, String(touching));
+  T('every piece lies on the plate\'s top, however long', offPlate === 0, String(offPlate));
+  T('they keep the order they were cut in', reordered === 0, String(reordered));
+  T('each is served whole, at its real size', resized === 0);
+  T('each lies on its side, turned toward the camera by at most the set turn', standing === 0, String(standing));
+  T('with room, they turn enough for their faces to show', flatTurns < rolls * 0.05, flatTurns + ' of ' + rolls);
+
+  sub('on a wide and a tall screen, from the board to the plate');
+  [['tablet landscape', 1180, 820], ['phone portrait', 390, 844]].forEach(([name, w, h]) => {
+    const a = play({ viewport: { width: w, height: h, dpr: 2 } }), ac = a.ctx, v = ac.layout.view;
+    ac.TUNING.pull = 0;
+    [0.2, 0.47, 0.61, 0.83, 0.34].forEach(u => { const k = ac.piecesOf(ac.roll).findIndex(q => u > q.u0 && u < q.u1);
+      const at = ac.planCut(ac.roll, k, u, 0); if(at !== null) ac.commitCut(k, at, null); });
+    while(ac.game.phase === 'ready') ac.keyboardCut();
+    let worst = 0, sank = 0;
+    for(let t = 0; t < ac.TUNING.holdMs; t += 8){
+      advance(a, 8);
+      if(ac.game.phase !== 'done') break;
+      const rects = ac.pieceRects();
+      rects.forEach((q, i) => rects.forEach((o, j) => {
+        if(j <= i || Math.abs(q.pose.y - o.pose.y) >= h2) return;
+        if(overlaps(foot(q.pose.x, q.pose.z, q.pose.len, q.pose.turn), foot(o.pose.x, o.pose.z, o.pose.len, o.pose.turn))) worst++;
+      }));
+      rects.forEach(q => { if(q.pose.y < ac.plateTop() - 1e-9) sank++; });
+    }
+    T(name + ': no two pieces touch at any moment on the way to the plate', worst === 0, String(worst));
+    T(name + ': and none sinks below the plate\'s top', sank === 0, String(sank));
+    const rects = ac.pieceRects(), at = ac.propsAt();
+    T(name + ': served, they sit on the plate, where it stands', rects.every(q =>
+      Math.abs(q.pose.x - at.plate) < P.w / 2 && Math.abs(q.pose.z - at.z) < P.d / 2 && near(q.pose.y, ac.plateTop(), 0.02)),
+      JSON.stringify(rects.map(q => [q.pose.x.toFixed(2), q.pose.z.toFixed(2), q.pose.y.toFixed(3)])));
+    const faces = rects.map(q => { const p = q.pose, n = [Math.cos(p.turn), 0, -Math.sin(p.turn)];
+      const fx = p.x + n[0] * p.len / 2, fz = p.z + n[2] * p.len / 2, d = [v.cx - fx, v.cy - p.y - 0.96, v.cz - fz];
+      return (n[0] * d[0] + n[2] * d[2]) / Math.hypot(d[0], d[1], d[2]); });
+    T(name + ': each shows the camera the face turned toward it', faces.every(f => f > 0.5), faces.map(f => f.toFixed(2)).join(' '));
+    T(name + ': no errors', a.errors.length === 0, a.errors.join(' | '));
+  });
+
+  sub('the finished mark shows above the served row');
+  [['tablet landscape', 1180, 820], ['phone portrait', 390, 844]].forEach(([name, w, h]) => {
+    const a = play({ viewport: { width: w, height: h, dpr: 2 } }), ac = a.ctx, v = ac.layout.view;
+    finishRollByKeys(a);
+    advance(a, ac.TUNING.holdMs * 0.95);
+    const tops = ac.pieceRects().map(q => ac.project(v, q.pose.x, q.pose.y + h2, q.pose.z));
+    const ctx2 = stageOf(a).getContext('2d');
+    ctx2.recording = true; ctx2.log = [];
+    ac.paintNow();
+    ctx2.recording = false;
+    const ring = ctx2.log.find(e => e.m === 'arc' && e.strokeStyle === ac.colors.done);
+    const x0 = Math.min(...tops.map(p => p.x)), x1 = Math.max(...tops.map(p => p.x)), y0 = Math.min(...tops.map(p => p.y));
+    T(name + ': the mark sits over the served row and above its pieces', !!ring && ring.args[0] > x0 && ring.args[0] < x1 &&
+      ring.args[1] + ring.args[2] < y0, ring && ring.args.slice(0, 3).map(Math.round).join(',') + ' over ' + [x0, x1, y0].map(Math.round).join(','));
+  });
+
+  sub('the board and the plate never meet as they trade places');
+  [[1180, 820], [1366, 1024], [844, 390], [667, 375], [1024, 768]].forEach(([w, h]) => {
+    const L = play({ viewport: { width: w, height: h, dpr: 2 } }).ctx.layout, B = c.SCENE.board;
+    T(w + 'x' + h + ': they stay at least their own widths apart', L.span >= (B.w + P.w) / 2 + 0.2, L.span.toFixed(2));
+  });
+
+  sub('with reduced motion they are simply there');
+  const rm = play({ reducedMotion: true }), rc = rm.ctx;
+  finishRollByKeys(rm);
+  advance(rm, rc.TUNING.holdMs * rc.SLICE.gatherAt + 20);
+  const lens = rc.piecesOf(rc.roll).map(q => (q.u1 - q.u0) * rc.SCENE.rollLen);
+  const want = rc.plateSpots(lens, rc.layout.serveRoom), got = rc.pieceRects();
+  T('at the gather every piece is already on its spot, turned', got.every((q, i) =>
+    near(q.pose.x, rc.layout.plateX + want[i].x, 1e-9) && near(q.pose.turn, want[i].turn, 1e-9) && near(q.pose.y, rc.plateTop(), 1e-9)));
+  T('no errors', rm.errors.length === 0, rm.errors.join(' | '));
+}
+
 module.exports = {
   T, section, sub, results, reset, testPortability, testSceneLifecycle, testVendoredLibrary,
   testBoot, testConfig, testStorage, testCollision, testMigration,
@@ -2482,5 +2842,5 @@ module.exports = {
   testMobile, testDesignSystem, testPWA, testRelease, testStress,
   testAccessibility, testContamination, testSourcesOfTruth,
   testCutModel, testStrokes, testGeometry, testRhythm, testLayout, testMotion,
-  testLifecycle, testPermanentRules
+  testLifecycle, testPermanentRules, testCamera, testServing
 };

@@ -1248,7 +1248,7 @@ function restNow(app){
 }
 /* What the scene is made of once, for good: the counter, its edge, the
    board, the plate and the shadow blob, and each of the chef's meshes. */
-function sceneryShapes(c){ let n = 0; c.view3d.chef.root.traverse(o => { if(o.isMesh) n++; }); return 5 + n; }
+function sceneryShapes(c){ let n = 0; c.view3d.chef.root.traverse(o => { if(o.isMesh) n++; }); return 5 + n + (c.layout && c.layout.noren ? 1 : 0); }
 
 /* =========================================================
    CONTRACT 20 — THE CUT MODEL
@@ -1814,7 +1814,8 @@ function testRhythm(){
   T('pieces match the roll exactly', c.pieces.length === c.roll.cuts.length + 1);
   advance(app, 3000);                              // the softest jiggle takes a moment to settle
   restNow(app);
-  T('at rest, between the chef\'s idle gestures, no frame is waiting at all', c.__clock.pendingFrames() === 0, String(c.__clock.pendingFrames()));
+  T('at rest only the chef\'s breath keeps a frame waiting, one at most, and nothing else moves',
+    c.__clock.pendingFrames() <= 1 && c.chefBreathing() && !c.sceneMoving() && !c.flatMoving(), String(c.__clock.pendingFrames()));
   T('and nothing was saved', app.storage._map.size === 1);
   T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
 
@@ -1851,9 +1852,13 @@ function testRhythm(){
   advance(app, c.TUNING.hintS * 1000 + 30000);
   gpu.render = render;
   T('the hint animates the flat layer, so frames run', c.hint.showing && c.__clock.pendingFrames() === 1);
+  /* Between gestures only the breath is drawn, at its own slower pace. */
   const stray = drawnAt.filter((d, i) => !d.g && !(i > 0 && drawnAt[i - 1].g && d.t - drawnAt[i - 1].t < 40));
-  T('the 3D scene is drawn only while the chef makes an idle gesture, and once as it ends', stray.length === 0,
-    stray.length + ' of ' + drawnAt.length + ' renders');
+  const tight = stray.filter((d, i) => i > 0 && !stray[i - 1].g && d.t - stray[i - 1].t < c.SCENE.chef.breath.renderMs - 1 &&
+    !drawnAt.some(e => e.g && e.t > stray[i - 1].t && e.t <= d.t));
+  T('between the chef\'s idle gestures the scene is drawn only for its breath, no more often than every ' +
+    c.SCENE.chef.breath.renderMs + ' ms', tight.length === 0 && stray.length <= (c.TUNING.hintS * 1000 + 30000) / c.SCENE.chef.breath.renderMs + 5,
+    tight.length + ' too close, ' + stray.length + ' of ' + drawnAt.length + ' renders');
   const starts = drawnAt.filter((d, i) => d.g && (i === 0 || !drawnAt[i - 1].g || d.t - drawnAt[i - 1].t > 40)).map(d => d.t);
   T('and its gestures are sparse, with quiet between them', starts.length >= 3 &&
     starts.every((t, i) => i === 0 || t - starts[i - 1] >= c.SCENE.chef.quiet[0] - 20),
@@ -2102,9 +2107,8 @@ function testMotion(){
   T('and no tipping piece ever passes into its neighbour', overlap < 0.005, overlap.toFixed(4));
   settleAll(app);                                                // well before the hint's first showing
   restNow(app);
-  T('it all comes to rest, exactly', !c.wobble.active && c.wobble.s.every(v => v === 0) &&
-    c.pieces.every(p => p.tilt === 0 && p.rock === 0 && p.tiltV === 0 && p.rockV === 0) &&
-    c.__clock.pendingFrames() === 0);
+  T('it all comes to rest, exactly (only the chef breathes on)', !c.wobble.active && c.wobble.s.every(v => v === 0) &&
+    c.pieces.every(p => p.tilt === 0 && p.rock === 0 && p.tiltV === 0 && p.rockV === 0) && !c.sceneMoving());
   pr(app, 'pointerdown', screenX(app, 0.2), yAt(app, 0.5)); pr(app, 'pointerup', screenX(app, 0.2), yAt(app, 0.5));
   advance(app, 300);
   T('a tap on one piece jiggles it', c.wobble.active && [...c.wobble.s].slice(0, node(0.5)).some(v => v !== 0));
@@ -2920,6 +2924,7 @@ function testChef(){
   const strike = (k, q) => {
     c.calmChef();
     c.chef.look.x = q.look; c.chef.nod.x = q.nod; c.chef.joy.x = q.joy; c.chef.lean.x = q.lean; c.chef.pleased = 1;
+    c.chef.breath = c.SCENE.chef.breath.ms / 2;                    // at the top of a breath, its fullest
     c.poseChef();
     k.head.rotation.y = q.look * C.turn;                    // the furthest its head may ever turn
     k.root.updateMatrixWorld(true);
@@ -2948,6 +2953,7 @@ function testChef(){
     if(nod * joy > 0.5 || lean * joy > 0.5) return;               // a nod gives way to delight; it leans only while cutting
     c.calmChef();
     c.chef.nod.x = nod; c.chef.lean.x = lean; c.chef.joy.x = joy; c.chef.look.x = look; c.chef.pleased = 1;
+    c.chef.breath = c.SCENE.chef.breath.ms / 2;
     if(g) c.chef.gesture = { kind: g, t: C.idle[g] / 2, side: look < 0 ? -1 : 1 };
     c.poseChef();
     ch.root.updateMatrixWorld(true);
@@ -3580,6 +3586,202 @@ function testFeedback(){
   T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
 }
 
+
+/* =========================================================
+   CONTRACT 34 — THE COUNTER'S NOREN, THE CHEF'S BREATH, AND
+   PRAISE THAT NEVER COVERS THE FOOD BEING SERVED
+   A noren hangs beside the chef where it covers nothing; the chef
+   breathes slowly, planted, drawn sparingly, never with reduced
+   motion or behind a pause; and a roll's last praise stays clear
+   of every piece all through its hop onto the plate.
+   ========================================================= */
+const SCREENS_34 = [
+  ['iPad landscape', 1024, 768, { top: 24, bottom: 20 }], ['iPad portrait', 768, 1024, { top: 24, bottom: 20 }],
+  ['iPad Pro portrait', 1024, 1366, { top: 24, bottom: 20 }], ['iPad mini landscape', 1133, 744, { top: 24, bottom: 20 }],
+  ['tablet landscape', 1180, 820, {}], ['tablet portrait', 820, 1180, {}],
+  ['phone portrait', 390, 844, { top: 47, bottom: 34 }], ['phone landscape', 844, 390, { left: 47, right: 47, bottom: 21 }],
+  ['small phone portrait', 375, 667, {}], ['small phone landscape', 667, 375, {}],
+  ['tiny portrait', 320, 568, {}], ['tiny landscape', 568, 320, {}]
+];
+/* A served piece's box on the stage, from its live pose: the rims of its
+   two ends, domes included — worked out here, not borrowed from the app. */
+function liveBoxes(c){
+  const v = c.layout.view, S = c.SCENE;
+  return c.pieceRects().map(r => {
+    const q = r.pose, dx = q.bx - q.ax, dz = q.bz - q.az, l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    [[q.ax - ux * 0.25, q.ay, q.az - uz * 0.25], [q.bx + ux * 0.25, q.by, q.bz + uz * 0.25]].forEach(e => {
+      for(let k = 0; k < 16; k++){
+        const a = k * Math.PI / 8, p = c.project(v, e[0] - uz * Math.cos(a), e[1] + Math.sin(a) * S.halfHeight, e[2] + ux * Math.cos(a));
+        x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+      }
+    });
+    return { x0, y0, x1, y1 };
+  });
+}
+const meets34 = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+/* A mesh's vertices on the stage, as the scene places them. */
+function stageBox(c, mesh){
+  mesh.updateWorldMatrix(true, false);
+  const p = mesh.geometry.attributes.position, v = new c.THREE.Vector3();
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for(let i = 0; i < p.count; i++){
+    v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld);
+    const q = c.project(c.layout.view, v.x, v.y, v.z);
+    x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+  }
+  return { x0, y0, x1, y1 };
+}
+function stagePoints(c, root){
+  const out = [], v = new c.THREE.Vector3();
+  root.updateMatrixWorld(true);
+  root.traverse(o => { if(!o.isMesh) return;
+    let seen = true; for(let u = o; u; u = u.parent){ if(!u.visible) seen = false; }
+    if(!seen) return;
+    const p = o.geometry.attributes.position;
+    for(let i = 0; i < p.count; i += 3){ v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); out.push(c.project(c.layout.view, v.x, v.y, v.z)); }
+  });
+  return out;
+}
+
+function testFinish(){
+  section('CONTRACT 34 — a noren behind the counter, a breathing chef, and praise clear of the food being served');
+
+  sub('a roll\'s last praise stays clear of every piece, all through the serve');
+  let checked = 0, clear = 0, shown = 0, safe = 0, sensitive = 0;
+  const misses = [];
+  SCREENS_34.forEach(([name, w, h, insets]) => {
+    [false, true].forEach(reduced => ['nice', 'great', 'perfect'].forEach(tier => [false, true].forEach(uneven => {
+      if(reduced && (uneven || tier === 'great')) return;
+      const app = play({ viewport: { width: w, height: h, dpr: 2, insets }, reducedMotion: reduced }), c = app.ctx;
+      advance(app, 1500);
+      const n = c.roll.n, cuts = uneven ? [0.12, 0.3, 0.52, 0.61, 0.83] : [1, 2, 3, 4, 5].map(k => k / n);
+      cuts.forEach((u, i) => {
+        const idx = c.piecesOf(c.roll).findIndex(p => u > p.u0 && u < p.u1), at = c.planCut(c.roll, idx, u, 0);
+        c.commitCut(idx, at === null ? u : at, null, i === cuts.length - 1 ? tier : 'nice');
+        if(i < cuts.length - 1) advance(app, 400);
+      });
+      const L = c.layout, st0 = c.feedback.stars, life = st0 ? st0.ms : 0;
+      /* The place a roll's last praise had in 0.5.0, above the cut: on a tall
+         screen the pieces hop right through it. */
+      const was = c.toStage(c.xAt(c.pieceRects()[c.pieceRects().length - 1], cuts[cuts.length - 1]) , L.top - L.T * 0.6);
+      let hits = 0, oldHits = 0, frames = 0, visible = true, inside = true;
+      for(let t = 0; t < life - 20; t += 16){
+        const st = c.feedback.stars;
+        if(!st){ visible = false; break; }
+        const b = c.starsBox(st), old = c.starsBox(Object.assign({}, st, { x: was.x, y: was.y }));
+        inside = inside && b.x0 >= L.ins.left && b.x1 <= L.W - L.ins.right && b.y0 >= L.ins.top && b.y1 <= L.H - L.ins.bottom;
+        liveBoxes(c).forEach(q => { if(meets34(b, q)) hits++; if(meets34(old, q)) oldHits++; });
+        advance(app, 16); frames++;
+      }
+      checked++;
+      if(hits === 0) clear++; else misses.push(name + ' ' + tier + (uneven ? ' uneven' : '') + (reduced ? ' reduced' : ''));
+      if(visible && frames > 5) shown++;
+      if(inside) safe++;
+      if(!reduced && tier === 'perfect' && !uneven && /portrait/.test(name) && oldHits > 0) sensitive++;
+    })));
+  });
+  T('the check can see the fault it guards against: 0.5.0\'s place above the cut covered the serve on every tall screen',
+    sensitive === SCREENS_34.filter(s => /portrait/.test(s[0])).length, String(sensitive));
+  T('on ' + checked + ' finished rolls — every screen, every tier, even and uneven, with and without reduced motion — ' +
+    'the stars never cover a piece on its way to the plate', clear === checked, misses.slice(0, 4).join(', '));
+  T('and they stay on screen for their whole time', shown === checked, shown + ' of ' + checked);
+  T('inside the safe area', safe === checked, safe + ' of ' + checked);
+  {
+    const app = play(), c = app.ctx;
+    advance(app, 1500);
+    finishRollByKeys(app);
+    T('the last praise is still said, and lasts no longer than the finished roll shows',
+      /^Perfect cut! Roll finished/.test(app.dom.document.getElementById('playStatus').textContent) &&
+      c.feedback.stars.ms === Math.min(c.FEEDBACK.starsMs, c.TUNING.holdMs));
+    c.__resize(768, 1024);
+    T('turning the screen while it shows drops it rather than leave it in the old place', c.feedback.stars === null &&
+      /^Perfect cut!/.test(app.dom.document.getElementById('playStatus').textContent));
+  }
+
+  sub('the noren hangs beside the chef and covers nothing');
+  let hung = 0;
+  SCREENS_34.forEach(([name, w, h, insets]) => {
+    const app = play({ viewport: { width: w, height: h, dpr: 2, insets } }), c = app.ctx, L = c.layout;
+    advance(app, 200);
+    const nr = c.view3d.props.noren;
+    if(!L.noren){
+      T(name + ': only a phone on its side, or a screen too small for the chef, goes without', /landscape/.test(name) && h < 500 &&
+        !nr.visible, name);
+      return;
+    }
+    hung++;
+    const b = stageBox(c, nr), k = c.layout.guard.knife, ins = L.ins;
+    const knife = { x0: Math.min(...k.map(p => p.x)), y0: Math.min(...k.map(p => p.y)) - 12, x1: Math.max(...k.map(p => p.x)), y1: Math.max(...k.map(p => p.y)) };
+    const sv = L.guard.served, served = { x0: Math.min(...sv.map(p => p.x)), y0: Math.min(...sv.map(p => p.y)), x1: Math.max(...sv.map(p => p.x)), y1: Math.max(...sv.map(p => p.y)) };
+    const floor = -c.SCENE.board.h, e0 = c.project(L.view, -30, floor, L.back), e1 = c.project(L.view, 30, floor, L.back);
+    const edge = x => e0.y + (e1.y - e0.y) * (x - e0.x) / (e1.x - e0.x);
+    /* the chef as drawn, at rest, nodding at a full breath, and delighted */
+    const pts = [];
+    [[0, 0, 0, 0], [1, 1, 0, 0.5], [0, 0, 1, 0.5]].forEach(([nod, lean, joy, br]) => {
+      c.chef.nod.x = nod; c.chef.lean.x = lean; c.chef.joy.x = joy; c.chef.breath = br * c.SCENE.chef.breath.ms;
+      c.paintNow(); pts.push(...stagePoints(c, c.view3d.chef.root));
+    });
+    const onScreen = (Math.min(b.x1, w - ins.right) - Math.max(b.x0, ins.left)) / (b.x1 - b.x0);
+    T(name + ': it shows (at least mostly), above the counter\'s edge, clear of the knife\'s ground, the plate, ' +
+      'the grown-ups\' button and every part of the chef', nr.visible && onScreen >= 0.6 && b.y1 < Math.min(edge(b.x0), edge(b.x1)) &&
+      !meets34(b, knife) && !meets34(b, served) && !meets34(b, { x0: ins.left, y0: ins.top, x1: ins.left + 60, y1: ins.top + 60 }) &&
+      pts.every(p => !(p.x > b.x0 && p.x < b.x1 && p.y > b.y0 && p.y < b.y1)), JSON.stringify(b));
+  });
+  T('it hangs on every tablet and every phone held upright', hung === SCREENS_34.filter(s => !/landscape/.test(s[0]) || s[2] >= 700).length,
+    String(hung));
+  {
+    const app = play({ viewport: { width: 820, height: 1180, dpr: 2 } }), c = app.ctx, nr = c.view3d.props.noren;
+    advance(app, 200);
+    const at = JSON.stringify([nr.position, nr.scale]);
+    finishRollByKeys(app); advance(app, 400); advance(app, 2000);
+    T('it is still: the same place through cuts, a serve and the next roll', JSON.stringify([nr.position, nr.scale]) === at);
+    T('one mesh in the chef\'s clay: no new material, texture or shader', nr.material === c.view3d.kit.clay && nr.isMesh);
+    T('the food keeps its size: the noren is placed after the food and the chef, never before',
+      /chef: set\.chef,\s*noren: set\.chef \? norenSpot/.test(js()));
+  }
+
+  sub('the chef breathes: slowly, planted, drawn sparingly');
+  {
+    const app = play({ search: '' }), c = app.ctx, ch = c.view3d.chef, B = c.SCENE.chef.breath;
+    c.TUNING.hintS = 60;                       // no hint while the breath is watched
+    c.armHint();
+    advance(app, 1500); restNow(app);
+    const root = JSON.stringify([ch.root.position, ch.torso.position]);
+    let lo = Infinity, hi = -Infinity, headLo = Infinity, headHi = -Infinity;
+    const renders = [], draws0 = c.paint.frames, render = app.gpu.renderers[0].render;
+    app.gpu.renderers[0].render = function(sc, cam){ renders.push({ t: c.__clock.now, g: !!c.chef.gesture || c.chefMoving() }); return render.call(this, sc, cam); };
+    for(let t = 0; t < B.ms * 1.5; t += 16){ advance(app, 16); lo = Math.min(lo, ch.body.scale.x); hi = Math.max(hi, ch.body.scale.x);
+      headLo = Math.min(headLo, ch.head.position.y); headHi = Math.max(headHi, ch.head.position.y); }
+    app.gpu.renderers[0].render = render;
+    T('its chest swells and falls a little, one breath every ' + B.ms / 1000 + ' s', near(lo, 1, 1e-3) && near(hi, 1 + B.body, 1e-3));
+    T('its head lifts a touch with it', near(headHi - headLo, B.rise, 1e-3));
+    T('and it stays planted: the chef does not bob up and down', JSON.stringify([ch.root.position, ch.torso.position]) === root);
+    const calm = renders.filter(r => !r.g), gaps = calm.slice(1).map((r, i) => r.t - calm[i].t);
+    T('breathing alone is drawn at most every ' + B.renderMs + ' ms, not every frame', calm.length > 20 && gaps.every(g => g >= B.renderMs - 1),
+      calm.length + ' renders, least gap ' + Math.min(...gaps).toFixed(1) + ' ms');
+    T('and the flat layer is not redrawn for it', c.paint.frames - draws0 <= renders.filter(r => r.g).length + 3, String(c.paint.frames - draws0));
+    const phase = c.chef.breath;
+    c.keyboardCut(); advance(app, 40); c.paintNow();
+    T('a cut blends in: the nod and the breath share one pose, nothing resets',
+      near(ch.head.rotation.x, c.SCENE.chef.headRest + c.SCENE.chef.nod * c.chef.nod.x + 0.05 * c.chef.lean.x - 0.12 * c.chef.joy.x -
+        B.chin * c.breathOf(), 1e-9) && ((c.chef.breath - phase + B.ms) % B.ms) >= 16 && ((c.chef.breath - phase + B.ms) % B.ms) <= 60);
+    finishRollByKeys(app); advance(app, 1600);
+    T('through a serve and the next roll the breath runs on', c.game.phase === 'ready' && c.chef.breath !== phase);
+    const before = c.chef.breath;
+    hide(app); advance(app, 3000);
+    T('hidden, it holds its breath where it was, and no frame waits', c.chef.breath === before && c.__clock.pendingFrames() === 0);
+    show(app); advance(app, 16);
+    c.openGate(); c.__flush(); const held = c.chef.breath; advance(app, 2000);
+    T('behind the grown-ups\' gate too', c.chef.breath === held && c.__clock.pendingFrames() === 0);
+    c.closeGate(); c.__flush();
+    c.__setReducedMotion(true); advance(app, 2000); c.paintNow();
+    T('with reduced motion it does not breathe, and at rest no frame waits', c.breathOf() === 0 && ch.body.scale.x === 1 &&
+      c.__clock.pendingFrames() === 0);
+    T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+  }
+}
+
 module.exports = {
   T, section, sub, results, reset, testPortability, testSceneLifecycle, testVendoredLibrary,
   testBoot, testConfig, testStorage, testCollision, testMigration,
@@ -3587,5 +3789,5 @@ module.exports = {
   testMobile, testDesignSystem, testPWA, testRelease, testStress,
   testAccessibility, testContamination, testSourcesOfTruth,
   testCutModel, testStrokes, testGeometry, testRhythm, testLayout, testMotion,
-  testLifecycle, testPermanentRules, testCamera, testServing, testChef, testFeedback
+  testLifecycle, testPermanentRules, testCamera, testServing, testChef, testFeedback, testFinish
 };

@@ -4,11 +4,12 @@ A cozy children's game set in a tiny Tokyo neighbourhood, where a calm
 capybara chef runs a sushi counter. At its heart is satisfying sushi slicing:
 order, slice, the pieces separate, the chef reacts, plate, serve, next roll.
 
-**Status: a development preview (v0.5.0), not a release for children.** One
+**Status: a development preview (v0.6.0), not a release for children.** One
 3D scene, seen three-quarters on so the rice and salmon show: a salmon roll
 on a cutting board, which squashes, wobbles and rocks as you cut it, a plate
 where the finished pieces are served with their faces showing, and Chef
-Capybara behind the counter, who watches and is pleased with every cut.
+Capybara behind the counter, breathing slowly beside a small noren, who
+watches and is pleased with every cut.
 Every cut is praised Nice, Great or Perfect with stars, a soft sound, a
 sparkle and, where the browser offers vibration, a light tap; a grown-ups
 button behind a times-table question turns sound and haptics off. There are

@@ -289,12 +289,16 @@ prototype. Each carries its reason; keep the reason with the rule.
     turn onto the plate, sliding and the moving hint are decoration, and stop,
     live, when motion is reduced: the pieces are simply on their spots.
 40. **Frames only while something moves.** `requestFrame()` keeps at most one
-    frame waiting, and none at rest. One clock drives everything, capped at
+    frame waiting. At rest the chef's slow breath is the one thing that never
+    stops: frames keep running for it, but the scene is drawn for the breath
+    alone at most every `SCENE.chef.breath.renderMs`, and the flat layer only
+    while something on it changes (`flatMoving()`). With reduced motion, or
+    behind any pause, it holds its breath and no frame waits. One clock drives everything, capped at
     50 ms a frame and restarted after any pause, so coming back from the
     background never makes anything jump. A pause (hidden, the tuning sheet,
     or the scene not showing) keeps play in place and lets no time pass. The 3D
     scene is drawn only while something in it moves; flat marks alone never
-    redraw it. At rest the only movement is Chef Capybara's occasional idle
+    redraw it. At rest the chef breathes and, now and then, makes an idle
     gesture — a blink, an ear flick, a glance — each brief, on one timer, with
     quiet between (rule 55).
 41. **Feel values live in `TUNING`, rules in `SLICE`, the 3D presentation in
@@ -395,6 +399,17 @@ prototype. Each carries its reason; keep the reason with the rule.
     device and started only from the inputs the HTML standard counts as the
     user's; a haptic tap is asked for only after one, and never assumed to
     have happened.
+59. **Praise never covers the food being served.** A roll's last cut is served
+    at once, so `praiseSpot()` works out where every piece will be all through
+    its hop (`serveBoxes()`, from the scene's own poses) and puts the stars in
+    the first clear place — above the cut, below the food, above it, beside it
+    — inside the safe area; its stars last no longer than the finished roll
+    shows. Contract 34 follows the stars and the live pieces frame by frame.
+60. **The scenery gives way; the food never does.** The noren is placed after
+    the food and the chef (`norenSpot()`), beside the chef, clear of it in
+    every pose, of the knife's ground and the praise above a cut, of the plate
+    and the mark, and of the grown-ups' button; smaller if it must, or not at
+    all. It is static and adds one mesh in the chef's clay.
 
 ## Development
 

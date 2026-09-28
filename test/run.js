@@ -57,7 +57,8 @@ const SUITES = [
   C.testCamera,
   C.testServing,
   C.testChef,
-  C.testFeedback
+  C.testFeedback,
+  C.testFinish
 ];
 
 async function main(){

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "appId": "capybara-sushi",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "phase": "Phase 1 — The Perfect Slice",
   "status": "building",
   "needsQa": true,
   "needsDecision": false,
   "currentTask": null,
-  "nextAction": "Play v0.5.0 on a real iPhone, iPad and an Android phone: judge the praise stars, cut sound, haptics and the chef (docs/DEVICE-QA.md)",
+  "nextAction": "Play v0.6.0 on a real iPhone, iPad and Android phone: judge the noren, the chef's breathing, praise, sound and haptics (docs/DEVICE-QA.md)",
   "blocker": null,
-  "updatedAt": "2026-09-28T18:24:28Z"
+  "updatedAt": "2026-09-28T22:55:01Z"
 }

@@ -1,4 +1,4 @@
-# Device QA — praise, sound and haptics (0.5.0)
+# Device QA — noren, breathing, praise (0.6.0)
 
 **Status: not done on a device.** Nothing on this list has been tried on a
 real phone or tablet. Browser QA ran in headless Edge on Windows, on an Intel
@@ -19,7 +19,7 @@ on the device for offline play.
   and `?tune` on the end for tuning. It uses HTTPS, so the service worker,
   offline play and home-screen install all work there. Pages can take up to
   10 minutes to show a new push. The identity panel in `?tune` shows which
-  version a device is running (0.5.0 for this phase).
+  version a device is running (0.6.0 for this phase).
 - **Same Wi-Fi, for quick feel testing.** On the PC, run
   `npx --yes http-server -p 8395 -c-1 .` in the repository. On the device,
   open `http://<the PC's local IP>:8395/`. A plain-http address is not a
@@ -73,6 +73,18 @@ The new movement and look:
       either way.
 - [ ] With Reduce Motion on, a cut (its gap and lit faces) and a finished
       roll (its plate and mark) are still unmistakable, and nothing wobbles.
+
+The noren and the breath (new in 0.6.0; not approved yet):
+
+- [ ] The noren reads as cloth at a doorway and makes the counter feel like a
+      tiny, calm restaurant — not a floating object, and never in the way.
+- [ ] Its indigo sits well beside the chef's apron on an Apple screen.
+- [ ] The chef's breathing is noticeable when you look, calm, never a bob;
+      it blends with nods and delight; it stops with Reduce Motion.
+- [ ] Battery and warmth after ten minutes left idle: the breath keeps the
+      scene drawing about 14 times a second at rest.
+- [ ] A roll's last stars never cover the pieces hopping to the plate, on a
+      tablet held upright especially.
 
 Praise, sound and haptics (new in 0.5.0; none of it approved yet):
 
@@ -152,6 +164,6 @@ values you prefer the new defaults.
 - [ ] Apple Pencil.
 - [ ] Home-screen install, standalone launch, and an offline launch after
       one online visit; storage and cache names `capybara-sushi.` and
-      `capybara-sushi-v0.5.0` (the identity panel in `?tune` shows them).
+      `capybara-sushi-v0.6.0` (the identity panel in `?tune` shows them).
 - [ ] If you have a device on iOS older than 16.4: it shows the note and
       the try-again button, not a blank screen.

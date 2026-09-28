@@ -32,6 +32,16 @@ None of this is done. It is listed so nothing here reads as finished.
   a note instead). If they matter, an older Three.js release would need a
   deliberate decision.
 
+## Known limits (0.6.0: noren and breathing)
+
+- The noren shows on tablets and phones held upright; on a phone held
+  sideways the wall behind the counter is too thin and it is left out.
+- At rest the chef's breath keeps frames running and the scene drawn about
+  14 times a second (0.5.0: about 7, for idle gestures only); the flat layer
+  is not redrawn for it. Measured on a desktop GPU, not a device.
+- A roll's last stars may sit below or above the food, or beside it, rather
+  than over the cut, and last no longer than the finished roll shows.
+
 ## Known limits (0.5.0: praise, sound and haptics)
 
 - The rating thresholds (a tenth and a quarter of a guide spacing, with 7 and
@@ -42,8 +52,7 @@ None of this is done. It is listed so nothing here reads as finished.
   and were measured, not listened to on a device.
 - Keyboard cuts land on their guide and are always Perfect.
 - The chef has no separate shrug for a Nice cut: every cut gets the same warm
-  nod, and a Perfect a brighter face. The roadmap card's idle breathing is
-  still to do.
+  nod, and a Perfect a brighter face.
 - At a Perfect cut the squash wave and the faces' glow run slower for about
   0.4 s; the pieces and the beat do not.
 

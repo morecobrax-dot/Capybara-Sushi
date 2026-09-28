@@ -1104,6 +1104,25 @@ const APP_FILES = [
    ========================================================= */
 const APP_UPDATES = [
   {
+    id: 'v0-6-0',
+    version: '0.6.0',
+    title: 'A noren and a breathing chef',
+    date: '2026-09-28',
+    summary: 'A small indigo noren now hangs beside Chef Capybara, and the chef breathes slowly while it watches. ' +
+             'The stars for a roll\'s last cut no longer cover the pieces on their way to the plate. Still a development preview.',
+    newFeatures: [
+      'A noren curtain hangs beside the chef, as at the kitchen doorway, on tablets and on phones held upright',
+      'Chef Capybara breathes slowly: its chest rises and falls a little, and its head lifts a touch'
+    ],
+    improvements: [
+      'The breathing pauses with play, blends with every other reaction, and stops with Reduce Motion on',
+      'The noren gives way on small screens held sideways rather than make the food smaller'
+    ],
+    fixes: [
+      'The stars for a roll\'s last cut move to a clear spot, so they never cover the pieces hopping onto the plate, on any screen'
+    ]
+  },
+  {
     id: 'v0-5-0',
     version: '0.5.0',
     title: 'Praise, sound and sparkle',
@@ -1916,6 +1935,12 @@ const SCENE = Object.freeze({
   board: Object.freeze({ w: 10.6, d: 4.6, h: 0.5, round: 0.55, bevel: 0.14 }),
   plate: Object.freeze({ w: 11.2, d: 4.0, h: 0.3, round: 1.4, bevel: 0.15 }),
   hop: 1.1,            // how high the pieces hop onto the plate
+  /* The noren: a curtain of a few cloth panels on a wooden rod, hung
+     beside the chef as at the kitchen's doorway, in the chef's own units
+     and scale. It is placed per screen where it covers nothing (norenSpot),
+     smaller if it must, or left out. */
+  noren: Object.freeze({ panels: 3, panel: 1.3, gapX: 0.06, length: 3.0, fold: 0.06,
+                         top: 7.35, side: 2.7, depth: 0.8, scales: Object.freeze([1, 0.82, 0.66, 0.54]) }),
   serveTurn: 30,       // degrees each served piece turns, so its face shows
   plateBack: 8,        // on a tall screen the plate waits this far behind the board
   serveGap: 0.08,      // between served pieces, along their length
@@ -2007,6 +2032,10 @@ const SCENE = Object.freeze({
     coolMs: 220,         // ... and fades this slowly
     springs: Object.freeze({ nod: Object.freeze([15, 0.7]), lean: Object.freeze([7, 0.9]),
                              look: Object.freeze([8, 0.9]), joy: Object.freeze([9, 0.8]) }),  // rad/s, damping
+    /* Slow breathing, always, under everything else: the chest swells a
+       little and the head lifts a touch, never the whole chef. When nothing
+       else moves it is drawn at most every renderMs. */
+    breath: Object.freeze({ ms: 4400, body: 0.01, rise: 0.012, chin: 0.008, renderMs: 66 }),
     quiet: Object.freeze([2600, 6000]),  // at rest, the quiet between idle gestures, least and most
     idle: Object.freeze({ blink: 150, flick: 380, glance: 1400 })  // and how long each takes
   }),
@@ -2331,6 +2360,7 @@ function computeLayout(W, H, ins, n, gapWanted, dpr){
   const away = (side, box) => clearDistance(view, W, side, box);
   return { W: W, H: H, dpr: dpr, ins: ins, area: area, spec: spec, view: view,
     back: set.back, guard: set.guard, chef: set.chef,
+    noren: set.chef ? norenSpot(view, W, ins, set.chef, set.guard, set.back, band.bot - band.top) : null,
     L: SCENE.rollLen * ppw, gap: Math.min(gapWanted, area.w * 0.14 / Math.max(1, n - 1)),
     top: band.top, bot: band.bot, mid: (band.top + band.bot) / 2, T: band.bot - band.top, cx: 0,
     plateX: plateX, plateZ: plateZ,
@@ -2478,7 +2508,8 @@ function chefSpheres(spot, q){
     const dy = y - hip[1], dz = z - hip[2], ly = hip[1] + dy * cl - dz * sl + q.rise, lz = hip[2] + dy * sl + dz * cl;
     return [spot.x + s * (x * cw + lz * sw), spot.y + s * ly, spot.z + s * (lz * cw - x * sw), s * r, face];
   };
-  const out = q.body === false ? [] : C.bodyFit.map(b => place(b[0], b[1], b[2], b[3], false));
+  /* The body at its fullest breath: a hair wider than at rest (poseChef). */
+  const out = q.body === false ? [] : C.bodyFit.map(b => place(b[0], b[1], b[2], b[3] + C.breath.body, false));
   C.headFit.forEach(h => {
     const y = h[1] - neck[1], z = h[2] - neck[2], y1 = y * ct - z * st, z1 = y * st + z * ct;
     out.push(place(neck[0] + h[0] * cy + z1 * sy, neck[1] + y1, neck[2] - h[0] * sy + z1 * cy, h[3], true));
@@ -2604,6 +2635,68 @@ function counterAt(v, sx, sy){
   const wy = v.uy * b - v.by, wz = v.rz * a + v.uz * b - v.bz;
   if(!(wy < -1e-9)) return -60;
   return Math.max(-60, v.cz + (-SCENE.board.h - v.cy) / wy * wz);
+}
+
+/* Where the noren hangs on this screen: beside the chef, at the height of
+   its head and hat, on whichever side has more room first. Its box on the
+   stage must stay above the counter's edge and clear of the chef in every
+   pose, of where the knife goes (and the praise above a cut), of the served
+   pieces and the mark, and of the grown-ups' button; it may run off the
+   stage's edge, but not mostly. Smaller if it must, or null: on a small
+   screen the scenery gives way, never the food. */
+function norenSpot(v, W, ins, chef, guard, back, T){
+  const Nr = SCENE.noren, floor = -SCENE.board.h;
+  const e0 = project(v, -30, floor, back), e1 = project(v, 30, floor, back);
+  const edgeY = x => e0.y + (e1.y - e0.y) * (x - e0.x) / (e1.x - e0.x);
+  const boxOf = pts => pts.reduce((b, p) => ({ x0: Math.min(b.x0, p.x), y0: Math.min(b.y0, p.y), x1: Math.max(b.x1, p.x), y1: Math.max(b.y1, p.y) }),
+    { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+  const grow = (b, m) => ({ x0: b.x0 - m, y0: b.y0 - m, x1: b.x1 + m, y1: b.y1 + m });
+  const meets = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+  const knife = boxOf(guard.knife), mk = guard.mark;
+  const keep = [
+    { x0: knife.x0, y0: knife.y0 - Math.max(16, T * 0.25), x1: knife.x1, y1: knife.y1 },     // the knife's ground, and the praise above a cut
+    boxOf(guard.served), { x0: mk.x - mk.r, y0: mk.y - mk.r, x1: mk.x + mk.r, y1: mk.y + mk.r },
+    { x0: ins.left, y0: ins.top, x1: ins.left + 64, y1: ins.top + 64 }                         // the grown-ups' button
+  ].map(b => grow(b, 6));
+  const circles = [];
+  chefPoses(v, chef.x, chef.z).forEach(q => chefSpheres(chef, q).forEach(b => {
+    const p = project(v, b[0], b[1], b[2]);
+    circles.push({ x: p.x, y: p.y, r: v.F * b[3] / depthOf(v, b[0], b[1], b[2]) + 6 });
+  }));
+  const wide = Nr.panels * Nr.panel + (Nr.panels - 1) * Nr.gapX;
+  const at = project(v, chef.x, chef.y + chef.s * 5, chef.z);
+  const room = side => side > 0 ? W - ins.right - at.x : at.x - ins.left;
+  const sides = room(1) >= room(-1) ? [1, -1] : [-1, 1];
+  /* Out along the counter from the chef, a step at a time, to the first
+     place clear of it in every pose; farther only runs off the stage. */
+  for(const k of Nr.scales){
+    for(const side of sides){
+      for(let d = Nr.side; d < Nr.side + 12; d += 0.3){
+        const sc = chef.s * k, x = chef.x + side * (chef.s * d + sc * (wide / 2 + 0.3));
+        const y = chef.y + chef.s * Nr.top, z = chef.z - chef.s * Nr.depth, pts = [];
+        [-1, 1].forEach(a => [0.2, -Nr.length - 0.25].forEach(dy => [-0.15, 0.15].forEach(dz =>
+          pts.push(project(v, x + a * sc * (wide / 2 + 0.3), y + sc * dy, z + sc * dz)))));
+        const b = boxOf(pts), w = b.x1 - b.x0;
+        const shown = (Math.min(b.x1, W - ins.right) - Math.max(b.x0, ins.left)) / w;
+        if(shown < 0.6) break;
+        if(circles.some(c => c.x + c.r > b.x0 && c.x - c.r < b.x1 && c.y + c.r > b.y0 && c.y - c.r < b.y1)) continue;
+        if(b.y1 - Math.max(b.y0, ins.top) < 36 || b.y1 > Math.min(edgeY(b.x0), edgeY(b.x1)) - 10 || keep.some(o => meets(b, o))) break;
+        /* Hung from above: raised until its beam meets the stage's top edge,
+           if it stays clear of the chef on the way. */
+        let spot = { x: x, y: y, z: z, s: sc, box: b };
+        for(let up = 0.15; up < 4 && spot.box.y0 > ins.top - 2; up += 0.15){
+          const yy = y + chef.s * up, qs = [];
+          [-1, 1].forEach(a => [0.2, -Nr.length - 0.25].forEach(dy => [-0.15, 0.15].forEach(dz =>
+            qs.push(project(v, x + a * sc * (wide / 2 + 0.3), yy + sc * dy, z + sc * dz)))));
+          const bb = boxOf(qs);
+          if(circles.some(c => c.x + c.r > bb.x0 && c.x - c.r < bb.x1 && c.y + c.r > bb.y0 && c.y - c.r < bb.y1)) break;
+          spot = { x: x, y: yy, z: z, s: sc, box: bb };
+        }
+        return spot;
+      }
+    }
+  }
+  return null;
 }
 
 /* The canvas cannot read env(). The probe carries the insets as padding. */
@@ -3294,8 +3387,42 @@ function plateTop(){ return SCENE.plate.h - SCENE.board.h; }
 /* The height of piece i's underside: the board's top, the air, the plate's top. */
 function liftOf(i, n){
   const t = hopT(i, n);
-  if(t <= 0) return 0;
-  return plateTop() * t + (motionReduced() ? 0 : SCENE.hop * 4 * t * (1 - t));
+  return t <= 0 ? 0 : liftAt(t);
+}
+/* The height of a piece's underside a share t of the way through its hop. */
+function liftAt(t){ return plateTop() * t + (motionReduced() ? 0 : SCENE.hop * 4 * t * (1 - t)); }
+
+/* Where each piece of the finished roll will be on the stage all through
+   its hop onto the plate, worked out ahead from the same poses the scene
+   will take: one box per piece per step, a little larger than the piece. */
+function serveBoxes(){
+  const L = layout, v = L.view, pcs = piecesOf(roll), lefts = restLefts();
+  const lens = pcs.map(p => (p.u1 - p.u0) * SCENE.rollLen), spots = plateSpots(lens, L.serveRoom);
+  const m = Math.max(4, L.T * 0.05), out = [];
+  pcs.forEach((p, i) => {
+    const board = poseOf((lefts[i] - L.cx) / v.ppw, lens[i], 0, 0, 0), home = L.plateX + spots[i].x;
+    for(let k = 0; k <= 8; k++){
+      const t = k / 8, e = easeInOut(t);
+      const b = poseBox(v, placePose(board.x + (home - board.x) * e, liftAt(t), (L.plateZ + spots[i].z) * e,
+                                     lens[i], 0, 0, spots[i].turn * e));
+      out.push({ x0: b.x0 - m, y0: b.y0 - m, x1: b.x1 + m, y1: b.y1 + m });
+    }
+  });
+  return out;
+}
+/* A piece's box on the stage: its two ends' rims, domes included. */
+function poseBox(v, q){
+  const dx = q.bx - q.ax, dz = q.bz - q.az, l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
+  const d = SCENE.endDome + 0.03, H = SCENE.halfHeight * 1.02;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  [[q.ax - ux * d, q.ay, q.az - uz * d], [q.bx + ux * d, q.by, q.bz + uz * d]].forEach(e => {
+    for(let k = 0; k < 12; k++){
+      const a = k * Math.PI / 6, c = Math.cos(a) * 1.02;
+      const p = project(v, e[0] - uz * c, e[1] + Math.sin(a) * H, e[2] + ux * c);
+      if(p.x < x0) x0 = p.x; if(p.x > x1) x1 = p.x; if(p.y < y0) y0 = p.y; if(p.y > y1) y1 = p.y;
+    }
+  });
+  return { x0: x0, y0: y0, x1: x1, y1: y1 };
 }
 function easeInOut(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(2 - 2 * t, 2) / 2; }
 
@@ -3359,6 +3486,8 @@ const chef = {
   joy: { x: 0, v: 0 },        // delight at a finished roll
   pleased: 0,                 // a cut's contentment, 0 to 1
   cheer: Infinity,            // ms since a Perfect cut
+  breath: 0,                  // ms into the current slow breath
+  breathWait: 0,              // ms since the breath was last drawn
   bright: 0,                  // its face lit up by one, 0 to 1
   gesture: null,              // an idle gesture under way: { kind, t, side }
   timer: 0,                   // the wait until the next one
@@ -3415,6 +3544,10 @@ function atRest(s, aim){ return Math.abs(s.x - aim) < 1e-3 && Math.abs(s.v) < 1e
 function stepChef(ms){
   chef.sinceCut += ms;
   chef.cheer += ms;
+  if(!motionReduced()){
+    chef.breath = (chef.breath + ms) % SCENE.chef.breath.ms;
+    chef.breathWait += ms;
+  }
   const C = SCENE.chef, a = chefAims();
   if(motionReduced()){
     /* Its face changes in place, and it holds still: a changed face is
@@ -3468,6 +3601,11 @@ function chefBusy(){
   return chef.sinceCut < SCENE.chef.pleasedMs || chef.cheer < SCENE.chef.cheerMs || chef.pleased !== a.pleased ||
          chef.bright !== a.bright || chef.joy.x !== a.joy;
 }
+/* Its breath, 0 out to 1 in, smooth at both ends; none with reduced motion. */
+function breathOf(){ return motionReduced() ? 0 : (1 - Math.cos(2 * Math.PI * chef.breath / SCENE.chef.breath.ms)) / 2; }
+/* It breathes whenever it is on the stage and play runs: the only motion
+   that never ends, so it alone is drawn at a slower pace (onFrame). */
+function chefBreathing(){ return !!layout && !!layout.chef && !motionReduced() && !isPaused(); }
 function chefMoving(){
   if(!layout || !layout.chef || motionReduced()) return false;
   const a = chefAims();
@@ -3521,13 +3659,62 @@ const FEEDBACK = Object.freeze({
 const PRAISE = Object.freeze({ nice: 'Nice cut.', great: 'Great cut!', perfect: 'Perfect cut!' });
 const feedback = { stars: null, sparks: [], slow: 0, seq: 0 };
 
-/* A cut at `x` (the knife's pixels along the roll) earned `tier`. */
+/* The stars' size, and the box they take on the stage — as drawn at this
+   moment, or over their whole life (their rise included). */
+function starsSize(n){
+  const r = Math.max(7, layout.T * 0.1) * (n === 3 ? 1.12 : 1);
+  return { r: r, gap: r * 2.2, pad: r * 1.35, w: (n - 1) * r * 2.2 };
+}
+function starsLift(st){
+  return motionReduced() ? 0 : FEEDBACK.rise * (1 - Math.pow(1 - Math.min(1, st.t / st.ms), 2));
+}
+function starsBox(st, whole){
+  const z = starsSize(st.n), up = whole ? (motionReduced() ? 0 : FEEDBACK.rise) : starsLift(st);
+  return { x0: st.x - z.w / 2 - z.pad, x1: st.x + z.w / 2 + z.pad, y0: st.y - up - z.pad, y1: st.y + z.pad };
+}
+/* Where a cut's stars show: above the cut. A roll's last cut is served at
+   once, and the pieces hop past there — onto a plate waiting behind the
+   board on a tall screen — so its stars go to the first place that stays
+   clear of every piece all through the hop, of the finished mark and of
+   the grown-ups' button, inside the safe area: above the cut, below the
+   food, above it, or beside it. Where nothing is wholly clear — a small
+   phone on its side, filled by the food — the place that covers least. */
+function praiseSpot(x, n){
+  const L = layout, at = toStage(x, L.top - L.T * 0.6);
+  if(!rollComplete(roll)) return at;
+  const z = starsSize(n), ins = L.ins, mk = L.guard.mark;
+  const keep = serveBoxes().concat([{ x0: mk.x - mk.r - 6, y0: mk.y - mk.r - 6, x1: mk.x + mk.r + 6, y1: mk.y + mk.r + 6 },
+                                    { x0: ins.left, y0: ins.top, x1: ins.left + 64, y1: ins.top + 64 }]);
+  const food = keep.slice(0, keep.length - 2);
+  const lo = Math.max.apply(null, food.map(b => b.y1)), hi = Math.min.apply(null, food.map(b => b.y0));
+  const half = z.w / 2 + z.pad, cx = Math.max(ins.left + half + 4, Math.min(L.W - ins.right - half - 4, at.x));
+  const left = Math.min.apply(null, food.map(b => b.x0)), right = Math.max.apply(null, food.map(b => b.x1));
+  const inY = y => Math.max(ins.top + z.pad + FEEDBACK.rise + 2, Math.min(L.H - ins.bottom - z.pad - 2, y));
+  const inX = x => Math.max(ins.left + half + 2, Math.min(L.W - ins.right - half - 2, x));
+  /* How much of the stars' box, over their whole life, would cover
+     something, or fall outside the safe area. */
+  const covers = p => { const b = starsBox({ x: p.x, y: p.y, n: n, t: 0, ms: 1 }, true);
+    const cut = o => { const w = Math.min(b.x1, o.x1) - Math.max(b.x0, o.x0), h = Math.min(b.y1, o.y1) - Math.max(b.y0, o.y0);
+      return w > 0 && h > 0 ? w * h : 0; };
+    const area = (b.x1 - b.x0) * (b.y1 - b.y0);
+    const safe = cut({ x0: ins.left, y0: ins.top, x1: L.W - ins.right, y1: L.H - ins.bottom });
+    return keep.reduce((a, o) => a + cut(o), 0) + (area - safe) * 4; };
+  const tries = [{ x: cx, y: at.y }, { x: cx, y: inY(lo + z.pad + 6) }, { x: cx, y: inY(hi - z.pad - FEEDBACK.rise - 6) },
+                 { x: inX(left - half - 6), y: inY(at.y) }, { x: inX(right + half + 6), y: inY(at.y) }];
+  let best = tries[0], least = Infinity;
+  for(const p of tries){ const c = covers(p); if(c === 0) return p; if(c < least){ least = c; best = p; } }
+  return best;
+}
+
+/* A cut at `x` (the knife's pixels along the roll) earned `tier`. The
+   stars of a roll's last cut last no longer than the finished roll shows. */
 function cutFeedback(x, tier){
   const n = TIERS.indexOf(tier) + 1;
   feedback.seq++;
   if(layout && x !== null && n > 0){
-    const L = layout, at = toStage(x, L.top - L.T * 0.6);
-    feedback.stars = { x: at.x, y: at.y, n: n, t: 0 };
+    const L = layout, at = praiseSpot(x, n);
+    feedback.stars = { x: at.x, y: at.y, n: n, t: 0,
+                       ms: rollComplete(roll) ? Math.min(FEEDBACK.starsMs, TUNING.holdMs) : FEEDBACK.starsMs };
     if(!motionReduced()){
       const r = seeded(0x2F6B7A91 + feedback.seq * 7919), count = FEEDBACK.sparks[tier];
       for(let i = 0; i < count; i++){
@@ -3552,7 +3739,7 @@ function stepFeedback(ms){
   const k = presentRate();
   feedback.slow = Math.max(0, feedback.slow - ms);
   const st = feedback.stars;
-  if(st && (st.t += ms) >= FEEDBACK.starsMs) feedback.stars = null;
+  if(st && (st.t += ms) >= st.ms) feedback.stars = null;
   if(feedback.sparks.length){
     feedback.sparks.forEach(p => { p.t += ms * k; });
     feedback.sparks = feedback.sparks.filter(p => p.t < FEEDBACK.sparkMs);
@@ -3865,7 +4052,7 @@ function renderPrefs(){
 /* ---------- FRAMES ---------- */
 let frameId = 0;              // the one pending animation frame, or 0
 let lastFrameAt = null;       // null restarts the clock: a pause never counts as time
-const paint = { rects: [], frames: 0 };   // what the last frame drew, flat and in 3D
+const paint = { rects: [], frames: 0, flatWas: false };   // what the last frame drew, flat and in 3D
 
 function requestFrame(){
   if(frameId || !wired || isPaused() || typeof requestAnimationFrame !== 'function') return;
@@ -3881,11 +4068,24 @@ function onFrame(t){
   const ms = lastFrameAt === null ? 0 : Math.max(0, Math.min(SLICE.maxStepMs, t - lastFrameAt));
   lastFrameAt = t;
   stepMotion(ms);
-  const rects = pieceRects();
-  draw(rects);
-  renderScene(rects, false);
+  /* The flat layer is drawn while anything on it changes, and once more
+     after; the scene while anything in it moves, or for the breath alone
+     every SCENE.chef.breath.renderMs. A frame with neither draws nothing. */
+  const flat = flatMoving(), scene = sceneMoving() || view3d.stale;
+  const breathe = chefBreathing() && chef.breathWait >= SCENE.chef.breath.renderMs;
+  if(flat || paint.flatWas || scene || breathe){
+    const rects = pieceRects();
+    if(flat || paint.flatWas || scene) draw(rects);
+    renderScene(rects, breathe);
+  }
+  paint.flatWas = flat;
   if(needsFrames()) requestFrame();
   else lastFrameAt = null;
+}
+/* Is anything on the flat layer changing: a stroke, its trail or a closing
+   incision, the hint, a cut's stars or sparkle, or the finished-roll beat? */
+function flatMoving(){
+  return !!gesture || trail.length > 0 || healing.length > 0 || hint.showing || feedbackBusy() || game.phase !== 'ready';
 }
 /* Draw now, outside the frame scheduler: after a pause, a resize or a
    tuning change. One geometry serves both layers. */
@@ -3896,7 +4096,7 @@ function paintNow(){
 }
 function needsFrames(){
   if(isPaused() || !layout) return false;
-  if(game.phase !== 'ready' || healing.length || wobble.active || chefBusy() || feedbackBusy()) return true;
+  if(game.phase !== 'ready' || healing.length || wobble.active || chefBusy() || feedbackBusy() || chefBreathing()) return true;
   if(!motionReduced() && (trail.length || hint.showing)) return true;
   return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
                           p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
@@ -4119,10 +4319,8 @@ function drawFeedback(c){
   });
   const st = feedback.stars;
   if(st){
-    const life = st.t / FEEDBACK.starsMs;
-    const lift = motionReduced() ? 0 : FEEDBACK.rise * (1 - Math.pow(1 - life, 2));
-    const r = Math.max(7, L.T * 0.1) * (st.n === 3 ? 1.12 : 1), gap = r * 2.2, y = st.y - lift;
-    const w = (st.n - 1) * gap, pad = r * 1.35;
+    const life = st.t / st.ms, z = starsSize(st.n);
+    const r = z.r, gap = z.gap, y = st.y - starsLift(st), w = z.w, pad = z.pad;
     c.globalAlpha = Math.max(0, Math.min(1, st.t / 90, (1 - life) * 5));
     c.fillStyle = C.doneDisc;
     c.strokeStyle = C.hudShade;
@@ -4546,7 +4744,36 @@ function makeProps(){
   const plateShadow = blobMesh(0.5);
   plateShadow.scale.set(P.w + 1.1, 1, P.d + 1.1);
   plateShadow.position.y = -B.h + 0.006;
-  return { counter: counter, edge: edge, boardShadow: boardShadow, board: board, plateShadow: plateShadow, plate: plate };
+  return { counter: counter, edge: edge, boardShadow: boardShadow, board: board, plateShadow: plateShadow, plate: plate,
+           noren: makeNoren() };
+}
+
+/* The noren, built once in its own units (the chef's): a wooden rod and a
+   few indigo cloth panels looped over it, each with soft vertical folds,
+   shaded a little in the hollows. One mesh, the chef's clay; no lettering,
+   no pattern. It hangs from its rod's middle. */
+function makeNoren(){
+  const T3 = THREE, Nr = SCENE.noren, wood = new T3.Color(colors.wood);
+  const cloth = new T3.Color(colors.apron), hollow = cloth.clone().multiplyScalar(0.93), half = Nr.panel / 2;
+  const wide = Nr.panels * Nr.panel + (Nr.panels - 1) * Nr.gapX, parts = [];
+  /* The rod, the cloth looped over its front: only its ends and top show. */
+  parts.push({ shape: surface(roundBlock([0, 0, -0.08], wide / 2 + 0.4, 0.16, 0.16, 2), 32, 12), color: wood });
+  for(let i = 0; i < Nr.panels; i++){
+    const cx = -wide / 2 + half + i * (Nr.panel + Nr.gapX), cy = 0.12 - Nr.length / 2;
+    /* Cloth: a thin sheet with soft vertical folds, deeper toward the hem. */
+    const g = new T3.PlaneGeometry(Nr.panel, Nr.length, 18, 6), p = g.attributes.position;
+    const fold = x => Math.cos(x / half * 1.5 * Math.PI);
+    for(let k = 0; k < p.count; k++){
+      const x = p.getX(k), y = p.getY(k);
+      p.setZ(k, Nr.fold * fold(x) * (0.55 + 0.45 * (0.5 - y / Nr.length)));
+    }
+    g.computeVertexNormals();
+    g.translate(cx, cy, 0.1);
+    parts.push({ shape: shapeOf(g), color: x => hollow.clone().lerp(cloth, 0.5 + 0.5 * fold(x - cx)) });
+  }
+  const mesh = new T3.Mesh(bake(parts), view3d.kit.clay);
+  mesh.visible = false;
+  return mesh;
 }
 
 /* A soft contact shadow: a blurred blob under something, instead of a
@@ -5117,6 +5344,9 @@ function placeProps(){
   P.counter.position.z = P.edge.position.z = layout.back;
   P.board.visible = P.boardShadow.visible = at.board !== null;
   P.plate.visible = P.plateShadow.visible = at.plate !== null;
+  const nr = layout.noren;
+  P.noren.visible = !!nr;
+  if(nr){ P.noren.position.set(nr.x, nr.y, nr.z); P.noren.scale.setScalar(nr.s); }
   if(at.board !== null){ P.board.position.x = at.board; P.boardShadow.position.x = at.board; }
   if(at.plate !== null){
     P.plate.position.set(at.plate, plateTop(), at.z);
@@ -5372,8 +5602,8 @@ function makeChef(){
   const root = new T3.Group();
   root.add(torso);
   const rest = o => ({ x: o.rotation.x, y: o.rotation.y, z: o.rotation.z });
-  return { root: root, torso: torso, head: head, arms: arms, ears: ears, eyes: eyes, mouth: mouth,
-           happy: happy, blush: blush, rest: { arms: arms.map(rest), ears: ears.map(rest) } };
+  return { root: root, torso: torso, body: torso.children[0], head: head, arms: arms, ears: ears, eyes: eyes, mouth: mouth,
+           happy: happy, blush: blush, rest: { arms: arms.map(rest), ears: ears.map(rest), headY: head.position.y } };
 }
 
 /* Stand the chef where the layout says, in the pose its mood gives: its
@@ -5397,9 +5627,14 @@ function poseChef(){
   const room = C.turn - C.look;
   let turn = Math.max(-room, Math.min(room, toward(0, 0))) + C.look * chef.look.x;
   if(g && g.kind === 'glance') turn += (toward(layout.view.cx, layout.view.cz) - turn) * bump;
+  const br = breathOf(), B = C.breath;
   ch.torso.rotation.x = (C.lean * lean - 0.04 * joy) * moves;
   ch.torso.position.y = C.hip[1] + C.rise * joy * moves;
-  ch.head.rotation.set(C.headRest + (C.nod * chef.nod.x + 0.05 * lean - 0.12 * joy) * moves, turn, 0.08 * joy * moves, 'YXZ');
+  /* The breath: only the body swells, from the hips; the head lifts a touch
+     with it. Added into the same pose, so nothing competes or resets. */
+  ch.body.scale.set(1 + B.body * br, 1 + B.body * 0.5 * br, 1 + B.body * br);
+  ch.head.position.y = ch.rest.headY + B.rise * br;
+  ch.head.rotation.set(C.headRest + (C.nod * chef.nod.x + 0.05 * lean - 0.12 * joy) * moves - B.chin * br, turn, 0.08 * joy * moves, 'YXZ');
   const bright = chef.bright, glow = Math.max(joy, 0.6 * bright);
   const blink = g && g.kind === 'blink' ? bump : 0, happy = joy >= 0.5 || bright >= 0.5;
   const open = Math.max(0.08, (0.9 + 0.1 * lean - 0.25 * pleased) * (1 - 0.85 * Math.min(1, joy / 0.5)) * (1 - blink));
@@ -5443,6 +5678,7 @@ function renderScene(rects, force){
   view3d.bent = wobble.active;
   view3d.renderer.render(view3d.scene, view3d.camera);
   view3d.renders++;
+  chef.breathWait = 0;
 }
 
 /* ---------- TUNING UI (developer only) ---------- */

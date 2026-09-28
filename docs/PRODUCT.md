@@ -47,7 +47,8 @@ paws, a tall puffy hat and an indigo apron.
 0. Foundations and a slicing prototype. **(0B: gray-box prototype, v0.1.0.)**
 1. One polished roll and counter, with satisfying slicing and chef reactions.
    **(1A: the first 3D slicing scene, v0.2.0. 1B: appearance, camera and
-   motion, v0.3.0. 1C: Chef Capybara, v0.4.0. Praise, slice juice and the
+   motion, v0.3.0. 1C: Chef Capybara, v0.4.0. A noren and the chef's breath,
+   v0.6.0. Praise, slice juice and the
    sound and haptics switches, v0.5.0.)**
 2. Customers, orders, more rolls, plating, short shifts.
 3. Rewards, recipes, decorations, outfits, local save.

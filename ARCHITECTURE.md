@@ -151,8 +151,12 @@ sequence. Every key is backed up first; a failure restores it and surfaces a
 warning. Bump `DATA_SCHEMA_VERSION` only when the *shape* of stored data
 changes.
 
-**Capybara Sushi saves nothing yet.** The roll, the tuning and every gesture
-live in memory, and the only key written is the schema version. Backup & data
+**Capybara Sushi saves nothing about play.** The roll, the tuning and every
+gesture live in memory. Besides the schema version, the only key is a
+grown-up's sound and haptics choice (`prefs.feedback`, the game's own
+`PREFS_KEY`), written only when one is changed; an unreadable value means
+the defaults and is left as it is, and where storage is refused a change
+lasts until the app closes. Backup & data
 counts records from whatever `data.*` keys exist, so it does not depend on
 any one product's collection.
 
@@ -237,7 +241,7 @@ What the harness gives the game, so it can be tested without a browser:
 
 Contracts are grouped by what they protect, in dependency order — identity and
 storage first, because everything above them is meaningless if those are wrong.
-The game's own contracts (20–32) run last. Aim for high-value contracts, not
+The game's own contracts (20–33) run last. Aim for high-value contracts, not
 volume. The harness cannot see a real browser's hit-testing or a real GPU, so
 every touch surface is also exercised with real CDP input in headless Edge
 against the real WebGL renderer (CLAUDE.md rule 43).
@@ -267,7 +271,7 @@ no foundation code uses any of them. The template's own check looked only for
 names containing "item", which is how Backup & data came to depend on the demo
 unnoticed.
 
-Capybara Sushi claims them as: `hydrate` (nothing to read: nothing is saved),
+Capybara Sushi claims them as: `hydrate` (the sound and haptics choice, `loadPrefs()`),
 `render` (re-measure and draw), `wire` (the stage's pointer, keyboard,
 visibility, resize and reduced-motion listeners, attached once, and the 3D
 scene's load) and `tabIcons` (none: play is one screen).
@@ -295,15 +299,17 @@ The `GAME DOMAIN — Slicing` section, in the order a touch travels through it:
 | Geometry | `pieceRects()` is the one answer to "where is the food". Each piece has a pose in the world (its slide, a tip over one bottom edge, its rock, a hop, and once served a spot on the plate and a turn), and its rectangle is the stretch of the roll's upright plane its axis covers, seen through the camera. The 3D scene places each piece's meshes from exactly this pose, and `pieceAt()` hit-tests the rectangle on that plane, so a moving, tipping piece is cut where it appears whatever the camera. `plateSpots()` arranges the served row: in cut order, at real sizes, on their sides and turned so their faces show, never touching. |
 | Gesture | One pointer owns the knife. Each sample on the glass is carried through the camera onto the roll's plane (`toRoll()`), where the roll lies level and a straight swipe is still straight; `feed()` clips each segment to the roll's band there, so a sparse flick still crosses it, and `tryCut()` cuts the moment a pass is deep and steep enough over real food. A stroke cuts at most once. The trail and the tap's travel stay on the glass. |
 | Motion | Springs (`stepMotion`), the jiggle, and the finished-roll beat (`stepPhase`: ready → done → clear → enter → ready), all on one clock. The jiggle is one soft body (`wobble`): a squash value at 41 points along the roll, joined to their neighbours so a push travels as a wave, each point drawn gently back to rest, and a cut parting two points for good. Impulses add to whatever is moving, so quick cuts blend. Each piece also tips and rocks on its own springs, held clear of its neighbours. A cut's recoil follows the stroke's speed and varies a little by cut (`recoilForce()`, `recoil()`), so no two cuts look alike. At the gather the finished roll is served: the pieces hop and turn to their spots on the plate; on a wide screen the board slides away under them and the plate slides in, on a tall one the plate waits behind the board; all inside the same 650 ms beat. Reduced motion settles all of it and puts the pieces straight on their spots, live. |
-| Chef | Chef Capybara's mood, `chef`: springs for its nod, lean, look along the roll and delight, its contentment, and one idle gesture at a time, all stepped by `stepChef()` on the one clock. `commitCut()` calls `chefCut()`; delight is read from the finished-roll beat (`chefJoyAim()`), so it lives inside it. Quick cuts hold one nod (`burstMs`). At rest `armChef()` keeps one timer for the next blink, ear flick or glance; `quietChef()` clears it. With reduced motion only its face changes. |
+| Rating | `rateCut()`: Nice, Great or Perfect, from where the knife crossed the roll's plane before `planCut()` pulled it, against `cutReference()` — the nearest free guide a cut in that piece may reach, or the piece's middle — in guide spacings with a pixel floor (`RATING`). `tryCut()` and `keyboardCut()` pass the tier to `commitCut()`. Nothing is kept. |
+| Chef | Chef Capybara's mood, `chef`: springs for its nod, lean, look along the roll and delight, its contentment, and one idle gesture at a time, all stepped by `stepChef()` on the one clock. `commitCut()` calls `chefCut()`; delight is read from the finished-roll beat (`chefJoyAim()`), so it lives inside it. Quick cuts hold one nod (`burstMs`). At rest `armChef()` keeps one timer for the next blink, ear flick or glance; `quietChef()` clears it. A Perfect cut lights its face up briefly (`cheer`, `bright`). With reduced motion only its face changes. |
+| Feedback | `cutFeedback()` after every cut: stars over it (`feedback.stars`, one to three), a sparkle along it, `playCut()` and `tapHaptic()`; a Perfect adds a slow-motion beat that `presentRate()` applies only to the squash wave and the faces' glow. `stepFeedback()` runs on the one clock; `clearFeedback()` on a pause, a resize or a new roll. Sound is Web Audio made on the device (`SOUND`: a gap, a voice limit, a chime gap, a limiter), started from activating input (`onActivation()`); `hushAudio()` stops it at once. The grown-ups' button opens `openGate()`, whose right answer opens the Sound and Haptics switches (`setPref()`, `PREFS_KEY`). |
 | Frames | `requestFrame()` keeps at most one frame waiting, and none when nothing moves. `onFrame()` caps a step at 50 ms and restarts the clock after any pause. The 3D scene is drawn only while something in it moves (`sceneMoving()`, the chef included), so an idle hint animates the flat layer without redrawing the scene, and at rest the scene is drawn only for the chef's occasional gestures. |
-| Lifecycle | `pausePlay()` / `resumePlay()` for hiding the page, for the tuning sheet, and for the scene (`'scene'`: loading, a lost GPU context, or unavailable), so the knife never meets food that is not on screen. No stroke survives a pause and no time passes during one; the chef's idle timer stops with play and starts again with it. A resize ends the stroke and settles motion; cuts keep their proportions because they are stored as fractions of the roll. |
-| HUD | The flat layer on the stage canvas over the scene: guide ticks, the knife's incision and trail, the hint, the finished mark. Everything on the roll is placed on the roll's plane and drawn through the camera (`toStage()`), so a guide's ticks lie on the line a cut there follows. It draws nothing unless the scene is showing. |
+| Lifecycle | `pausePlay()` / `resumePlay()` for hiding the page, for the tuning sheet, for the grown-ups' gate and switches (`'grownup'`), and for the scene (`'scene'`: loading, a lost GPU context, or unavailable), so the knife never meets food that is not on screen. No stroke survives a pause and no time passes during one; the chef's idle timer stops with play and starts again with it. A resize ends the stroke and settles motion; cuts keep their proportions because they are stored as fractions of the roll. |
+| HUD | The flat layer on the stage canvas over the scene: guide ticks, the knife's incision and trail, a cut's stars and sparkle (`drawFeedback()`), the hint, the finished mark. Everything on the roll is placed on the roll's plane and drawn through the camera (`toStage()`), so a guide's ticks lie on the line a cut there follows. It draws nothing unless the scene is showing. |
 | Scene | Three.js. `loadScene()` imports the library; `makeRenderer()`, `buildWorld()` (lights, fog, the counter, board, plate and their soft blob shadows, the shared textures and materials) and `sceneReady()` follow. Each piece is a view: its nori side with softly rounded ends and the nori's own band round each face, and two filled faces of rice and salmon, set a little differently at every cut (`faceOf()`), built from its share of the roll and replaced when a cut splits it, disposing what it replaces. `deformView()` squashes the vertices from the jiggle, anchored on the board. `makeChef()` builds Chef Capybara once, from smooth parametric shapes (`surface()`, `roundBlock()`, `turned()`, the head's own `headPoint()`) baked into a dozen meshes whose colours are carried per vertex from the tokens; `poseChef()` stands it where the layout says and poses it from its mood. The counter ends in a rounded edge at the layout's `back`. Textures are computed from the tokens and a seeded pattern; the food alone reflects a small computed room (`roomTexture()`) for its sheen, and the counter, which fills most of the screen, uses plain matte shading. A lost context pauses play and asks for the context back; if it does not return, a fresh renderer on a fresh canvas is tried, at most `SCENE.rebuilds` times, and then the scene says it is unavailable, with a way to try again. |
 | Hint | After `hintS` quiet seconds, a ghost finger swipes where `cutTarget()` says a cut can go, or a still picture of it with reduced motion. |
 | Tuning UI | The `?tune` developer sheet, on the overlay engine. |
 
-The contracts for all of this are 20–32 in `test/contracts.js`. The feel
+The contracts for all of this are 20–33 in `test/contracts.js`. The feel
 itself is not something a contract can judge: [docs/DEVICE-QA.md](docs/DEVICE-QA.md).
 
 ## The vendored library

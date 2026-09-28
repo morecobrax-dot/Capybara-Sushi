@@ -15,11 +15,12 @@ None of this is done. It is listed so nothing here reads as finished.
 ## Before any release to children
 
 - Remove the `?tune` developer sheet, or move it behind the parent gate.
-- Build the parent gate (planned for Phase 1, with the first grown-up
-  settings). Backup & data and What's new then move behind it.
-- Sound and haptics, each with an off switch behind the gate. Haptics are
-  web-available on Android only: iPhone Safari has no vibration API and iPads
-  have no haptic hardware.
+- Move Backup & data and What's new behind the parent gate (0.5.0 built the
+  gate for the sound and haptics switches only). The rest of the Grown-up
+  area card — reset progress, session length — is Phase 5 work.
+- Haptics reach only browsers with the Vibration API (Chrome and Edge on
+  Android); Safari on iPhone and iPad has none, so there is no haptic there.
+  Whether a device actually vibrates cannot be known from the page.
 - The foundation's "this browser is not saving" notice has nowhere to appear,
   because nothing is saved. When local save arrives (Phase 3), show it in the
   grown-ups area.
@@ -30,6 +31,21 @@ None of this is done. It is listed so nothing here reads as finished.
 - Devices on iOS or iPadOS older than 16.4 cannot run the 3D scene (it shows
   a note instead). If they matter, an older Three.js release would need a
   deliberate decision.
+
+## Known limits (0.5.0: praise, sound and haptics)
+
+- The rating thresholds (a tenth and a quarter of a guide spacing, with 7 and
+  16 px floors) are first guesses for a hands-on trial: they are in `RATING`,
+  not in `?tune`. Whether children find them encouraging is untested.
+- Sound starts only after a finger lifts or a key is pressed, as browsers
+  require, so the first cut of a visit is silent. The sounds are synthesized
+  and were measured, not listened to on a device.
+- Keyboard cuts land on their guide and are always Perfect.
+- The chef has no separate shrug for a Nice cut: every cut gets the same warm
+  nod, and a Perfect a brighter face. The roadmap card's idle breathing is
+  still to do.
+- At a Perfect cut the squash wave and the faces' glow run slower for about
+  0.4 s; the pieces and the beat do not.
 
 ## Known limits (Phase 1C)
 

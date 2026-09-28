@@ -5,7 +5,7 @@ because ignoring it produced a real defect in a real shipped product.
 
 They came from the app-starter template and still apply to Capybara Sushi's
 sheets and pages. Where the game itself differs, its own rules win and live in
-[CLAUDE.md](CLAUDE.md) (29–56). It is designed for tablets and landscape
+[CLAUDE.md](CLAUDE.md) (29–58). It is designed for tablets and landscape
 first, with phones in either orientation still playable. Play is one 3D scene
 rather than screens of controls, and it asks for no reading.
 

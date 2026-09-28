@@ -56,7 +56,8 @@ const SUITES = [
   C.testVendoredLibrary,
   C.testCamera,
   C.testServing,
-  C.testChef
+  C.testChef,
+  C.testFeedback
 ];
 
 async function main(){

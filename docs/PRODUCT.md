@@ -47,7 +47,8 @@ paws, a tall puffy hat and an indigo apron.
 0. Foundations and a slicing prototype. **(0B: gray-box prototype, v0.1.0.)**
 1. One polished roll and counter, with satisfying slicing and chef reactions.
    **(1A: the first 3D slicing scene, v0.2.0. 1B: appearance, camera and
-   motion, v0.3.0. 1C: Chef Capybara, v0.4.0.)**
+   motion, v0.3.0. 1C: Chef Capybara, v0.4.0. Praise, slice juice and the
+   sound and haptics switches, v0.5.0.)**
 2. Customers, orders, more rolls, plating, short shifts.
 3. Rewards, recipes, decorations, outfits, local save.
 4. A small Tokyo neighbourhood.
@@ -207,7 +208,12 @@ orders, an economy, the neighbourhood, sound and haptics, a naming screen.
 - Phase 1C: Chef Capybara, built in the same scene from smooth shapes, with
   no new dependency or asset. The counter gained a back edge, and the food
   moves down on tablets to make room above it, never shrinking.
-- Gameplay and tuning are kept in memory; nothing is saved.
+- Gameplay and tuning are kept in memory; nothing about play is saved. Since
+  0.5.0 the one stored thing is a grown-up's sound and haptics choice.
+- 0.5.0: cuts are praised Nice, Great or Perfect from where the swipe went,
+  before the guide's pull; sound is made on the device with no files; haptics
+  use the Vibration API where it exists and are honestly absent on iPhone and
+  iPad; the parent gate is a times-table question.
 - Gray-box visuals and the placeholder icons.
 - Phase 0C, with the user's approval: pushed to `main` and published on GitHub
   Pages as a development preview for real-device playtesting

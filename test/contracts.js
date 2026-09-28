@@ -2398,8 +2398,9 @@ function testPermanentRules(){
   T('there is no link, form or frame leading away', !/<a\s[^>]*href=|<form|<iframe/i.test(html) &&
     script.indexOf('window.open') === -1);
   const markup = html.replace(/<script>[\s\S]*?<\/script>/g, '');
-  T('nothing asks for a name, email or anything typed',
-    (markup.match(/<input/g) || []).length === 1 && /<input type="file" id="importInput"/.test(markup));
+  T('nothing asks for a name, email or anything typed but the parent gate\'s number',
+    (markup.match(/<input/g) || []).length === 2 && /<input type="file" id="importInput"/.test(markup) &&
+    /<input type="text" id="gateAnswer" inputmode="numeric"/.test(markup));
   T('the only inputs the script builds are the developer sliders',
     (js().match(/<input[^']*/g) || []).every(s => /type="range"/.test(s)));
 
@@ -2415,10 +2416,14 @@ function testPermanentRules(){
 
   sub('grown-up screens are out of a child\'s reach');
   const outside = html.slice(html.indexOf('<body>'), html.indexOf('<!-- FEEL TUNING'));
-  T('in play, the only controls are the developer button, hidden without ?tune, and the scene\'s ' +
-    'try-again button, hidden unless the 3D scene cannot be shown',
-    (outside.match(/<button/g) || []).length === 2 && /id="tuneBtn"[\s\S]{0,160}hidden><\/button>/.test(outside) &&
-    /id="sceneRetry"[\s\S]{0,160}hidden><\/button>/.test(outside));
+  T('in play, the only controls are the developer button, hidden without ?tune, the scene\'s ' +
+    'try-again button, hidden unless the 3D scene cannot be shown, and the grown-ups\' button, which opens only the gate',
+    (outside.match(/<button/g) || []).length === 3 && /id="tuneBtn"[\s\S]{0,160}hidden><\/button>/.test(outside) &&
+    /id="sceneRetry"[\s\S]{0,160}hidden><\/button>/.test(outside) &&
+    /id="grownUpBtn"[^>]*\s+onclick="openGate\(\)"><\/button>/.test(outside));
+  T('the sound and haptics switches open only from a right answer at the gate',
+    (html.match(/openOverlay\('prefsOverlay'\)/g) || []).length === 1 &&
+    /Number\(given\) === gate\.answer\)\{[\s\S]{0,300}openOverlay\('prefsOverlay'\)/.test(html));
   T('in ordinary play both stay hidden', app.dom.document.getElementById('sceneRetry').hidden === true &&
     H.loadApp().dom.document.getElementById('tuneBtn').hidden === true);
   T('Backup & data and What\'s new open only from inside the tuning sheet',
@@ -2546,7 +2551,7 @@ function testSceneLifecycle(){
 
   sub('tuning the jiggle while it is moving');
   app = play({ search: '?tune' }); c = app.ctx; c.TUNING.pull = 0;
-  stroke(app, guideX(app, 3));
+  stroke(app, guideX(app, 3) + 0.4 * c.layout.L / c.roll.n);    // a Nice cut: no slow-motion beat
   advance(app, 60);
   const mid = Array.from(c.wobble.s);
   c.openTuning(); c.__flush();
@@ -2889,6 +2894,8 @@ function testChef(){
 
   sub('one character, built once from the tokens');
   const meshesOf = k => { const out = []; k.root.traverse(o => { if(o.isMesh) out.push(o); }); return out; };
+  /* Drawn: the mesh and every group above it visible. */
+  const shown = m => { for(let o = m; o; o = o.parent){ if(!o.visible) return false; } return true; };
   const meshes = meshesOf(ch);
   T('it stands in the scene, on the stage', !!c.layout.chef && ch.root.parent === c.view3d.scene && ch.root.visible);
   T('it is a dozen or so meshes, not a crowd of parts', meshes.length >= 8 && meshes.length <= 14, String(meshes.length));
@@ -3173,7 +3180,9 @@ function testChef(){
   T('a cut pleases it at once, without a nod', c.chef.pleased === 1 && c.chef.nod.x === 0 && frozen() === still &&
     ch.eyes.every(e => e.scale.y < 0.9));
   advance(app, C.pleasedMs + 50);
-  T('its contentment ends on time, and then no frame waits', c.chef.pleased === 0 && c.__clock.pendingFrames() === 0);
+  T('its contentment ends on time', c.chef.pleased === 0);
+  advance(app, c.FEEDBACK.starsMs - C.pleasedMs);
+  T('and once the cut\'s stars have gone too, no frame waits', c.feedback.stars === null && c.__clock.pendingFrames() === 0);
   finishRollByKeys(app);
   advance(app, 20);
   c.paintNow();
@@ -3210,8 +3219,365 @@ function testChef(){
   c.sceneEl.dispatch('webglcontextlost', { preventDefault(){} });
   advance(app, c.SCENE.recoverMs + 50);
   T('on a fresh renderer too, all of it', c.view3d.status === 'ready' && app.gpu.renderers.length === 2 &&
-    parts.filter((g, i) => meshesOf(ch)[i].visible).every(g => app.gpu.renderers[1].live.geometries.has(g)));
+    parts.filter((g, i) => shown(meshesOf(ch)[i])).every(g => app.gpu.renderers[1].live.geometries.has(g)));
   T('with no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+}
+
+
+/* =========================================================
+   CONTRACT 33 — GENTLE PRAISE, AND JUICE THAT KNOWS ITS PLACE
+   Every accepted cut is praised Nice, Great or Perfect, judged from
+   where the knife went before any guide pulled it; nothing else is
+   praised or scolded, and nothing is kept. Sound, sparkle, the
+   haptic tap and the Perfect slow motion are bounded, stop on
+   request or on a pause, never touch play, and sit behind a parent
+   gate as a grown-up's two switches — the only thing stored.
+   ========================================================= */
+/* A stand-in for the Web Audio API: enough to prove what is played, when,
+   and that it all stops. It makes no sound; how it sounds is judged by ear. */
+function fakeAudio(){
+  const made = { contexts: [], started: 0, stopped: 0, live: new Set(), resumes: 0, suspends: 0, now: null, blocked: false };
+  const param = () => ({ value: 0, setValueAtTime(){}, exponentialRampToValueAtTime(){}, linearRampToValueAtTime(){} });
+  class Node { connect(){} disconnect(){} }
+  class Source extends Node {
+    start(){ made.started++; made.live.add(this); }
+    stop(){ if(made.live.delete(this)) made.stopped++; }
+  }
+  class Ctx {
+    constructor(){ this.state = 'suspended'; this.sampleRate = 48000; this.destination = new Node(); made.contexts.push(this); }
+    get currentTime(){ return made.now ? made.now() : 0; }
+    resume(){ made.resumes++; if(!made.blocked) this.state = 'running'; return Promise.resolve(); }
+    suspend(){ made.suspends++; this.state = 'suspended'; return Promise.resolve(); }
+    createGain(){ const n = new Node(); n.gain = param(); return n; }
+    createBiquadFilter(){ const n = new Node(); n.frequency = param(); n.Q = param(); return n; }
+    createDynamicsCompressor(){ const n = new Node(); ['threshold', 'knee', 'ratio', 'attack', 'release'].forEach(k => { n[k] = param(); }); return n; }
+    createBuffer(ch, len){ const d = new Float32Array(len); return { length: len, getChannelData: () => d }; }
+    createBufferSource(){ return new Source(); }
+    createOscillator(){ const n = new Source(); n.frequency = param(); return n; }
+  }
+  made.Ctx = Ctx;
+  return made;
+}
+function withAudio(opts){
+  const fa = fakeAudio();
+  const app = play(Object.assign({ windowExtras: { AudioContext: fa.Ctx } }, opts || {}));
+  fa.now = () => app.ctx.performance.now() / 1000;
+  return { app: app, fa: fa };
+}
+function tapsOf(app){ const taps = []; app.ctx.navigator.vibrate = p => { taps.push(p); return true; }; return taps; }
+function said(app){ return app.dom.document.getElementById('playStatus').textContent; }
+
+function testFeedback(){
+  section('CONTRACT 33 — every cut is praised, gently; its juice is bounded, quiet on request, and never in the way');
+  let app, c;
+
+  sub('three tiers, defined once, judged where the knife went');
+  app = play(); c = app.ctx; settleAll(app);
+  const n = c.roll.n, sp = 1 / n, rate = (u, px) => c.rateCut(c.roll, 0, u, px || 0);
+  T('Nice, Great and Perfect, and no other word for a cut', c.TIERS.join() === 'nice,great,perfect' &&
+    Object.keys(c.PRAISE).join() === 'nice,great,perfect');
+  T('the thresholds are declared once, Perfect inside Great', (js().match(/const RATING = /g) || []).length === 1 &&
+    c.RATING.perfect.share < c.RATING.great.share && c.RATING.perfect.px < c.RATING.great.px);
+  T('on a guide is Perfect', rate(sp) === 'perfect');
+  T('within a tenth of a spacing is still Perfect', rate(sp + 0.095 * sp) === 'perfect' && rate(sp - 0.095 * sp) === 'perfect');
+  T('a fifth off is Great', rate(sp + 0.2 * sp) === 'great');
+  T('two fifths off is Nice, and still praise', rate(sp + 0.4 * sp) === 'nice');
+  T('the nearest guide is the reference, whichever side', rate(2 * sp - 0.05 * sp) === 'perfect');
+  T('on a small screen a fingertip\'s few pixels still earn a Perfect',
+    rate(sp + 0.15 * sp, 6 / (0.15 * sp)) === 'perfect' && rate(sp + 0.15 * sp, 22 / (0.15 * sp)) === 'great');
+  T('no finger, no pixel allowance: the keyboard is judged by share alone', rate(sp + 0.15 * sp, 0) === 'great');
+
+  sub('a real stroke is judged before the guide pulls its cut');
+  const spacingPx = () => c.layout.L / c.roll.n;
+  stroke(app, guideX(app, 2) + 0.18 * spacingPx());
+  const pulled = c.roll.cuts[0];
+  T('a stroke a fifth off a guide is Great ...', c.roll.cuts.length === 1 && c.feedback.stars && c.feedback.stars.n === 2,
+    c.feedback.stars && c.feedback.stars.n);
+  T('... though the cut it leaves is pulled to within a tenth, where it would have looked Perfect',
+    Math.abs(pulled - 2 * sp) < 0.1 * sp && Math.abs(pulled - 2 * sp) > 0, ((pulled - 2 * sp) / sp).toFixed(3));
+  T('and it is said, for assistive technology, as praise', /^Great cut! \d+ to go\.$/.test(said(app)), said(app));
+  const moving = c.pieces.some(p => p.vel !== 0 || p.off !== 0);
+  stroke(app, guideX(app, 4));
+  T('a stroke on a guide of a piece still sliding apart is Perfect: it is judged where the piece is drawn',
+    moving && c.roll.cuts.length === 2 && c.feedback.stars.n === 3);
+  settleAll(app);
+  /* A slow, careful stroke: a second and a half from top to bottom. */
+  const x3 = guideX(app, 3), who = { pointerId: 7, pointerType: 'touch' };
+  pr(app, 'pointerdown', x3, yAt(app, -0.8), who);
+  for(let i = 1; i <= 30; i++){ advance(app, 50); pr(app, 'pointermove', x3, yAt(app, -0.8 + 2.6 * i / 30), who); }
+  pr(app, 'pointerup', x3, yAt(app, 1.8), who);
+  T('a slow, deliberate stroke on a guide is Perfect too', c.roll.cuts.length === 3 && c.feedback.stars && c.feedback.stars.n === 3 &&
+    /^Perfect cut!/.test(said(app)), said(app));
+
+  sub('after cuts that wandered, the piece itself is the reference');
+  app = play(); c = app.ctx; settleAll(app);
+  c.commitCut(0, 1.45 * sp, null, 'nice');             // takes guide 1, far off it
+  settleAll(app);
+  T('a piece left with no free guide is judged against its own middle',
+    c.cutReference(c.roll, 0, 0.3 * sp) === 1.45 * sp / 2 && c.rateCut(c.roll, 0, 1.45 * sp / 2, 0) === 'perfect');
+  stroke(app, screenX(app, 1.45 * sp / 2));
+  T('so a stroke through that middle is Perfect', c.roll.cuts.length === 2 && c.feedback.stars.n === 3);
+
+  sub('every accepted cut is praised, and nothing else is');
+  app = play(); c = app.ctx; settleAll(app);
+  let taps = tapsOf(app);
+  const mid = c.layout.cx;
+  pr(app, 'pointerdown', mid, yAt(app, 0.5)); pr(app, 'pointerup', mid, yAt(app, 0.5));
+  stroke(app, guideX(app, 1), { to: 0.3 });
+  const slant = 3 * 2.6 * c.layout.T;                      // about 72 degrees off vertical
+  stroke(app, guideX(app, 1) - slant / 2, { dx: slant });
+  advance(app, 200);
+  T('a tap, a stroke that stops short and one too slanted cut nothing, and get no praise, sound or tap',
+    c.roll.cuts.length === 0 && c.feedback.seq === 0 && c.feedback.stars === null && taps.length === 0 &&
+    !/cut[.!]/.test(said(app)));
+  stroke(app, guideX(app, 1));
+  T('before any input the browser counts as the user\'s, a cut asks for no haptic tap: the first cut of a visit ' +
+    'lands mid-stroke, and a request then is refused', c.roll.cuts.length === 1 && taps.length === 0);
+  app.dom.document.dispatch('pointerup', { type: 'pointerup', pointerType: 'touch' });
+  advance(app, 120);
+  const offs = [0.18, 0.4, -0.05, 0.3];
+  let praised = 0;
+  offs.forEach((o, i) => {
+    stroke(app, guideX(app, i + 2) + o * spacingPx());
+    const st = c.feedback.stars;
+    if(c.roll.cuts.length === i + 2 && st && st.n >= 1 && st.n <= 3 && c.feedback.seq === i + 2 &&
+       /^(Nice cut\.|Great cut!|Perfect cut!|Roll finished)/.test(said(app))) praised++;
+    advance(app, 120);
+  });
+  T('four more cuts, near and far, each praised once', praised === 4, praised);
+  T('after that, each with one light tap on a device that has one', taps.length === 4, JSON.stringify(taps));
+  T('and no tier ever says less than Nice: there is no other outcome', c.TIERS.indexOf('nice') === 0);
+  app = play(); c = app.ctx; settleAll(app);
+  key(app, ' ');
+  T('a keyboard cut, placed on its guide, is praised Perfect', c.roll.cuts.length === 1 && c.feedback.stars.n === 3 &&
+    /^Perfect cut!/.test(said(app)));
+
+  sub('nothing about play is kept');
+  const shared = new Map();
+  app = play({ sharedStorage: shared }); c = app.ctx; settleAll(app);
+  for(let r = 0; r < 5; r++){ finishRollByKeys(app); settleAll(app); }
+  T('five rolls stored nothing but the schema version', [...shared.keys()].join() === 'capybara-sushi.sys.schemaVersion',
+    [...shared.keys()].join());
+  T('and the praise keeps no history: one set of stars at most, and a count only to seed the sparkle',
+    Object.keys(c.feedback).join() === 'stars,sparks,slow,seq' && Object.keys(c.roll).join() === 'id,n,cuts');
+
+  sub('the chef: pleased with every cut, brighter for a Perfect one');
+  app = play(); c = app.ctx; settleAll(app);
+  stroke(app, guideX(app, 1) + 0.4 * spacingPx());
+  advance(app, 100);
+  const niceFace = { pleased: c.chef.pleased, bright: c.chef.bright, mouth: c.view3d.chef.mouth.scale.x };
+  settleAll(app);
+  stroke(app, guideX(app, 2) + 0.18 * spacingPx());
+  advance(app, 100);
+  c.paintNow();
+  const greatFace = { pleased: c.chef.pleased, bright: c.chef.bright, mouth: c.view3d.chef.mouth.scale.x };
+  T('a Nice cut and a Great one get the same warm, pleased face: nothing lesser for either',
+    niceFace.pleased === 1 && greatFace.pleased === 1 && niceFace.bright === 0 && greatFace.bright === 0 &&
+    near(niceFace.mouth, greatFace.mouth, 1e-9), JSON.stringify([niceFace, greatFace]));
+  settleAll(app);
+  stroke(app, guideX(app, 3));
+  advance(app, 100);
+  c.paintNow();
+  T('a Perfect cut lights its face up: happy eyes, the blush, perked ears', c.chef.bright === 1 &&
+    c.view3d.chef.happy.visible && c.view3d.chef.blush.visible, c.chef.bright);
+  advance(app, c.SCENE.chef.cheerMs + c.SCENE.chef.coolMs + 50);
+  c.paintNow();
+  T('and it passes quickly, back to calm', c.chef.bright === 0 && !c.view3d.chef.happy.visible);
+
+  sub('quick cuts coalesce, and every effect is bounded');
+  let w = withAudio(); app = w.app; c = app.ctx; settleAll(app);
+  taps = tapsOf(app);
+  app.dom.document.dispatch('pointerup', { type: 'pointerup', pointerType: 'touch' });
+  T('the first lifted finger starts the audio, as browsers require', w.fa.contexts.length === 1 && c.sound.ctx.state === 'running');
+  const before = w.fa.started;
+  for(let k = 1; k <= 3; k++){ stroke(app, guideX(app, k)); advance(app, 50); }
+  T('three Perfect cuts 50 ms apart: three cut sounds and one chime, never a pile-up',
+    w.fa.started - before === 3 * 2 + 2 && c.sound.voices.length <= c.SOUND.voices, w.fa.started - before);
+  T('one set of stars, the newest', c.feedback.stars && c.feedback.stars.n === 3);
+  T('sparkles stay within their bound', c.feedback.sparks.length <= c.FEEDBACK.maxSparks, c.feedback.sparks.length);
+  T('haptic taps no closer than their gap', taps.length === 2, taps.length);
+  const burst = w.fa.started;
+  for(let k = 4; k <= 5; k++){ stroke(app, guideX(app, k)); advance(app, 16); }
+  T('a cut 16 ms after another shares its sound', w.fa.started - burst === 2, w.fa.started - burst);
+  T('and the chef lights up once, not once per cut: nothing queues', c.chef.bright > 0 && c.__clock.liveTimers() <= 2);
+
+  sub('muting and switching off take effect at once');
+  w = withAudio(); app = w.app; c = app.ctx; settleAll(app);
+  taps = tapsOf(app);
+  app.dom.document.dispatch('pointerup', { type: 'pointerup', pointerType: 'touch' });
+  stroke(app, guideX(app, 1));
+  const playing = w.fa.live.size;
+  c.setPref('sound', false);
+  T('turning sound off stops every sound already playing', playing > 0 && w.fa.live.size === 0 && c.sound.voices.length === 0);
+  const quiet = w.fa.started;
+  advance(app, 100);
+  stroke(app, guideX(app, 2));
+  T('and the next cut is silent, but still praised', w.fa.started === quiet && c.feedback.stars !== null);
+  c.setPref('haptics', false);
+  const tapped = taps.length;
+  advance(app, 100);
+  stroke(app, guideX(app, 3));
+  T('turning haptics off stops the taps', tapped === 2 && taps.length === tapped, taps.length);
+  c.setPref('sound', true);
+  advance(app, 100);
+  stroke(app, guideX(app, 4));
+  T('turning sound back on plays the next cut', w.fa.started > quiet);
+  app = play(); c = app.ctx; settleAll(app);
+  delete c.navigator.vibrate;
+  c.renderPrefs();
+  const hs = app.dom.document.getElementById('prefHaptics');
+  T('where the browser offers no vibration, the switch says so and cannot be pressed',
+    hs.hasAttribute('disabled') && hs.getAttribute('aria-checked') === 'false' &&
+    /does not offer vibration/.test(app.dom.document.getElementById('prefHapticsHint').textContent) &&
+    c.setPref('haptics', true) === false);
+  stroke(app, guideX(app, 1));
+  T('and play is unchanged', c.roll.cuts.length === 1 && c.feedback.stars !== null && app.errors.length === 0);
+
+  sub('only preferences are stored, and honestly');
+  const store = new Map(), KEY = 'capybara-sushi.prefs.feedback';
+  app = play({ sharedStorage: store }); c = app.ctx;
+  T('nothing is written until a grown-up changes something', !store.has(KEY) && c.prefs.state === 'default' &&
+    c.prefs.sound === true && c.prefs.haptics === true);
+  c.setPref('sound', false);
+  T('a change is stored under the app\'s namespace, as two switches and nothing else',
+    store.get(KEY) === JSON.stringify({ sound: false, haptics: true }) && c.prefs.state === 'saved', store.get(KEY));
+  app = play({ sharedStorage: store }); c = app.ctx;
+  T('and read back next time', c.prefs.sound === false && c.prefs.haptics === true && c.prefs.state === 'saved');
+  ['{not json', '[]', '{"sound":"off"}', 'null'].forEach(bad => {
+    store.set(KEY, bad);
+    app = play({ sharedStorage: store }); c = app.ctx;
+    c.renderPrefs();
+    T('an unreadable value (' + bad + ') means the defaults, is left as it was, and the sheet says so',
+      c.prefs.sound === true && c.prefs.haptics === true && c.prefs.state === 'unreadable' && store.get(KEY) === bad &&
+      /could not be read/.test(app.dom.document.getElementById('prefsStorage').textContent));
+  });
+  app = play({ failWrites: true }); c = app.ctx;
+  c.setPref('sound', false);
+  T('where storage is refused, the choice still applies, and the sheet says it will not last',
+    c.prefs.sound === false && c.prefs.state === 'unsaved' &&
+    /cannot be saved/.test(app.dom.document.getElementById('prefsStorage').textContent) && app.errors.length === 0);
+
+  sub('grown-up settings sit behind a parent gate');
+  app = play(); c = app.ctx; settleAll(app);
+  const doc = app.dom.document, open = id => doc.getElementById(id).classList.contains('open');
+  T('the way in shows in ordinary play, with no ?tune', !doc.getElementById('grownUpBtn').hidden && !c.TUNE_ENABLED);
+  c.openGate(); c.__flush();
+  T('it opens a question, not the settings, and play pauses', open('gateOverlay') && !open('prefsOverlay') && c.pauses.has('grownup'));
+  T('a times table a young child cannot answer, with a label', c.gate.answer === c.gate.a * c.gate.b &&
+    c.gate.a >= 4 && c.gate.b >= 4 && doc.getElementById('gateQuestion').textContent === 'What is ' + c.gate.a + ' × ' + c.gate.b + '?' &&
+    /<label class="gate-question" for="gateAnswer"/.test(H.readApp()));
+  stroke(app, guideX(app, 1));
+  T('no stroke cuts while it is open', c.roll.cuts.length === 0);
+  const answer = doc.getElementById('gateAnswer');
+  answer.value = String(c.gate.answer + 1);
+  T('a wrong answer opens nothing, and simply asks another', c.checkGate() === false && open('gateOverlay') && !open('prefsOverlay') &&
+    answer.value === '' && doc.getElementById('gateNote').textContent !== '');
+  answer.value = '';
+  T('so does no answer', c.checkGate() === false && !open('prefsOverlay'));
+  answer.value = ' ' + c.gate.answer + ' ';
+  T('the right one opens the switches, and play stays paused', c.checkGate() === true && !open('gateOverlay') && open('prefsOverlay') &&
+    c.pauses.has('grownup'));
+  c.__flush();
+  c.togglePref('haptics');
+  T('a switch is a switch to assistive technology, and says its state',
+    doc.getElementById('prefHaptics').getAttribute('role') === 'switch' &&
+    doc.getElementById('prefHaptics').getAttribute('aria-checked') === 'false');
+  c.closePrefs(); c.__flush();
+  T('Done resumes play', !open('prefsOverlay') && !c.pauses.has('grownup') && !c.isPaused());
+  c.openGate(); c.__flush();
+  key(app, 'Escape');
+  c.__flush();
+  T('Escape leaves the gate and play carries on', !open('gateOverlay') && !c.isPaused());
+  T('and the answer was never kept: only the schema version and the switch just changed are stored',
+    [...app.storage._map.keys()].every(k => /sys[.]schemaVersion$|prefs[.]feedback$/.test(k)) &&
+    [...app.storage._map.values()].every(v => v === '1' || !/[0-9]/.test(v)), [...app.storage._map.keys()].join());
+
+  sub('with reduced motion the praise stays, still and brief');
+  app = play({ reducedMotion: true }); c = app.ctx; settleAll(app);
+  stroke(app, guideX(app, 2));
+  T('a Perfect cut still shows its three stars, but no sparkle and no slow motion',
+    c.feedback.stars && c.feedback.stars.n === 3 && c.feedback.sparks.length === 0 && c.feedback.slow === 0 && c.presentRate() === 1);
+  advance(app, c.FEEDBACK.starsMs + 20);
+  T('and they go when their time is up, with no frame left waiting', c.feedback.stars === null &&
+    c.__clock.pendingFrames() === 0);
+  app = play(); c = app.ctx; settleAll(app);
+  stroke(app, guideX(app, 2));
+  advance(app, 30);
+  const had = c.feedback.sparks.length > 0 && c.feedback.slow > 0;
+  c.__setReducedMotion(true);
+  T('switched on mid-sparkle, the sparkle and slow motion stop at once', had && c.feedback.sparks.length === 0 &&
+    c.feedback.slow === 0 && c.presentRate() === 1);
+
+  sub('the slow motion is presentation only');
+  const a = play(), b = play();
+  [a, b].forEach(x => settleAll(x));
+  const cut = x => x.ctx.cutTarget(x.ctx.roll);
+  a.ctx.commitCut(cut(a).index, cut(a).u, null, 'perfect');
+  b.ctx.commitCut(cut(b).index, cut(b).u, null, 'great');
+  advance(a, 120); advance(b, 120);
+  const where = x => JSON.stringify(x.ctx.pieces.map(p => [p.off, p.vel, p.tilt, p.tiltV, p.rock, p.rockV]));
+  T('during it, the pieces the knife meets are exactly where they would be', where(a) === where(b));
+  T('only the squash wave runs slower', a.ctx.presentRate() < 1 && Array.from(a.ctx.wobble.s).some((v, i) => v !== b.ctx.wobble.s[i]));
+  const stamp = x => { const t = []; let last = x.ctx.game.phase;
+    for(let ms = 0; ms < 3000; ms += 5){ advance(x, 5); if(x.ctx.game.phase !== last){ t.push(x.ctx.game.phase + '@' + ms); last = x.ctx.game.phase; } }
+    return t.join(' '); };
+  const finish = (x, tier) => { while(x.ctx.game.phase === 'ready'){ const t = cut(x); x.ctx.commitCut(t.index, t.u, null, tier); } };
+  [a, b].forEach(x => settleAll(x));
+  finish(a, 'perfect'); finish(b, 'nice');
+  const ta = stamp(a), tb = stamp(b);
+  T('a Perfect last cut serves, clears and brings the next roll at exactly the same moments', ta === tb && /ready@/.test(ta), ta + ' | ' + tb);
+
+  sub('pauses and resizes drop what is stale, and nothing replays');
+  w = withAudio({ search: '?tune' }); app = w.app; c = app.ctx; settleAll(app);
+  c.unlockAudio();
+  stroke(app, guideX(app, 2));
+  advance(app, 20);
+  T('a Perfect cut is under way: stars, sparkle, slow motion and sound', c.feedbackBusy() && c.feedback.slow > 0 && w.fa.live.size > 0);
+  hide(app);
+  T('leaving the app drops it all, stops every sound and puts the audio to sleep', !c.feedbackBusy() &&
+    w.fa.live.size === 0 && w.fa.suspends >= 1);
+  const was = w.fa.started;
+  advance(app, 5000);
+  show(app);
+  advance(app, 100);
+  T('coming back replays nothing', !c.feedbackBusy() && w.fa.started === was);
+  app.dom.document.dispatch('pointerup', { type: 'pointerup', pointerType: 'touch' });
+  stroke(app, guideX(app, 3));
+  T('and the next cut sounds again once a touch has woken the audio', w.fa.started > was && c.sound.ctx.state === 'running');
+  c.openTuning(); c.__flush();
+  T('the tuning sheet drops it too', !c.feedbackBusy() && w.fa.live.size === 0);
+  c.closeTuning(); c.__flush();
+  stroke(app, guideX(app, 4));
+  c.__resize(768, 1024);
+  T('so does turning the screen', !c.feedbackBusy());
+  w.fa.blocked = true;
+  c.sound.ctx.state = 'interrupted';
+  const hushed = w.fa.started;
+  settleAll(app);
+  stroke(app, guideX(app, 5));
+  T('audio the browser interrupts or will not start is simply quiet, and play goes on', w.fa.started === hushed &&
+    c.roll.cuts.length >= 4 && app.errors.length === 0);
+  w.fa.blocked = false;
+  app.dom.document.dispatch('keydown', { type: 'keydown', key: 'a', target: app.dom.document.body });
+  T('and the next input tries again', c.sound.ctx.state === 'running');
+  app = play({ windowExtras: { AudioContext: undefined, webkitAudioContext: undefined } }); c = app.ctx; settleAll(app);
+  app.dom.document.dispatch('pointerup', { type: 'pointerup', pointerType: 'touch' });
+  stroke(app, guideX(app, 1));
+  T('a browser without Web Audio plays on, silently', c.sound.ctx === null && c.roll.cuts.length === 1 && app.errors.length === 0);
+
+  sub('fifty rolls leak nothing');
+  w = withAudio(); app = w.app; c = app.ctx; settleAll(app);
+  c.unlockAudio();
+  const heard = listeners(app);
+  for(let r = 0; r < 50; r++){
+    while(c.game.phase === 'ready'){ c.keyboardCut(); advance(app, 45); }
+    advance(app, 1500);
+  }
+  T('fifty rolls, every cut praised', c.game.rolls === 50 && c.feedback.seq === 50 * (c.roll.n - 1), c.feedback.seq);
+  T('one audio context, and at most a few voices', w.fa.contexts.length === 1 && c.sound.voices.length <= c.SOUND.voices);
+  T('no sparkle, star or slow motion left over', !c.feedbackBusy());
+  T('no listener or timer added', listeners(app) === heard && owned(c) <= 2 && c.__clock.liveTimers() <= 2);
+  T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
 }
 
 module.exports = {
@@ -3221,5 +3587,5 @@ module.exports = {
   testMobile, testDesignSystem, testPWA, testRelease, testStress,
   testAccessibility, testContamination, testSourcesOfTruth,
   testCutModel, testStrokes, testGeometry, testRhythm, testLayout, testMotion,
-  testLifecycle, testPermanentRules, testCamera, testServing, testChef
+  testLifecycle, testPermanentRules, testCamera, testServing, testChef, testFeedback
 };

@@ -1,4 +1,4 @@
-# Device QA — Phase 1C, Chef Capybara
+# Device QA — praise, sound and haptics (0.5.0)
 
 **Status: not done on a device.** Nothing on this list has been tried on a
 real phone or tablet. Browser QA ran in headless Edge on Windows, on an Intel
@@ -19,7 +19,7 @@ on the device for offline play.
   and `?tune` on the end for tuning. It uses HTTPS, so the service worker,
   offline play and home-screen install all work there. Pages can take up to
   10 minutes to show a new push. The identity panel in `?tune` shows which
-  version a device is running (0.4.0 for this phase).
+  version a device is running (0.5.0 for this phase).
 - **Same Wi-Fi, for quick feel testing.** On the PC, run
   `npx --yes http-server -p 8395 -c-1 .` in the repository. On the device,
   open `http://<the PC's local IP>:8395/`. A plain-http address is not a
@@ -74,6 +74,31 @@ The new movement and look:
 - [ ] With Reduce Motion on, a cut (its gap and lit faces) and a finished
       roll (its plate and mark) are still unmistakable, and nothing wobbles.
 
+Praise, sound and haptics (new in 0.5.0; none of it approved yet):
+
+- [ ] The stars read at a glance, on a phone held either way and on a tablet:
+      one, two or three, without reading. They never hide where the next
+      swipe starts.
+- [ ] A careful, slow swipe on a guide can get three stars; a quick, rough
+      one still gets praise. Do children want the three stars, and never feel
+      bad about one? (Watch a child; do not ask leading questions.)
+- [ ] The cut sound is soft and crisp on the device's speaker and on
+      headphones, not harsh or hissy; the Perfect chime is pleasant, not a
+      slot machine; five quick cuts never turn into a harsh burst.
+- [ ] The first swipe of a visit is silent until a finger has lifted once
+      (browsers require it). After locking the device, taking a call or
+      switching apps, sound returns with the next touch.
+- [ ] Haptics on an Android phone in Chrome: a light tap per cut, a double
+      one for Perfect, nothing once switched off. On iPhone and iPad the
+      switch says vibration is not available and play is unchanged.
+- [ ] The slow-motion moment on a Perfect cut feels good, and never makes
+      the next swipe feel late.
+- [ ] The grown-ups button: a child tapping it meets only a question; the
+      right answer opens Sound and Haptics; muting is immediate; the choice
+      is still there after closing and reopening the app.
+- [ ] With Reduce Motion on, the stars still show, with no sparkle or slow
+      motion.
+
 Chef Capybara (new in 0.4.0; a first version, not an approved look):
 
 - [ ] It reads as a capybara at a glance — not a bear, hamster or beaver —
@@ -127,6 +152,6 @@ values you prefer the new defaults.
 - [ ] Apple Pencil.
 - [ ] Home-screen install, standalone launch, and an offline launch after
       one online visit; storage and cache names `capybara-sushi.` and
-      `capybara-sushi-v0.4.0` (the identity panel in `?tune` shows them).
+      `capybara-sushi-v0.5.0` (the identity panel in `?tune` shows them).
 - [ ] If you have a device on iOS older than 16.4: it shows the note and
       the try-again button, not a blank screen.

@@ -188,6 +188,11 @@
   --hud-shade: rgba(74,46,26,0.38);
   --done-mark: #4E8F6B;
   --done-disc: rgba(255,251,242,0.94);
+  /* A cut's stars and sparkle: warm gold with a dark edge, so they read
+     over nori and wood alike; the number of stars carries the meaning. */
+  --rating-star: #F4B942;
+  --rating-edge: rgba(92,58,32,0.72);
+  --sparkle: #FFF6D8;
   --scene-ink: #5B3E29;
   --scene-ink-soft: rgba(91,62,41,0.22);
 }
@@ -783,6 +788,22 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
 }
 /* .icon-btn sets a display, which would otherwise override [hidden]. */
 .tune-btn[hidden]{ display: none; }
+/* The grown-ups' way in: small and quiet in the top corner, and all it
+   opens is a question a young child cannot answer. */
+.grownup-btn{
+  position: absolute; z-index: 2;
+  top: calc(var(--inset-top) + var(--space-sm));
+  left: calc(var(--inset-left) + var(--space-sm));
+  color: var(--scene-ink); background: var(--done-disc); border: 1px solid var(--scene-ink-soft);
+}
+.grownup-btn[hidden]{ display: none; }
+/* A question to read, not a field label: plain case, full size. */
+.field .gate-question{
+  font-family: inherit; font-size: var(--fs-body); font-weight: 600;
+  letter-spacing: normal; text-transform: none; color: var(--text);
+}
+.pref-text{ display: flex; flex-direction: column; gap: var(--space-xs); }
+.toggle[disabled]{ opacity: 0.45; cursor: not-allowed; }
 .tune-row{
   display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md);
   margin-top: var(--space-md);
@@ -835,6 +856,9 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
     <!-- Developer only: shown when the address carries ?tune, never in ordinary play -->
     <button class="icon-btn tune-btn" id="tuneBtn" aria-label="Feel tuning (developer)"
             onclick="openTuning()" hidden></button>
+    <!-- Grown-ups: sound and haptics, behind a question a young child cannot answer -->
+    <button class="icon-btn grownup-btn" id="grownUpBtn" aria-label="For grown-ups: sound and haptics"
+            onclick="openGate()"></button>
     <div class="sr-only" id="playStatus" role="status" aria-live="polite"></div>
     <div class="safe-probe" id="safeProbe" aria-hidden="true"></div>
   </main>
@@ -880,6 +904,57 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
       <button class="btn-secondary" onclick="resetTuning()">Reset</button>
       <button class="btn-secondary" onclick="copyTuning()">Copy</button>
       <button class="btn-primary" onclick="closeTuning()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- PARENT GATE — a question for a grown-up before any setting. Play pauses while it is open. -->
+<div class="overlay" id="gateOverlay" onclick="backdropDismiss(event, closeGate)">
+  <div class="sheet" aria-labelledby="gateTitle" aria-describedby="gateSub">
+    <div class="sheet-scroll">
+      <h2 id="gateTitle">For grown-ups</h2>
+      <p class="sheet-sub" id="gateSub">Answer the question to change sound and haptics.</p>
+      <div class="field">
+        <label class="gate-question" for="gateAnswer" id="gateQuestion">What is 6 × 7?</label>
+        <input type="text" id="gateAnswer" inputmode="numeric" pattern="[0-9]*" maxlength="3"
+               autocomplete="off" aria-describedby="gateNote" onkeydown="onGateKey(event)">
+        <div class="field-hint" id="gateNote" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" onclick="closeGate()">Cancel</button>
+      <button class="btn-primary" onclick="checkGate()">Open</button>
+    </div>
+  </div>
+</div>
+
+<!-- SOUND AND HAPTICS — reached only through the parent gate -->
+<div class="overlay" id="prefsOverlay" onclick="backdropDismiss(event, closePrefs)">
+  <div class="sheet" aria-labelledby="prefsTitle">
+    <div class="sheet-scroll">
+      <h2 id="prefsTitle">Sound and haptics</h2>
+      <p class="sheet-sub">Play is paused while this is open.</p>
+      <div class="toggle-row">
+        <span class="pref-text">
+          <span class="list-row-title" id="prefSoundLabel">Sound</span>
+          <span class="field-hint" id="prefSoundHint">A soft sound for each cut, and a little chime for a Perfect one.</span>
+        </span>
+        <button class="toggle" id="prefSound" role="switch" aria-checked="true"
+                aria-labelledby="prefSoundLabel" aria-describedby="prefSoundHint" onclick="togglePref('sound')"></button>
+      </div>
+      <div class="toggle-row">
+        <span class="pref-text">
+          <span class="list-row-title" id="prefHapticsLabel">Haptics</span>
+          <span class="field-hint" id="prefHapticsHint"></span>
+        </span>
+        <button class="toggle" id="prefHaptics" role="switch" aria-checked="true"
+                aria-labelledby="prefHapticsLabel" aria-describedby="prefHapticsHint" onclick="togglePref('haptics')"></button>
+      </div>
+      <div class="field-hint" id="prefsMotion"></div>
+      <div class="field-hint" id="prefsStorage" role="status" aria-live="polite"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="closePrefs()">Done</button>
     </div>
   </div>
 </div>
@@ -1029,6 +1104,27 @@ const APP_FILES = [
    ========================================================= */
 const APP_UPDATES = [
   {
+    id: 'v0-5-0',
+    version: '0.5.0',
+    title: 'Praise, sound and sparkle',
+    date: '2026-09-28',
+    summary: 'Every cut is now praised Nice, Great or Perfect, with a soft sound, a little sparkle and, on devices ' +
+             'that can vibrate, a light tap. Grown-ups can turn sound and haptics off. Still a development preview.',
+    newFeatures: [
+      'Every cut is praised with stars: one for Nice, two for Great, three for Perfect, judged from where you swiped',
+      'A soft cutting sound, a tiny sparkle along the cut, and a little chime and slow-motion moment for a Perfect cut',
+      'A light haptic tap on each cut, on devices and browsers that offer vibration (not Safari on iPhone or iPad)',
+      'A grown-ups button asks a times-table question, then offers Sound and Haptics switches'
+    ],
+    improvements: [
+      'Chef Capybara lights up a little brighter for a Perfect cut, and is pleased with every cut',
+      'With Reduce Motion on, the stars still show, still, with no sparkle or slow motion',
+      'Only the sound and haptics choices are saved on this device; nothing about play is kept',
+      'The swipe, its forgiveness, the camera and the pace between rolls are the same as before'
+    ],
+    fixes: []
+  },
+  {
     id: 'v0-4-0',
     version: '0.4.0',
     title: 'Chef Capybara',
@@ -1118,7 +1214,8 @@ const APP_VERSION = APP_UPDATES[0].version;
 const STORAGE_NAMESPACE = APP_CONFIG.id + '.';
 const CACHE_NAMESPACE = APP_CONFIG.id + '-v' + APP_VERSION;
 
-/* The game saves nothing yet: the roll and the tuning live in memory. */
+/* The foundation's own keys. The game keeps its one key (a grown-up's sound
+   and haptics choice) in its own section, under the same namespace. */
 const KEYS = {
   schemaVersion: 'sys.schemaVersion',
   backupPrefix:  'sys.backup.',
@@ -1697,13 +1794,15 @@ function renderAll(){
    ---------------------------------------------------------
    One salmon roll on a cutting board, drawn in 3D, with Chef
    Capybara watching from behind the counter. A swipe down across
-   the roll cuts a piece; slow drags and quick flicks both count.
-   Nothing here is saved: the roll, the tuning and every gesture
-   live in memory.
+   the roll cuts a piece; slow drags and quick flicks both count,
+   and every cut is praised: Nice, Great or Perfect. Play saves
+   nothing: the roll, the tuning and every gesture live in memory.
+   Only a grown-up's sound and haptics choice is stored.
 
    In the order a touch travels through it:
      TUNING     every feel value in one place, adjustable from ?tune
      MODEL      a roll is its cut positions; pieces are derived
+     RATING     how warmly a cut is praised, from where the knife went
      LAYOUT     the camera for this screen, fitted inside the safe area,
                 and where the chef stands on it
      GEOMETRY   pieceRects(): the one answer to "where is the food?",
@@ -1711,6 +1810,8 @@ function renderAll(){
      GESTURE    one pointer owns the knife; a qualifying crossing cuts
      MOTION     springs, the jiggle and the finished-roll beat, one clock
      CHEF       the chef's reactions, on the same clock; it only watches
+     FEEDBACK   a cut's stars, sparkle, sound and haptic tap; the switches
+                for them, behind a parent gate
      FRAMES     drawn only while something is moving
      LIFECYCLE  pause, resume, resize, reduced motion
      HUD        the knife's trail, the guides, the hint and the mark,
@@ -1901,6 +2002,7 @@ const SCENE = Object.freeze({
     nodMs: 320,          // a cut holds its nod down this long: an unhurried nod ...
     burstMs: 600,        // ... and a cut this soon after another holds it this long
     pleasedMs: 520,      // ... and its contentment this long
+    cheerMs: 420,        // a Perfect cut lights its face up this long
     warmMs: 60,          // contentment comes on this quickly ...
     coolMs: 220,         // ... and fades this slowly
     springs: Object.freeze({ nod: Object.freeze([15, 0.7]), lean: Object.freeze([7, 0.9]),
@@ -1991,6 +2093,51 @@ function cutTarget(r){
   let best = 0;
   pcs.forEach((p, i) => { if(p.u1 - p.u0 > pcs[best].u1 - pcs[best].u0) best = i; });
   return legalRange(pcs[best], r.n) ? { index: best, u: (pcs[best].u0 + pcs[best].u1) / 2 } : null;
+}
+
+/* ---------- RATING ---------- */
+/* Every cut is praised; how warmly depends on how close the knife itself
+   came to a place the roll can still be cut, before a guide pulled the cut
+   toward it. It is measured on the roll's own plane (toRoll), through the
+   camera, against the piece where it is drawn, moving or not, so it is the
+   same whichever way the screen is held. It is shown and heard for a
+   moment and then forgotten: nothing is kept, counted or compared.
+
+   The reference is the nearest guide that is still free and that a cut in
+   that piece may reach (the ones whose ticks are drawn). After earlier cuts
+   wander, a piece can hold no such guide; then the middle of the piece is
+   the reference, as it is for the hint and the keyboard.
+
+   Distance is measured in guide spacings (1/n of the roll), so a Perfect is
+   as easy on every roll, with a floor in the knife's pixels so a small
+   phone's fingertip is never asked for more than a tablet's. Speed plays no
+   part: a slow, careful stroke earns a Perfect as readily as a flick. */
+const RATING = Object.freeze({
+  perfect: Object.freeze({ share: 0.1,  px: 7 }),    // within a tenth of a spacing, or 7 px
+  great:   Object.freeze({ share: 0.25, px: 16 })    // within a quarter, or 16 px; every other cut is Nice
+});
+const TIERS = Object.freeze(['nice', 'great', 'perfect']);
+
+function cutReference(r, index, u){
+  const p = piecesOf(r)[index];
+  if(!p) return null;
+  const range = legalRange(p, r.n);
+  let best = null;
+  if(range) freeGuides(r).forEach(g => {
+    if(g < range.lo || g > range.hi) return;
+    if(best === null || Math.abs(g - u) < Math.abs(best - u)) best = g;
+  });
+  return best !== null ? best : (p.u0 + p.u1) / 2;
+}
+/* How warmly to praise a cut at `u` (where the knife crossed) in piece
+   `index`. `pxPerU` is how many of the knife's pixels the whole roll spans
+   there; without a finger (the keyboard) it is 0 and only the share counts. */
+function rateCut(r, index, u, pxPerU){
+  const ref = cutReference(r, index, u);
+  if(ref === null) return 'nice';
+  const off = Math.abs(u - ref), spacing = 1 / r.n, px = off * (pxPerU || 0);
+  const within = t => off <= t.share * spacing + 1e-9 || (pxPerU > 0 && px <= t.px);
+  return within(RATING.perfect) ? 'perfect' : within(RATING.great) ? 'great' : 'nice';
 }
 
 /* ---------- STATE ---------- */
@@ -2481,7 +2628,8 @@ const COLOR_TOKENS = Object.freeze({
   fur: '--chef-fur', furDark: '--chef-fur-dark', hat: '--chef-hat', apron: '--chef-apron',
   eye: '--chef-eye', shine: '--chef-shine', blush: '--chef-blush',
   guide: '--guide-mark', blade: '--blade-trail', bladeEdge: '--blade-edge', incision: '--incision',
-  hint: '--hint-ghost', hudShade: '--hud-shade', done: '--done-mark', doneDisc: '--done-disc'
+  hint: '--hint-ghost', hudShade: '--hud-shade', done: '--done-mark', doneDisc: '--done-disc',
+  star: '--rating-star', starEdge: '--rating-edge', sparkle: '--sparkle'
 });
 function readColors(){
   const cs = typeof getComputedStyle === 'function' ? getComputedStyle(document.documentElement) : null;
@@ -2747,7 +2895,8 @@ function tryCut(g){
   const slant = Math.atan2(Math.abs(v.bx - v.ax), Math.abs(v.by - v.ay)) * 180 / Math.PI;
   const x = v.crossX !== null ? v.crossX : v.bx;
   const rect = slant <= TUNING.angle ? pieceAt(x) : null;
-  const u = rect ? planCut(roll, rect.index, uAt(rect, x), TUNING.pull) : null;
+  const at = rect ? uAt(rect, x) : null;                 // where the knife went, before any pull
+  const u = rect ? planCut(roll, rect.index, at, TUNING.pull) : null;
   if(u === null){
     /* Too slanted, through a gap, past an end, or too close to a cut: this
        pass cuts nothing, and it costs nothing. */
@@ -2755,11 +2904,16 @@ function tryCut(g){
     healVisit(v);
     return;
   }
-  commitCut(rect.index, u, g);
+  commitCut(rect.index, u, g, rateCut(roll, rect.index, at, rect.w / (rect.u1 - rect.u0)));
 }
 
-function commitCut(index, u, g){
+/* `tier` is how warmly the cut is praised; a caller with no knife to judge
+   leaves it out and the cut is judged where it lands. */
+function commitCut(index, u, g, tier){
+  const rated = TIERS.indexOf(tier) !== -1 ? tier : rateCut(roll, index, u, 0);
   const force = recoilForce(g && g.visit ? g.visit.speed : 0);
+  const was = pieceRects()[index];
+  const cutX = was ? xAt(was, u) : null;
   const drawn = slideLefts();
   const splitAt = drawn[index] + (u - piecesOf(roll)[index].u0) * layout.L;
   const parent = pieces[index] || newPieceState();
@@ -2784,9 +2938,10 @@ function commitCut(index, u, g){
     pieces.forEach((p, i) => { p.vel += (i <= index ? -1 : 1) * TUNING.pop; });
     recoil(index, u, force);
   }
-  chefCut(u);
+  chefCut(u, rated);
+  cutFeedback(cutX, rated);
   const remaining = roll.n - 1 - roll.cuts.length;
-  announce(remaining > 0 ? 'Cut. ' + remaining + ' to go.' : 'Roll finished. Here comes another.');
+  announce(PRAISE[rated] + ' ' + (remaining > 0 ? remaining + ' to go.' : 'Roll finished. Here comes another.'));
   if(rollComplete(roll)) finishRoll();
   requestFrame();
 }
@@ -2894,7 +3049,7 @@ function keyboardCut(){
   const target = cutTarget(roll);
   if(!target) return false;
   hideHint();
-  commitCut(target.index, target.u, null);
+  commitCut(target.index, target.u, null, rateCut(roll, target.index, target.u, 0));
   if(game.phase === 'ready') armHint();
   return true;
 }
@@ -2917,6 +3072,10 @@ function jiggleFeel(){
 }
 
 function stepMotion(ms){
+  /* A Perfect cut's slow-motion beat slows only what nothing is tested
+     against: the squash wave and the faces' glow. The pieces' slide, tip
+     and rock, which the knife meets, keep real time. */
+  const slow = presentRate();
   if(ms > 0){
     if(motionReduced()) settleSprings();
     else {
@@ -2939,7 +3098,7 @@ function stepMotion(ms){
             p.rock += p.rockV * h;
           }
         });
-        if(wobble.active) stepWobble(h, J);
+        if(wobble.active) stepWobble(h * slow, J);
       }
       pieces.forEach(p => {
         if(Math.abs(p.off) < 0.05 && Math.abs(p.vel) < 2){ p.off = 0; p.vel = 0; }
@@ -2948,7 +3107,7 @@ function stepMotion(ms){
       });
       if(wobble.active) restWobble();
     }
-    pieces.forEach(p => { p.flashL = Math.max(0, p.flashL - ms); p.flashR = Math.max(0, p.flashR - ms); });
+    pieces.forEach(p => { p.flashL = Math.max(0, p.flashL - ms * slow); p.flashR = Math.max(0, p.flashR - ms * slow); });
     if(motionReduced()){ if(!gesture) trail = []; }
     else {
       trail.forEach(t => { t.age += ms; });
@@ -2960,6 +3119,7 @@ function stepMotion(ms){
   }
   stepPhase(ms);
   stepChef(ms);
+  stepFeedback(ms);
 }
 
 /* One step of the jiggle. Each point pulls on the points it is still
@@ -3198,6 +3358,8 @@ const chef = {
   look: { x: 0, v: 0 },       // where along the roll it looks: −1 the far end, 1 the near
   joy: { x: 0, v: 0 },        // delight at a finished roll
   pleased: 0,                 // a cut's contentment, 0 to 1
+  cheer: Infinity,            // ms since a Perfect cut
+  bright: 0,                  // its face lit up by one, 0 to 1
   gesture: null,              // an idle gesture under way: { kind, t, side }
   timer: 0,                   // the wait until the next one
   seq: 0                      // idle gestures so far, which picks the next
@@ -3205,8 +3367,12 @@ const chef = {
 
 /* A cut, of any kind and anywhere: a small nod, and contentment. A cut
    that follows another closely holds the nod down through the burst, so
-   quick cuts make one long nod rather than a head bobbing between them. */
-function chefCut(u){
+   quick cuts make one long nod rather than a head bobbing between them. A
+   Perfect one also lights its face up for a moment: happy eyes, a pinker
+   cheek, perked ears. Nice and Great are the same warm nod; there is no
+   lesser reaction, and nothing that could read as a sigh. */
+function chefCut(u, tier){
+  if(tier === 'perfect') chef.cheer = 0;
   chef.hold = chef.sinceCut < SCENE.chef.burstMs ? SCENE.chef.burstMs : SCENE.chef.nodMs;
   chef.sinceCut = 0;
   chef.cutU = u;
@@ -3215,7 +3381,8 @@ function chefCut(u){
 /* What each part of its mood is heading for, from the game's own state. */
 function chefAims(){
   const C = SCENE.chef, joy = chefJoyAim();
-  return { joy: joy, pleased: chef.sinceCut < C.pleasedMs ? 1 : 0, nod: chef.sinceCut < chef.hold ? 1 - joy : 0,
+  return { joy: joy, pleased: chef.sinceCut < C.pleasedMs ? 1 : 0, bright: chef.cheer < C.cheerMs ? 1 : 0,
+           nod: chef.sinceCut < chef.hold ? 1 - joy : 0,
            lean: gesture ? 1 : 0, look: chefLookAim() };
 }
 /* Delight: all through the finished roll's show and its leaving, fading as
@@ -3247,13 +3414,14 @@ function atRest(s, aim){ return Math.abs(s.x - aim) < 1e-3 && Math.abs(s.v) < 1e
 
 function stepChef(ms){
   chef.sinceCut += ms;
+  chef.cheer += ms;
   const C = SCENE.chef, a = chefAims();
   if(motionReduced()){
     /* Its face changes in place, and it holds still: a changed face is
        drawn once. */
-    const was = chef.pleased + chef.joy.x;
+    const was = chef.pleased + chef.joy.x + chef.bright;
     settleChef();
-    if(chef.pleased + chef.joy.x !== was) view3d.stale = true;
+    if(chef.pleased + chef.joy.x + chef.bright !== was) view3d.stale = true;
     return;
   }
   const steps = Math.max(1, Math.ceil(ms / 8)), h = ms / 1000 / steps;
@@ -3267,6 +3435,7 @@ function stepChef(ms){
     if(atRest(p[0], p[1])){ p[0].x = p[1]; p[0].v = 0; }
   });
   chef.pleased += Math.max(-ms / C.coolMs, Math.min(ms / C.warmMs, a.pleased - chef.pleased));
+  chef.bright += Math.max(-ms / C.coolMs, Math.min(ms / C.warmMs, a.bright - chef.bright));
   const g = chef.gesture;
   if(g && (g.t += ms) >= C.idle[g.kind]) chef.gesture = null;
 }
@@ -3278,11 +3447,13 @@ function settleChef(){
   [[chef.nod, a.nod], [chef.lean, a.lean], [chef.look, a.look], [chef.joy, a.joy]].forEach(p => { p[0].x = p[1]; p[0].v = 0; });
   if(motionReduced()){ chef.nod.x = chef.lean.x = chef.look.x = 0; }
   chef.pleased = a.pleased;
+  chef.bright = a.bright;
   chef.gesture = null;
 }
 /* Calm, as if nothing had happened: a new roll from the tuning sheet. */
 function calmChef(){
   chef.sinceCut = Infinity;
+  chef.cheer = Infinity;
   chef.hold = 0;
   settleChef();
 }
@@ -3294,12 +3465,14 @@ function chefBusy(){
   if(!layout || !layout.chef) return false;
   if(!motionReduced()) return chefMoving();
   const a = chefAims();
-  return chef.sinceCut < SCENE.chef.pleasedMs || chef.pleased !== a.pleased || chef.joy.x !== a.joy;
+  return chef.sinceCut < SCENE.chef.pleasedMs || chef.cheer < SCENE.chef.cheerMs || chef.pleased !== a.pleased ||
+         chef.bright !== a.bright || chef.joy.x !== a.joy;
 }
 function chefMoving(){
   if(!layout || !layout.chef || motionReduced()) return false;
   const a = chefAims();
-  return !!chef.gesture || chef.pleased !== a.pleased || !(atRest(chef.nod, a.nod) && atRest(chef.lean, a.lean) &&
+  return !!chef.gesture || chef.pleased !== a.pleased || chef.bright !== a.bright || chef.cheer < SCENE.chef.cheerMs ||
+         !(atRest(chef.nod, a.nod) && atRest(chef.lean, a.lean) &&
          atRest(chef.look, a.look) && atRest(chef.joy, a.joy));
 }
 
@@ -3323,6 +3496,370 @@ function chefIdle(){
   chef.gesture = { kind: calm && r < 0.2 ? 'glance' : r < 0.4 ? 'flick' : 'blink', t: 0, side: r * 10 % 1 < 0.5 ? 1 : -1 };
   requestFrame();
   armChef();
+}
+
+/* ---------- FEEDBACK ---------- */
+/* What a cut looks, sounds and feels like beyond the food itself: stars
+   over the cut (one Nice, two Great, three Perfect, told by how many there
+   are, not by colour or words), a tiny sparkle along it, a soft sound, and
+   a light tap where the browser offers one. A Perfect cut also gets a
+   short slow-motion beat, in presentation only (see stepMotion). Quick cuts
+   replace the stars rather than stack them, and sparkles, sounds and taps
+   are each bounded. Nothing here outlives a pause or a resize. With
+   reduced motion the stars still show, still and briefly, and there is no
+   sparkle and no slow motion. */
+const FEEDBACK = Object.freeze({
+  starsMs: 720,        // the stars show this long
+  rise: 12,            // px they float up while they show (not with reduced motion)
+  sparkMs: 460,        // one sparkle's life
+  sparks: Object.freeze({ nice: 3, great: 4, perfect: 7 }),
+  maxSparks: 14,       // quick cuts never pile sparkles up past this
+  slowMs: 240,         // a Perfect cut's slow-motion beat ...
+  slowEase: 180,       // ... then easing back to real time over this
+  slowRate: 0.35       // how fast presentation runs at its slowest
+});
+const PRAISE = Object.freeze({ nice: 'Nice cut.', great: 'Great cut!', perfect: 'Perfect cut!' });
+const feedback = { stars: null, sparks: [], slow: 0, seq: 0 };
+
+/* A cut at `x` (the knife's pixels along the roll) earned `tier`. */
+function cutFeedback(x, tier){
+  const n = TIERS.indexOf(tier) + 1;
+  feedback.seq++;
+  if(layout && x !== null && n > 0){
+    const L = layout, at = toStage(x, L.top - L.T * 0.6);
+    feedback.stars = { x: at.x, y: at.y, n: n, t: 0 };
+    if(!motionReduced()){
+      const r = seeded(0x2F6B7A91 + feedback.seq * 7919), count = FEEDBACK.sparks[tier];
+      for(let i = 0; i < count; i++){
+        const p = toStage(x + (r() - 0.5) * L.T * 0.2, L.top + L.T * (i + 0.5) / count);
+        feedback.sparks.push({ x: p.x, y: p.y, t: -i * 28, dx: (r() - 0.5) * 28, big: tier === 'perfect' });
+      }
+      while(feedback.sparks.length > FEEDBACK.maxSparks) feedback.sparks.shift();
+      if(tier === 'perfect') feedback.slow = FEEDBACK.slowMs + FEEDBACK.slowEase;
+    }
+  }
+  playCut(tier);
+  tapHaptic(tier);
+}
+/* How fast presentation runs: 1 is real time. */
+function presentRate(){
+  if(feedback.slow <= 0 || motionReduced()) return 1;
+  const e = FEEDBACK.slowEase, k = FEEDBACK.slowRate;
+  return feedback.slow > e ? k : k + (1 - k) * (1 - feedback.slow / e);
+}
+function stepFeedback(ms){
+  if(!(ms > 0)) return;
+  const k = presentRate();
+  feedback.slow = Math.max(0, feedback.slow - ms);
+  const st = feedback.stars;
+  if(st && (st.t += ms) >= FEEDBACK.starsMs) feedback.stars = null;
+  if(feedback.sparks.length){
+    feedback.sparks.forEach(p => { p.t += ms * k; });
+    feedback.sparks = feedback.sparks.filter(p => p.t < FEEDBACK.sparkMs);
+  }
+}
+/* Stale on return: a pause, a resize or a fresh roll drops all of it. */
+function clearFeedback(){
+  feedback.stars = null;
+  feedback.sparks = [];
+  feedback.slow = 0;
+}
+function feedbackBusy(){ return !!feedback.stars || feedback.sparks.length > 0 || feedback.slow > 0; }
+
+/* ---------- SOUND ---------- */
+/* Made on the device with the Web Audio API: nothing is downloaded. A cut
+   is a short breath of noise through a band that sweeps down ("shhk") and
+   a soft knock of the blade meeting the board, a little different each
+   time; a Perfect cut adds a quiet two-note chime. Quick cuts are bounded
+   (one sound per gap, a few at once, the chime no faster than its gap)
+   and a gentle limiter keeps a flurry from turning harsh.
+
+   Browsers start audio only from a user's input, so the context is made
+   and resumed from the input events the HTML standard lets start it (a key,
+   a mouse press, a finger lifting) — the first stroke on a fresh visit may
+   be silent until then. A context the browser suspends or interrupts is
+   simply quiet until the next such input. Muting, a pause or leaving the
+   app stops every sound at once. */
+const SOUND = Object.freeze({
+  volume: 0.55,        // the master level, under the limiter
+  gapMs: 40,           // cuts closer together than this share one sound
+  voices: 4,           // at most this many cut sounds at once
+  chimeGapMs: 400,     // the Perfect chime never repeats faster than this
+  tapGapMs: 70         // nor the haptic tap
+});
+const sound = { ctx: null, out: null, noise: null, voices: [], lastCut: -Infinity, lastChime: -Infinity, made: 0 };
+
+function audioClass(){
+  const w = typeof window !== 'undefined' ? window : null;
+  return (w && (w.AudioContext || w.webkitAudioContext)) || null;
+}
+function audioRunning(){ return !!sound.ctx && sound.ctx.state === 'running'; }
+function unlockAudio(ev){
+  /* A finger touching down is not yet a user activation; starting audio
+     then only earns the console a warning. Its lift is one. */
+  if(ev && ev.type === 'pointerdown' && ev.pointerType !== 'mouse') return;
+  if(!prefs.sound || pauses.has('hidden')) return;
+  if(sound.ctx && sound.ctx.state === 'closed') sound.ctx = null;
+  if(!sound.ctx){
+    const A = audioClass();
+    if(!A) return;
+    try{ sound.ctx = new A(); buildAudio(); }
+    catch(e){ sound.ctx = null; return; }
+  }
+  if(sound.ctx.state !== 'running'){
+    try{ const p = sound.ctx.resume(); if(p && typeof p.catch === 'function') p.catch(() => {}); }catch(e){}
+  }
+}
+function buildAudio(){
+  const ctx = sound.ctx;
+  const out = ctx.createGain();
+  out.gain.value = SOUND.volume;
+  let tail = out;
+  if(typeof ctx.createDynamicsCompressor === 'function'){
+    const lim = ctx.createDynamicsCompressor();
+    lim.threshold.value = -16; lim.knee.value = 10; lim.ratio.value = 6;
+    lim.attack.value = 0.002; lim.release.value = 0.12;
+    out.connect(lim);
+    tail = lim;
+  }
+  tail.connect(ctx.destination);
+  sound.out = out;
+  const len = Math.floor(ctx.sampleRate * 0.3), buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0), r = seeded(0x5EEDC0DE);
+  for(let i = 0; i < len; i++) d[i] = r() * 2 - 1;
+  sound.noise = buf;
+}
+/* An envelope: silent, up to `peak` in `attack` s, down again by `end` s. */
+function envelope(param, t, peak, attack, end){
+  param.setValueAtTime(0.0001, t);
+  param.exponentialRampToValueAtTime(peak, t + attack);
+  param.exponentialRampToValueAtTime(0.0001, t + end);
+}
+function playCut(tier){
+  if(!prefs.sound || isPaused() || !audioRunning() || !sound.out) return false;
+  const ctx = sound.ctx, now = ctx.currentTime;
+  sound.voices = sound.voices.filter(v => v.end > now);
+  if((now - sound.lastCut) * 1000 < SOUND.gapMs || sound.voices.length >= SOUND.voices) return false;
+  sound.lastCut = now;
+  const r = seeded(0x9E3779B1 + ++sound.made * 2654435761), vary = k => 1 + (r() * 2 - 1) * k;
+  const len = 0.085 * vary(0.1), f = 3300 * vary(0.08);
+  const nodes = [];
+  /* shhk: noise through a band that sweeps down as the blade goes through */
+  const src = ctx.createBufferSource(), band = ctx.createBiquadFilter(), amp = ctx.createGain();
+  src.buffer = sound.noise;
+  band.type = 'bandpass';
+  band.Q.value = 0.9;
+  band.frequency.setValueAtTime(f, now);
+  band.frequency.exponentialRampToValueAtTime(f * 0.45, now + len);
+  envelope(amp.gain, now, 0.55 * vary(0.1), 0.006, len);
+  src.connect(band); band.connect(amp); amp.connect(sound.out);
+  src.start(now, r() * 0.15, len + 0.03);
+  nodes.push(src);
+  /* the soft knock of the blade meeting the board */
+  const knock = ctx.createOscillator(), kg = ctx.createGain(), at = now + len * 0.65;
+  knock.type = 'sine';
+  knock.frequency.setValueAtTime(190 * vary(0.05), at);
+  knock.frequency.exponentialRampToValueAtTime(115, at + 0.07);
+  envelope(kg.gain, at, 0.22 * vary(0.1), 0.004, 0.07);
+  knock.connect(kg); kg.connect(sound.out);
+  knock.start(at); knock.stop(at + 0.09);
+  nodes.push(knock);
+  let end = at + 0.09;
+  if(tier === 'perfect' && (now - sound.lastChime) * 1000 >= SOUND.chimeGapMs){
+    sound.lastChime = now;
+    [[1318.5, 0.1], [1975.5, 0.05]].forEach(n => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), t = now + 0.05;
+      o.type = 'sine';
+      o.frequency.setValueAtTime(n[0], t);
+      envelope(g.gain, t, n[1], 0.008, 0.45);
+      o.connect(g); g.connect(sound.out);
+      o.start(t); o.stop(t + 0.47);
+      nodes.push(o);
+      end = Math.max(end, t + 0.47);
+    });
+  }
+  sound.voices.push({ nodes: nodes, end: end });
+  return true;
+}
+/* Stop every sound now: muted, paused, or gone. */
+function hushAudio(){
+  sound.voices.forEach(v => v.nodes.forEach(n => {
+    try{ n.stop(); }catch(e){}
+    try{ n.disconnect(); }catch(e){}
+  }));
+  sound.voices = [];
+}
+function sleepAudio(){
+  hushAudio();
+  if(audioRunning()){
+    try{ const p = sound.ctx.suspend(); if(p && typeof p.catch === 'function') p.catch(() => {}); }catch(e){}
+  }
+}
+
+/* ---------- HAPTICS ---------- */
+/* A light tap per cut through the Vibration API, where the browser has it.
+   Safari on iPhone and iPad does not, so there the switch says so and play
+   is unchanged. The browser's answer to a request says only that it was
+   accepted, never that anything moved, so nothing here assumes it did. */
+let lastTapAt = -Infinity;
+let activated = false;         // an input the browser counts as the user's has happened
+/* The first cut of a visit lands mid-stroke, before any finger has lifted;
+   asking for a tap then is refused, and the refusal is logged. */
+function pageActivated(){
+  const ua = typeof navigator !== 'undefined' && navigator ? navigator.userActivation : null;
+  return ua && typeof ua.hasBeenActive === 'boolean' ? ua.hasBeenActive : activated;
+}
+/* The inputs the HTML standard counts as the user's: a key, a mouse press, a
+   finger or pen lifting. They may start audio, and they allow a tap. */
+function onActivation(ev){
+  const t = ev && ev.type, mouse = ev && ev.pointerType === 'mouse';
+  if(t === 'keydown' || t === 'touchend' || (t === 'pointerup' && !mouse) || (t === 'pointerdown' && mouse)) activated = true;
+  unlockAudio(ev);
+}
+function hapticsAvailable(){
+  return typeof navigator !== 'undefined' && !!navigator && typeof navigator.vibrate === 'function';
+}
+function tapHaptic(tier){
+  if(!prefs.haptics || isPaused() || !hapticsAvailable() || !pageActivated()) return false;
+  const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  if(now - lastTapAt < SOUND.tapGapMs) return false;
+  lastTapAt = now;
+  try{ navigator.vibrate(tier === 'perfect' ? [12, 40, 12] : 10); }catch(e){ return false; }
+  return true;
+}
+
+/* ---------- PREFERENCES ---------- */
+/* The only things this game stores: whether a grown-up turned sound or
+   haptics off. Absent means the defaults, and nothing is written until a
+   grown-up changes something. A stored value that cannot be read is left
+   as it is and the defaults are used, and the settings say so; where
+   storage is unavailable a change still applies until the app closes. */
+const PREFS_KEY = 'prefs.feedback';            // namespaced by Store, like every key
+const PREF_DEFAULTS = Object.freeze({ sound: true, haptics: true });
+const prefs = { sound: true, haptics: true, state: 'default' };    // default | saved | unreadable | unsaved
+
+function loadPrefs(){
+  prefs.sound = PREF_DEFAULTS.sound;
+  prefs.haptics = PREF_DEFAULTS.haptics;
+  prefs.state = 'default';
+  const raw = Store.get(PREFS_KEY);
+  if(raw === null) return prefs;
+  let v = null;
+  try{ v = JSON.parse(raw); }catch(e){ v = null; }
+  if(!v || typeof v !== 'object' || Array.isArray(v) ||
+     (typeof v.sound !== 'boolean' && typeof v.haptics !== 'boolean')){
+    prefs.state = 'unreadable';
+    return prefs;
+  }
+  if(typeof v.sound === 'boolean') prefs.sound = v.sound;
+  if(typeof v.haptics === 'boolean') prefs.haptics = v.haptics;
+  prefs.state = 'saved';
+  return prefs;
+}
+function setPref(key, on){
+  if(key !== 'sound' && key !== 'haptics') return false;
+  if(key === 'haptics' && !hapticsAvailable()) return false;
+  prefs[key] = !!on;
+  if(key === 'sound'){ if(prefs.sound) unlockAudio(); else hushAudio(); }
+  const ok = Store.setJSON(PREFS_KEY, { sound: prefs.sound, haptics: prefs.haptics });
+  prefs.state = ok && Store.isPersistent() ? 'saved' : 'unsaved';
+  renderPrefs();
+  return true;
+}
+
+/* ---------- GROWN-UPS ---------- */
+/* One small button in play opens a question a young child cannot answer (a
+   times table), and only then the switches. A wrong answer just asks
+   another; nothing locks. Play is paused all the while. ?tune is a
+   developer route and is not this gate. */
+const gate = { a: 0, b: 0, answer: 0 };
+function gearIcon(s){
+  return svg('<circle cx="8" cy="8" r="2.3"/><path d="M8 1.8v1.9M8 12.3v1.9M1.8 8h1.9M12.3 8h1.9' +
+             'M3.6 3.6 5 5M11 11l1.4 1.4M3.6 12.4 5 11M11 5l1.4-1.4"/>', s);
+}
+function newGateQuestion(){
+  gate.a = 4 + Math.floor(Math.random() * 6);
+  gate.b = 4 + Math.floor(Math.random() * 6);
+  gate.answer = gate.a * gate.b;
+  const q = document.getElementById('gateQuestion');
+  if(q) q.textContent = 'What is ' + gate.a + ' × ' + gate.b + '?';
+  const input = document.getElementById('gateAnswer');
+  if(input) input.value = '';
+}
+function setGateNote(text){
+  const el = document.getElementById('gateNote');
+  if(el) el.textContent = text;
+}
+function grownUpOpen(){
+  return ['gateOverlay', 'prefsOverlay'].some(id => {
+    const ov = document.getElementById(id);
+    return !!ov && ov.classList.contains('open');
+  });
+}
+function openGate(){
+  if(grownUpOpen()) return;
+  pausePlay('grownup');
+  newGateQuestion();
+  setGateNote('');
+  pushOverlayHistory();
+  openOverlay('gateOverlay');
+}
+function closeGate(){
+  const ov = document.getElementById('gateOverlay');
+  if(!ov || !ov.classList.contains('open')) return;
+  closeOverlay('gateOverlay');
+  releaseOverlayHistory();
+  resumePlay('grownup');
+}
+function checkGate(){
+  const input = document.getElementById('gateAnswer');
+  const given = input ? String(input.value).trim() : '';
+  if(/^[0-9]+$/.test(given) && Number(given) === gate.answer){
+    /* The settings take the gate's place, and its history entry. */
+    closeOverlay('gateOverlay');
+    renderPrefs();
+    openOverlay('prefsOverlay');
+    return true;
+  }
+  newGateQuestion();
+  setGateNote(given === '' ? 'Type the answer, then choose Open.' : 'Not quite. Here is another one.');
+  return false;
+}
+function onGateKey(ev){
+  if(ev && ev.key === 'Enter'){
+    if(typeof ev.preventDefault === 'function') ev.preventDefault();
+    checkGate();
+  }
+}
+function closePrefs(){
+  const ov = document.getElementById('prefsOverlay');
+  if(!ov || !ov.classList.contains('open')) return;
+  closeOverlay('prefsOverlay');
+  releaseOverlayHistory();
+  resumePlay('grownup');
+}
+function togglePref(key){ return setPref(key, !prefs[key]); }
+function renderPrefs(){
+  const sw = (id, on, disabled) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.setAttribute('aria-checked', on ? 'true' : 'false');
+    if(disabled) el.setAttribute('disabled', ''); else el.removeAttribute('disabled');
+  };
+  const haptics = hapticsAvailable();
+  sw('prefSound', prefs.sound, false);
+  sw('prefHaptics', haptics && prefs.haptics, !haptics);
+  const text = (id, t) => { const el = document.getElementById(id); if(el) el.textContent = t; };
+  text('prefHapticsHint', haptics
+    ? 'A light tap on each cut, on devices that can vibrate.'
+    : 'This browser does not offer vibration to web apps (Safari on iPhone and iPad does not), so there is nothing to switch.');
+  text('prefsMotion', 'Reduce Motion follows this device\'s setting, which is ' + (motionReduced() ? 'on' : 'off') +
+    ': with it on, cuts are still praised, without sparkle or slow motion.');
+  text('prefsStorage', prefs.state === 'unsaved'
+    ? 'These choices cannot be saved on this device, so they last until the app closes.'
+    : prefs.state === 'unreadable'
+      ? 'Earlier choices could not be read, so the defaults are in use until you change something.'
+      : '');
 }
 
 /* ---------- FRAMES ---------- */
@@ -3359,7 +3896,7 @@ function paintNow(){
 }
 function needsFrames(){
   if(isPaused() || !layout) return false;
-  if(game.phase !== 'ready' || healing.length || wobble.active || chefBusy()) return true;
+  if(game.phase !== 'ready' || healing.length || wobble.active || chefBusy() || feedbackBusy()) return true;
   if(!motionReduced() && (trail.length || hint.showing)) return true;
   return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
                           p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
@@ -3388,7 +3925,7 @@ function showHint(){
 }
 
 /* ---------- LIFECYCLE ---------- */
-const pauses = new Set();     // why play is paused: 'hidden', 'tuning', 'scene'
+const pauses = new Set();     // why play is paused: 'hidden', 'tuning', 'grownup', 'scene'
 function isPaused(){ return pauses.size > 0; }
 
 /* Paused play keeps its place (a finished roll resumes its beat where it
@@ -3398,11 +3935,14 @@ function pausePlay(why){
   endGesture();
   hideHint();
   quietChef();
+  clearFeedback();
+  if(why === 'hidden') sleepAudio(); else hushAudio();
   cancelFrame();
   paintNow();
 }
 function resumePlay(why){
   if(!pauses.delete(why) || pauses.size) return;
+  if(sound.ctx && prefs.sound) unlockAudio();   // may need the next touch, which will try again
   armHint();
   armChef();
   requestFrame();                // cancelFrame() restarted the clock when play paused
@@ -3418,6 +3958,7 @@ function onStageResize(){
     endGesture();
     settleSprings();
     settleChef();
+    clearFeedback();
     healing = [];
     trail = [];
   }
@@ -3432,6 +3973,8 @@ function setReducedMotion(on){
     settleSprings();
     settleChef();
     quietChef();
+    feedback.sparks = [];
+    feedback.slow = 0;
     healing = [];
     if(!gesture) trail = [];
     gx = groupOffset();
@@ -3466,6 +4009,7 @@ function draw(rects){
   if(game.phase === 'ready') drawGuides(c, list);
   drawIncisions(c, list);
   drawTrail(c);
+  drawFeedback(c);
   if(game.gathered && serveProgress() >= 0.7) drawDoneMark(c, list);
   if(hint.showing && game.phase === 'ready' && !gesture) drawHint(c, list);
 }
@@ -3544,6 +4088,62 @@ function drawTrail(c){
       c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
     }
   });
+  c.globalAlpha = 1;
+}
+
+/* A star of `points` points, as a path. */
+function starPath(c, x, y, r, points, inner){
+  c.beginPath();
+  for(let i = 0; i < points * 2; i++){
+    const a = -Math.PI / 2 + i * Math.PI / points, k = i % 2 ? inner : 1;
+    if(i) c.lineTo(x + Math.cos(a) * r * k, y + Math.sin(a) * r * k);
+    else c.moveTo(x + Math.cos(a) * r * k, y + Math.sin(a) * r * k);
+  }
+  c.closePath();
+}
+/* A cut's sparkle along it, then its stars on a soft disc above it. */
+function drawFeedback(c){
+  const L = layout, C = colors;
+  feedback.sparks.forEach(p => {
+    if(p.t < 0) return;
+    const life = p.t / FEEDBACK.sparkMs, a = Math.sin(Math.PI * life);
+    const r = (p.big ? 1.35 : 1) * Math.max(4, L.T * 0.07) * (0.5 + 0.5 * a);
+    starPath(c, p.x + p.dx * life, p.y - 10 * life, r, 4, 0.34);
+    c.globalAlpha = a;
+    c.fillStyle = C.sparkle;
+    c.fill();
+    c.globalAlpha = a * 0.6;
+    c.strokeStyle = C.starEdge;
+    c.lineWidth = 1;
+    c.stroke();
+  });
+  const st = feedback.stars;
+  if(st){
+    const life = st.t / FEEDBACK.starsMs;
+    const lift = motionReduced() ? 0 : FEEDBACK.rise * (1 - Math.pow(1 - life, 2));
+    const r = Math.max(7, L.T * 0.1) * (st.n === 3 ? 1.12 : 1), gap = r * 2.2, y = st.y - lift;
+    const w = (st.n - 1) * gap, pad = r * 1.35;
+    c.globalAlpha = Math.max(0, Math.min(1, st.t / 90, (1 - life) * 5));
+    c.fillStyle = C.doneDisc;
+    c.strokeStyle = C.hudShade;
+    c.lineWidth = 1;
+    c.beginPath();
+    c.arc(st.x - w / 2, y, pad, Math.PI / 2, Math.PI * 1.5);
+    c.lineTo(st.x + w / 2, y - pad);
+    c.arc(st.x + w / 2, y, pad, -Math.PI / 2, Math.PI / 2);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.fillStyle = C.star;
+    c.strokeStyle = C.starEdge;
+    c.lineWidth = Math.max(1.5, r * 0.16);
+    c.lineJoin = 'round';
+    for(let i = 0; i < st.n; i++){
+      starPath(c, st.x - w / 2 + i * gap, y, r, 5, 0.48);
+      c.fill();
+      c.stroke();
+    }
+  }
   c.globalAlpha = 1;
 }
 
@@ -4800,14 +5400,15 @@ function poseChef(){
   ch.torso.rotation.x = (C.lean * lean - 0.04 * joy) * moves;
   ch.torso.position.y = C.hip[1] + C.rise * joy * moves;
   ch.head.rotation.set(C.headRest + (C.nod * chef.nod.x + 0.05 * lean - 0.12 * joy) * moves, turn, 0.08 * joy * moves, 'YXZ');
-  const blink = g && g.kind === 'blink' ? bump : 0, happy = joy >= 0.5;
+  const bright = chef.bright, glow = Math.max(joy, 0.6 * bright);
+  const blink = g && g.kind === 'blink' ? bump : 0, happy = joy >= 0.5 || bright >= 0.5;
   const open = Math.max(0.08, (0.9 + 0.1 * lean - 0.25 * pleased) * (1 - 0.85 * Math.min(1, joy / 0.5)) * (1 - blink));
   ch.eyes.forEach(e => { e.scale.y = open; e.visible = !happy; });
   ch.happy.visible = happy;
-  ch.mouth.scale.set(1 + 0.25 * pleased + 0.45 * joy, 1 + 0.4 * pleased + 0.8 * joy, 1);
-  ch.blush.visible = joy > 0.02;
-  ch.blush.material.opacity = 0.55 * joy;
-  const perk = Math.max(joy, 0.5 * lean, 0.4 * pleased) * moves;
+  ch.mouth.scale.set(1 + 0.25 * pleased + 0.45 * joy + 0.15 * bright, 1 + 0.4 * pleased + 0.8 * joy + 0.25 * bright, 1);
+  ch.blush.visible = glow > 0.02;
+  ch.blush.material.opacity = 0.55 * glow;
+  const perk = Math.max(joy, 0.5 * lean, 0.4 * pleased, bright) * moves;
   ch.ears.forEach((e, i) => {
     const r = ch.rest.ears[i], side = i === 0 ? 1 : -1, flick = g && g.kind === 'flick' && g.side === side ? bump : 0;
     e.rotation.set(r.x - 0.3 * perk, r.y, r.z - side * 0.45 * flick, 'YXZ');
@@ -4896,6 +5497,8 @@ function newRollFromTuning(){
   gx = 0;
   startRoll();
   calmChef();
+  clearFeedback();
+  hushAudio();
   paintNow();
 }
 
@@ -4970,6 +5573,10 @@ function wirePlay(){
   stageEl.addEventListener('lostpointercapture', onStageCancel);
   stageEl.addEventListener('contextmenu', ev => { if(ev && typeof ev.preventDefault === 'function') ev.preventDefault(); });
   document.addEventListener('keydown', onPlayKey);
+  /* The inputs a browser lets start audio (see SOUND). Listening on the
+     document catches the stroke's own lift as well as any other tap. */
+  ['pointerdown', 'pointerup', 'touchend', 'keydown'].forEach(type =>
+    document.addEventListener(type, onActivation, { capture: true, passive: true }));
   document.addEventListener('visibilitychange', () => {
     if(document.visibilityState === 'hidden') pausePlay('hidden'); else resumePlay('hidden');
   });
@@ -4987,6 +5594,8 @@ function wirePlay(){
     btn.hidden = !TUNE_ENABLED;
     if(TUNE_ENABLED) btn.innerHTML = tuneIcon(20);
   }
+  const grown = document.getElementById('grownUpBtn');
+  if(grown) grown.innerHTML = gearIcon(18);
 
   relayout();
   if(document.visibilityState === 'hidden') pausePlay('hidden');
@@ -4995,7 +5604,9 @@ function wirePlay(){
   requestFrame();
 }
 
-function hydratePlay(){ /* nothing is saved: the roll and the tuning live in memory */ }
+/* Play saves nothing: the roll and the tuning live in memory. Only a
+   grown-up's sound and haptics choice is read back. */
+function hydratePlay(){ loadPrefs(); }
 function renderPlay(){
   if(!wired) return;
   relayout();

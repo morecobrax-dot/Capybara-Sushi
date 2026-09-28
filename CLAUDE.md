@@ -65,6 +65,17 @@ AUDIT → UNDERSTAND → IMPLEMENT → ADVERSARIAL VERIFY → DIFF AUDIT → SHI
 - **Report** what you did, what you verified, and what you did not.
 - **Stop** at the requested phase. Do not begin the next one.
 
+### The Notion roadmap is the plan
+
+Consult the Notion roadmap (Capybara Sushi → Roadmap) before implementing.
+Update the selected cards when work starts (In Progress, what is being built)
+and again after a verified deployment (version, commit, what remains). Keep
+every pending acceptance check on a card — visual approval, real-device
+testing, a child's reaction — until it has actually happened; Shipped only
+when a card's own "Done when" is met. Log each release in the Build Log and
+the day's Timeline entry. Include the links of every Notion page changed in
+each paste-back report.
+
 ## Before changing anything
 
 1. **Run the baseline first.** `npm run verify` before you start, so you know
@@ -203,17 +214,21 @@ prototype. Each carries its reason; keep the reason with the rule.
     link.
 30. **No fail states, punishing timers, or punishment for imperfect cuts.** A
     stroke either cuts or does nothing. A roll never expires. The game keeps
-    no score, lives or misses (contract 27).
+    no score, lives or misses (contract 27). Every accepted cut is praised —
+    Nice, Great or Perfect — and nothing is counted, compared or kept.
 31. **Core play works without reading.** The stage draws no text. The gesture
     is taught by a hint that shows it; words exist only for assistive
     technology.
-32. **Grown-up settings belong behind a parent gate.** There is no gate yet
-    because there are no grown-up settings. The developer `?tune` sheet is not
-    one (rule 42). Backup & data and What's new open only from `?tune` until
-    the gate exists.
+32. **Grown-up settings belong behind a parent gate.** The grown-ups' button
+    in play opens only a times-table question (`openGate()`); the Sound and
+    Haptics switches open only from a right answer. A wrong answer asks
+    another; nothing locks. The developer `?tune` sheet is not the gate
+    (rule 42). Backup & data and What's new still open only from `?tune`.
 33. **Respect reduced motion, and let sound and haptics be turned off.**
-    Reduced motion is honoured live. There is no sound or haptics yet; when
-    they arrive, each gets an off switch behind the gate.
+    Reduced motion is honoured live. Sound and haptics each have a switch
+    behind the gate, and turning one off takes effect at once. The switches
+    are the only thing stored (`PREFS_KEY`), and only once a grown-up
+    changes one.
 
 ## The slicing interaction
 
@@ -339,6 +354,24 @@ prototype. Each carries its reason; keep the reason with the rule.
 56. **With reduced motion, only the chef's face changes.** No nod, lean,
     turn, rise, lifted paws or idle gestures: contentment and delight show as
     a changed face, drawn once.
+
+## Praise and slice juice
+
+57. **A cut is judged where the knife went, before any pull, and only kindly.**
+    `rateCut()` measures the crossing on the roll's plane against the nearest
+    free guide a cut in that piece may still reach (or the piece's middle when
+    it has none), in guide spacings with a pixel floor (`RATING`, declared
+    once). Every accepted cut gets Nice, Great or Perfect; speed plays no part.
+    The stars say it by count and shape — never colour or words alone — and
+    the chef stays pleased with all three, a little brighter for a Perfect.
+58. **Juice never touches play.** Stars, sparkle, sound, the haptic tap and a
+    Perfect cut's slow-motion beat are presentation: the slow motion slows
+    only the squash wave and the faces' glow, never the pieces the knife meets,
+    an input or the finished-roll beat. Each is bounded for quick cuts, and a
+    pause, a resize or a new roll drops what is stale. Audio is made on the
+    device and started only from the inputs the HTML standard counts as the
+    user's; a haptic tap is asked for only after one, and never assumed to
+    have happened.
 
 ## Development
 

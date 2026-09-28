@@ -817,8 +817,17 @@ function testRelease(){
     c.APP_UPDATES.every(u => (u.newFeatures || []).length + (u.improvements || []).length +
                              (u.fixes || []).length > 0));
 
-  sub('the starter ships a minimal history, not an inherited one');
-  T('a small number of entries', c.APP_UPDATES.length <= 3, String(c.APP_UPDATES.length));
+  sub('a minimal history, not an inherited one');
+  /* The starter's own list once came along with it. This product's history
+     starts at its own first release, and every entry is a later release of
+     it: versions strictly descend to 0.1.0, so nothing older can hide below. */
+  const semver = v => v.split('.').map(Number);
+  const newer = (a, b) => { const x = semver(a), y = semver(b); for(let i = 0; i < 3; i++){ if(x[i] !== y[i]) return x[i] > y[i]; } return false; };
+  T('this product\'s own releases, not an inherited list: they end at its first release',
+    c.APP_UPDATES[c.APP_UPDATES.length - 1].id === 'v0-1-0', c.APP_UPDATES[c.APP_UPDATES.length - 1].id);
+  T('and each entry is a newer release than the one below it',
+    c.APP_UPDATES.every((u, i) => i === c.APP_UPDATES.length - 1 || newer(u.version, c.APP_UPDATES[i + 1].version)),
+    c.APP_UPDATES.map(u => u.version).join(' > '));
   T('the authoring rules travel with the data', /AUTHORING A NEW ENTRY/.test(js()));
   T('and it says new products replace it', /New products replace this array wholesale/.test(js()));
 
@@ -1228,6 +1237,18 @@ function key(app, k, o){
 function hide(app){ app.dom.document.visibilityState = 'hidden'; app.dom.document.dispatch('visibilitychange', {}); }
 function show(app){ app.dom.document.visibilityState = 'visible'; app.dom.document.dispatch('visibilitychange', {}); }
 const near = (a, b, eps) => Math.abs(a - b) <= (eps === undefined ? 1e-6 : eps);
+/* Play holds at most two timers, each with one owner: the hint's, and the
+   chef's next idle gesture while the chef is on the stage. */
+function owned(c){ return (c.hint.timer ? 1 : 0) + (c.chef.timer ? 1 : 0); }
+/* Wait out an idle gesture of the chef's, so the scene is truly at rest. */
+function restNow(app){
+  const c = app.ctx;
+  for(let i = 0; i < 100 && (c.chef.gesture || c.chefMoving()); i++) advance(app, 50);
+  advance(app, 50);
+}
+/* What the scene is made of once, for good: the counter, its edge, the
+   board, the plate and the shadow blob, and each of the chef's meshes. */
+function sceneryShapes(c){ let n = 0; c.view3d.chef.root.traverse(o => { if(o.isMesh) n++; }); return 5 + n; }
 
 /* =========================================================
    CONTRACT 20 — THE CUT MODEL
@@ -1788,11 +1809,12 @@ function testRhythm(){
   T('by real strokes, mostly', strokes > 300, String(strokes));
   T('no listener was added on the way', listeners(app) === base, listeners(app) + ' vs ' + base);
   T('never more than one frame waiting', maxFrames <= 1, String(maxFrames));
-  T('never more than one timer waiting', maxTimers <= 1, String(maxTimers));
+  T('never more than one timer each for the hint and the chef', maxTimers <= 2, String(maxTimers));
   T('the trail and incisions stay small', c.trail.length <= c.SLICE.trailMax && c.healing.length <= 8);
   T('pieces match the roll exactly', c.pieces.length === c.roll.cuts.length + 1);
   advance(app, 3000);                              // the softest jiggle takes a moment to settle
-  T('at rest, no frame is waiting at all', c.__clock.pendingFrames() === 0, String(c.__clock.pendingFrames()));
+  restNow(app);
+  T('at rest, between the chef\'s idle gestures, no frame is waiting at all', c.__clock.pendingFrames() === 0, String(c.__clock.pendingFrames()));
   T('and nothing was saved', app.storage._map.size === 1);
   T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
 
@@ -1809,9 +1831,8 @@ function testRhythm(){
     v3.made.geometries - v3.freed.geometries === v3.views.length * perPiece &&
     v3.made.materials - v3.freed.materials === v3.views.length * perPiece,
     JSON.stringify(v3.made) + ' / ' + JSON.stringify(v3.freed));
-  /* The scenery is four shapes: counter, board, plate and the shadow blob. */
-  T('the renderer holds the scenery and the pieces on screen, nothing older',
-    gpu.info.memory.geometries === 4 + v3.views.length * perPiece, String(gpu.info.memory.geometries));
+  T('the renderer holds the scenery, the chef and the pieces on screen, nothing older',
+    gpu.info.memory.geometries === sceneryShapes(c) + v3.views.length * perPiece, String(gpu.info.memory.geometries));
   /* Eight: the nori's two maps, the face's two, the wood, the counter, the
      shadow's blob and the room the food reflects. */
   T('textures were made once and shared: the kit\'s eight, still', c.view3d.kit.textures.length === 8 &&
@@ -1819,13 +1840,25 @@ function testRhythm(){
   T('nothing disposed was ever drawn again', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
   T('the renderer was created once', app.gpu.renderers.length === 1 && app.gpu.constructed === 1);
 
-  sub('an idle scene is not redrawn');
+  /* The hint animates the flat layer only. The scene is drawn again at rest
+     only for the chef's idle gestures — a blink, a flick, a glance — each
+     with quiet before the next, and once more when it ends. */
+  sub('an idle scene is drawn only for the chef\'s sparse gestures');
   for(let t = 0; t < 400 && c.sceneMoving(); t++) advance(app, 50);
   advance(app, 50);                                // the frame that draws it at rest
-  const drawn = gpu.renders;
-  advance(app, c.TUNING.hintS * 1000 + 3000);
+  const drawnAt = [], render = gpu.render;
+  gpu.render = function(sc, cam){ drawnAt.push({ t: c.__clock.now, g: !!c.chef.gesture }); return render.call(this, sc, cam); };
+  advance(app, c.TUNING.hintS * 1000 + 30000);
+  gpu.render = render;
   T('the hint animates the flat layer, so frames run', c.hint.showing && c.__clock.pendingFrames() === 1);
-  T('but the 3D scene, which has not changed, is not drawn again', gpu.renders === drawn, (gpu.renders - drawn) + ' renders');
+  const stray = drawnAt.filter((d, i) => !d.g && !(i > 0 && drawnAt[i - 1].g && d.t - drawnAt[i - 1].t < 40));
+  T('the 3D scene is drawn only while the chef makes an idle gesture, and once as it ends', stray.length === 0,
+    stray.length + ' of ' + drawnAt.length + ' renders');
+  const starts = drawnAt.filter((d, i) => d.g && (i === 0 || !drawnAt[i - 1].g || d.t - drawnAt[i - 1].t > 40)).map(d => d.t);
+  T('and its gestures are sparse, with quiet between them', starts.length >= 3 &&
+    starts.every((t, i) => i === 0 || t - starts[i - 1] >= c.SCENE.chef.quiet[0] - 20),
+    starts.map(t => Math.round(t)).join(', '));
+  T('at 30 frames a gesture at most', drawnAt.length <= starts.length * 90, drawnAt.length + ' renders for ' + starts.length);
 
   sub('100 resets');
   for(let i = 0; i < 100; i++){
@@ -1837,15 +1870,16 @@ function testRhythm(){
     watch();
   }
   T('no listener was added', listeners(app) === base, listeners(app) + ' vs ' + base);
-  T('still at most one frame and one timer', maxFrames <= 1 && maxTimers <= 1, maxFrames + ' / ' + maxTimers);
+  T('still at most one frame, and one timer each for the hint and the chef', maxFrames <= 1 && maxTimers <= 2, maxFrames + ' / ' + maxTimers);
   c.paintNow();
   T('a hundred fresh rolls left the GPU holding only what is on screen',
     c.view3d.made.geometries - c.view3d.freed.geometries === c.view3d.views.length * 3 &&
-    app.gpu.renderers[0].info.memory.geometries === 4 + c.view3d.views.length * 3 &&
+    app.gpu.renderers[0].info.memory.geometries === sceneryShapes(c) + c.view3d.views.length * 3 &&
     app.gpu.renderers[0].info.memory.textures === c.view3d.kit.textures.length, JSON.stringify(app.gpu.renderers[0].info.memory));
   c.armHint(); c.armHint(); c.armHint();
-  T('arming the hint again replaces its timer rather than adding one', c.__clock.liveTimers() === 1,
-    String(c.__clock.liveTimers()));
+  c.armChef(); c.armChef(); c.armChef();
+  T('arming the hint or the chef again replaces its timer rather than adding one',
+    c.__clock.liveTimers() === 2 && owned(c) === 2, String(c.__clock.liveTimers()));
   T('play is not left paused', c.pauses.size === 0);
   T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
 }
@@ -2067,6 +2101,7 @@ function testMotion(){
   { const save = c; c = crowd.ctx; for(let t = 0; t < 40; t++){ watch(); crowd.ctx.__advance(16); } c = save; }
   T('and no tipping piece ever passes into its neighbour', overlap < 0.005, overlap.toFixed(4));
   settleAll(app);                                                // well before the hint's first showing
+  restNow(app);
   T('it all comes to rest, exactly', !c.wobble.active && c.wobble.s.every(v => v === 0) &&
     c.pieces.every(p => p.tilt === 0 && p.rock === 0 && p.tiltV === 0 && p.rockV === 0) &&
     c.__clock.pendingFrames() === 0);
@@ -2204,7 +2239,8 @@ function testLifecycle(){
   pr(app, 'pointermove', x, yAt(app, 1.8));
   T('the finger moving on while hidden cuts nothing', c.roll.cuts.length === 0);
   show(app);
-  T('coming back re-arms the hint and draws', c.__clock.liveTimers() === 1 && c.__clock.pendingFrames() === 1);
+  T('coming back re-arms the hint and the chef, and draws', c.__clock.liveTimers() === 2 && owned(c) === 2 &&
+    c.__clock.pendingFrames() === 1);
   pr(app, 'pointerup', x, yAt(app, 1.8));
   T('the old stroke does not resume', c.roll.cuts.length === 0);
 
@@ -2266,7 +2302,7 @@ function testLifecycle(){
   sub('closing resumes safely');
   c.closeTuning(); c.__flush();
   T('the sheet closes and play resumes', !app.dom.document.getElementById('tuneOverlay').classList.contains('open') &&
-    c.pauses.size === 0 && c.__clock.pendingFrames() === 1 && c.__clock.liveTimers() === 1);
+    c.pauses.size === 0 && c.__clock.pendingFrames() === 1 && c.__clock.liveTimers() === 2 && owned(c) === 2);
   T('a new piece count starts a fresh roll', c.roll.n === 8 && c.roll.cuts.length === 0);
   stroke(app, guideX(app, 1));
   T('and play goes on', c.roll.cuts.length === 1);
@@ -2316,7 +2352,8 @@ function testLifecycle(){
     maxTimers = Math.max(maxTimers, c.__clock.liveTimers());
   }
   T('no listener was added', listeners(app) === base, listeners(app) + ' vs ' + base);
-  T('at most one frame and one timer ever waited', maxFrames <= 1 && maxTimers <= 1, maxFrames + ' / ' + maxTimers);
+  T('at most one frame, and one timer each for the hint and the chef, ever waited', maxFrames <= 1 && maxTimers <= 2,
+    maxFrames + ' / ' + maxTimers);
   T('the overlay stack is empty', c._openSheetStack.length === 0);
   T('no errors', app.errors.length === 0, app.errors.join(' | '));
 }
@@ -2468,7 +2505,8 @@ function testSceneLifecycle(){
   c.sceneEl.dispatch('webglcontextrestored', {});
   T('given back, the scene draws again and play resumes', c.view3d.status === 'ready' && c.pauses.size === 0 &&
     app.gpu.renderers[0].renders > rendered && status(app).hidden === true);
-  T('with the same renderer, and no timer left behind', app.gpu.renderers.length === 1 && c.__clock.liveTimers() === 1);
+  T('with the same renderer, and no timer left behind', app.gpu.renderers.length === 1 && c.__clock.liveTimers() === 2 &&
+    owned(c) === 2);
   stroke(app, guideX(app, 2));
   T('and the roll cuts', c.roll.cuts.length === 1);
 
@@ -2502,7 +2540,7 @@ function testSceneLifecycle(){
   advance(app, 20);
   T('given a size, it lays out and draws', !!c.layout && app.gpu.renderers[0].width === 1024 &&
     app.gpu.renderers[0].renders >= 1);
-  T('and the hint is armed for it', c.__clock.liveTimers() === 1);
+  T('and the hint and the chef are armed for it', c.__clock.liveTimers() === 2 && owned(c) === 2);
   stroke(app, guideX(app, 1));
   T('and the roll cuts', c.roll.cuts.length === 1);
 
@@ -2835,6 +2873,347 @@ function testServing(){
   T('no errors', rm.errors.length === 0, rm.errors.join(' | '));
 }
 
+/* =========================================================
+   CONTRACT 32 — CHEF CAPYBARA
+   One character behind the counter, watching the roll and pleased
+   with every cut. It covers nothing the player needs and never
+   shrinks the food; its reactions run on the game's one clock,
+   coalesce rather than queue, never hold play up, and settle back
+   to calm; at rest it only blinks and glances now and then.
+   ========================================================= */
+function testChef(){
+  section('CONTRACT 32 — Chef Capybara watches, is pleased, and never gets in the way');
+  let app = play(), c = app.ctx;
+  const T3 = c.THREE, C = c.SCENE.chef;
+  let ch = c.view3d.chef;
+
+  sub('one character, built once from the tokens');
+  const meshesOf = k => { const out = []; k.root.traverse(o => { if(o.isMesh) out.push(o); }); return out; };
+  const meshes = meshesOf(ch);
+  T('it stands in the scene, on the stage', !!c.layout.chef && ch.root.parent === c.view3d.scene && ch.root.visible);
+  T('it is a dozen or so meshes, not a crowd of parts', meshes.length >= 8 && meshes.length <= 14, String(meshes.length));
+  T('it downloads nothing and adds no texture', c.view3d.kit.textures.length === 8 &&
+    meshes.every(m => !m.material.map && !m.material.bumpMap && !m.material.envMap));
+  const key = col => [col.r, col.g, col.b].map(x => x.toFixed(4)).join();
+  const tokens = ['fur', 'furDark', 'hat', 'apron', 'eye'].map(k => key(new T3.Color(c.colors[k])));
+  const painted = new Set();
+  meshes.forEach(m => { const a = m.geometry.attributes.color; if(a) for(let i = 0; i < a.count; i++) painted.add(key({ r: a.getX(i), g: a.getY(i), b: a.getZ(i) })); });
+  T('its fur, snout, paws, hat and apron are painted in their tokens, and nothing else',
+    tokens.every(t => painted.has(t)) && [...painted].every(p => tokens.indexOf(p) !== -1), [...painted].length + ' colours');
+  const same = (a, b) => near(a.r, b.r, 1e-6) && near(a.g, b.g, 1e-6) && near(a.b, b.b, 1e-6);
+  T('and its eyes, their spark and its blush', same(c.view3d.kit.eye.color, new T3.Color(c.colors.eye)) &&
+    same(c.view3d.kit.shine.color, new T3.Color(c.colors.shine)) && same(c.view3d.kit.blush.color, new T3.Color(c.colors.blush)));
+  T('it is matte clay: only its eyes are glossy, and none of it reflects the room',
+    c.view3d.kit.clay.roughness >= 0.8 && c.view3d.kit.eye.roughness < 0.5 && !c.view3d.kit.clay.envMap);
+
+  /* Poses at the ends of everything it does, for checking where it reaches. */
+  const extremes = [];
+  [-1, 1].forEach(look => [0, 1].forEach(nod => [0, 1].forEach(joy => [0, 1].forEach(lean =>
+    extremes.push({ look: look, nod: nod, joy: joy, lean: lean }))))) ;
+  const strike = (k, q) => {
+    c.calmChef();
+    c.chef.look.x = q.look; c.chef.nod.x = q.nod; c.chef.joy.x = q.joy; c.chef.lean.x = q.lean; c.chef.pleased = 1;
+    c.poseChef();
+    k.head.rotation.y = q.look * C.turn;                    // the furthest its head may ever turn
+    k.root.updateMatrixWorld(true);
+  };
+  /* Every few vertices of each of its meshes, in the world. */
+  const each = (k, fn, face) => {
+    const v = new T3.Vector3();
+    meshesOf(k).forEach(m => {
+      let o = m, inHead = false;
+      while(o){ if(o === k.head) inHead = true; o = o.parent; }
+      if(face && !inHead) return;
+      const pa = m.geometry.attributes.position;
+      for(let i = 0; i < pa.count; i += 3) fn(v.fromBufferAttribute(pa, i).applyMatrix4(m.matrixWorld), inHead);
+    });
+  };
+
+  /* The layout fits the chef by spheres it poses as the scene poses the
+     chef: whatever the chef is doing — nodding, leaning in, delighted,
+     following the knife, glancing, flicking an ear, or on its way between —
+     all of it must lie inside what the layout checked, or it could reach
+     where it must not. */
+  let outside = 0, poses = 0;
+  const spot = c.layout.chef, env = [];
+  c.chefPoses(c.layout.view, spot.x, spot.z).forEach(q => env.push(...c.chefSpheres(spot, q)));
+  [0, 0.5, 1].forEach(nod => [0, 1].forEach(lean => [0, 0.5, 1].forEach(joy => [-1, 0, 1].forEach(look => [null, 'glance', 'flick'].forEach(g => {
+    if(nod * joy > 0.5 || lean * joy > 0.5) return;               // a nod gives way to delight; it leans only while cutting
+    c.calmChef();
+    c.chef.nod.x = nod; c.chef.lean.x = lean; c.chef.joy.x = joy; c.chef.look.x = look; c.chef.pleased = 1;
+    if(g) c.chef.gesture = { kind: g, t: C.idle[g] / 2, side: look < 0 ? -1 : 1 };
+    c.poseChef();
+    ch.root.updateMatrixWorld(true);
+    poses++;
+    each(ch, w => { if(!env.some(b => Math.hypot(w.x - b[0], w.y - b[1], w.z - b[2]) <= b[3])) outside++; });
+  })))));
+  T('whatever pose it takes, all of it lies inside what the layout fitted', outside === 0, outside + ' points outside, over ' + poses + ' poses');
+  c.calmChef(); c.paintNow();
+
+  /* On every screen: none of it shows where the knife goes, its face never
+     shows behind the served pieces or the finished mark, all of its face is
+     on the stage and above the counter, and it stands behind the counter.
+     The knife's ground is worked out here from the hint's own swipe, and the
+     pieces and the mark from where they are, not from the layout's guards. */
+  sub('on every screen, it covers nothing the player needs');
+  const screens = [
+    ['iPad landscape', 1024, 768, { top: 24, bottom: 20 }], ['iPad portrait', 768, 1024, { top: 24, bottom: 20 }],
+    ['iPad Pro landscape', 1366, 1024, { top: 24, bottom: 20 }], ['iPad Pro portrait', 1024, 1366, { top: 24, bottom: 20 }],
+    ['iPad mini landscape', 1133, 744, { top: 24, bottom: 20 }],
+    ['phone portrait', 390, 844, { top: 47, bottom: 34 }], ['phone landscape', 844, 390, { left: 47, right: 47, bottom: 21 }],
+    ['big phone landscape', 932, 430, { left: 59, right: 59, bottom: 21 }],
+    ['small phone portrait', 375, 667, {}], ['small phone landscape', 667, 375, {}],
+    ['tiny portrait', 320, 568, {}], ['tiny landscape', 568, 320, {}]
+  ];
+  screens.forEach(([name, w, h, insets]) => {
+    const a = play({ viewport: { width: w, height: h, dpr: 2, insets } }), ac = a.ctx, L = ac.layout, v = L.view, k = ac.view3d.chef;
+    const ins = Object.assign({ top: 0, right: 0, bottom: 0, left: 0 }, insets);
+    const tiny = w < 600 && h < 600 && Math.min(w, h) <= 320;
+    if(!L.chef){ T(name + ': only a tiny screen may leave the chef out', tiny); return; }
+    /* The food keeps the size it had before the chef: its scale is the fit
+       of the food to the safe area, worked out here the same way. */
+    const margin = Math.max(16, Math.min(w, h) * 0.04), area = { w: w - ins.left - ins.right - 2 * margin, h: h - ins.top - ins.bottom - 2 * margin };
+    const tall = L.spec.wide < 0.5, unit = ac.viewFor(L.spec, 1, 0, 0);
+    const fr = ac.frameOf(unit, !tall, L.plateX, L.plateZ, ac.roll.n), cap = area.h * 0.34 / fr.thick;
+    const fit = b => Math.min(area.w * 0.96 / (b.x1 - b.x0), area.h * 0.94 / (b.y1 - b.y0), cap);
+    const F = fit(fr.all) >= fit(fr.food) * 0.95 ? fit(fr.all) : fit(fr.food);
+    T(name + ': the food keeps its size: the chef never shrinks it', near(v.F, F, 1e-9), v.F.toFixed(3) + ' vs ' + F.toFixed(3));
+    /* Where the knife goes: the roll, cut and spread, from above where the
+       hint's swipe starts to below where it ends, its finger included. */
+    const n = ac.roll.n, half = (L.L + (n - 1) * L.gap) / 2, dot = Math.max(12, L.T * 0.15);
+    const knife = [[-half, L.top - 0.75 * L.T], [half, L.top - 0.75 * L.T], [half, L.bot + 0.45 * L.T], [-half, L.bot + 0.45 * L.T]]
+      .map(q => ac.toStage(q[0], q[1]));
+    const e0 = ac.project(v, -30, -ac.SCENE.board.h, L.back), e1 = ac.project(v, 30, -ac.SCENE.board.h, L.back);
+    const edgeY = x => e0.y + (e1.y - e0.y) * (x - e0.x) / (e1.x - e0.x);
+    let inKnife = 0, faceOut = 0, faceUnder = 0, front = -Infinity, below = -Infinity;
+    extremes.forEach(q => {
+      strike(k, q);
+      each(k, (p3, inHead) => {
+        front = Math.max(front, p3.z);
+        if(p3.y < -ac.SCENE.board.h) below = Math.max(below, p3.z);
+        const p = ac.project(v, p3.x, p3.y, p3.z);
+        if(p.y < edgeY(p.x) && ac.touches({ x: p.x, y: p.y, r: dot }, knife)) inKnife++;
+        if(inHead && (p.x < ins.left || p.x > w - ins.right || p.y < ins.top)) faceOut++;
+        if(inHead && p.y > edgeY(p.x) + 1) faceUnder++;
+      });
+    });
+    T(name + ': none of it shows where the knife goes', inKnife === 0, inKnife + ' points');
+    T(name + ': all of its face and hat are on the stage, clear of the notches', faceOut === 0, faceOut + ' points');
+    T(name + ': and above the counter, never cut off by it', faceUnder === 0, faceUnder + ' points');
+    T(name + ': it stands behind the counter: what is lower than its top is behind its edge', below < L.back,
+      below.toFixed(2) + ' / ' + L.back.toFixed(2));
+    T(name + ': and none of it reaches over the board or the plate', front < Math.min(-ac.SCENE.board.d / 2, L.plateZ - ac.SCENE.plate.d / 2),
+      front.toFixed(2));
+    /* Served: the pieces on the plate and the finished mark, as they are. */
+    finishRollByKeys(a);
+    advance(a, ac.TUNING.holdMs * 0.95);
+    const corners = [], h2 = 2 * ac.SCENE.halfHeight;
+    ac.pieceRects().forEach(r => { const p = r.pose, ct = Math.cos(p.turn), st = Math.sin(p.turn);
+      [-p.len / 2, p.len / 2].forEach(lx => [-1, 1].forEach(lz => [p.y, p.y + h2].forEach(y =>
+        corners.push(ac.project(v, p.x + lx * ct + lz * st, y, p.z - lx * st + lz * ct))))); });
+    const served = ac.convexOutline(corners);
+    const ctx2 = stageOf(a).getContext('2d');
+    ctx2.recording = true; ctx2.log = [];
+    ac.paintNow();
+    ctx2.recording = false;
+    const ring = ctx2.log.find(e => e.m === 'arc' && e.fillStyle === ac.colors.doneDisc) || ctx2.log.find(e => e.m === 'arc');
+    let behind = 0;
+    k.root.updateMatrixWorld(true);
+    each(k, p3 => {
+      const p = ac.project(v, p3.x, p3.y, p3.z);
+      if(ac.touches({ x: p.x, y: p.y, r: 0.5 }, served)) behind++;
+      if(ring && Math.hypot(p.x - ring.args[0], p.y - ring.args[1]) < ring.args[2]) behind++;
+    }, true);
+    T(name + ': delighted, its face shows clear of the served pieces and the finished mark', !!ring && behind === 0, behind + ' points');
+    T(name + ': with no errors', a.errors.length === 0, a.errors.slice(0, 2).join(' | '));
+  });
+
+  /* A cut of any kind pleases it at once; a stroke that does not cut gets
+     nothing, and nothing is ever a frown or a verdict. */
+  sub('it reacts to every cut, and to nothing else');
+  app = play(); c = app.ctx; c.TUNING.pull = 0; ch = c.view3d.chef;
+  settleAll(app);
+  const short = guideX(app, 2);
+  stroke(app, short, { from: -0.8, to: 0.3 });                   // too shallow to cut
+  stroke(app, short, { dx: app.ctx.layout.T * 4 });              // far too slanted
+  pr(app, 'pointerdown', short, yAt(app, 0.5)); pr(app, 'pointerup', short, yAt(app, 0.5));   // a tap
+  advance(app, 200);
+  T('a stroke that does not cut, a slanted one and a tap get no reaction',
+    c.roll.cuts.length === 0 && c.chef.sinceCut > 1e9 && c.chef.nod.x === 0 && c.chef.pleased === 0);
+  stroke(app, guideX(app, 1) + c.layout.L * 0.04);               // an imperfect cut
+  advance(app, 50);
+  T('an imperfect cut pleases it at once', c.roll.cuts.length === 1 && c.chef.pleased > 0.5, c.chef.pleased.toFixed(2));
+  advance(app, 100);
+  T('with a small nod, well under way within a tenth of a second more', c.chef.nod.x > 0.5, c.chef.nod.x.toFixed(2));
+  T('its face only warms: its eyes squint and its smile widens', (() => { c.poseChef();
+    return ch.eyes.every(e => e.scale.y < 0.9) && ch.mouth.scale.x > 1 && ch.mouth.scale.y > 1; })());
+  let settled = 0;
+  for(; settled < 3000 && (c.chef.nod.x !== 0 || c.chef.pleased !== 0 || c.chef.look.v !== 0); settled += 16) advance(app, 16);
+  T('and it settles back to calm soon after', settled <= 1500, settled + ' ms');
+
+  sub('quick cuts blend into one reaction, never a queue');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  settleAll(app);
+  /* A nod starts when the head goes down past halfway from near rest; a
+     wobble at the bottom of a held nod is not another one. */
+  const peaks = [];
+  let low = true, deepest = 0;
+  const watchNod = () => { const x = c.chef.nod.x; deepest = Math.max(deepest, x);
+    if(low && x > 0.5){ peaks.push(x); low = false; } else if(x < 0.3) low = true; };
+  [1, 2, 3].forEach(k => { stroke(app, guideX(app, k), { steps: 3 }); for(let t = 0; t < 4; t++){ advance(app, 16); watchNod(); } });
+  for(let t = 0; t < 120; t++){ advance(app, 16); watchNod(); }
+  T('three quick cuts make one nod, held a little longer', c.roll.cuts.length === 3 && peaks.length === 1, peaks.length + ' nods');
+  T('and it never nods further than one nod', deepest <= 1.15, deepest.toFixed(2));
+  /* As fast as a child really flicks — found in the browser, where cuts came
+     about 180 ms apart and the head bobbed between them. */
+  [180, 300].forEach(gapMs => {
+    const a = play(), ac = a.ctx; ac.TUNING.pull = 0;
+    settleAll(a);
+    const seen = [];
+    let calm = true;
+    const look = () => { const x = ac.chef.nod.x; if(calm && x > 0.5){ seen.push(x); calm = false; } else if(x < 0.3) calm = true; };
+    [1, 2, 3].forEach(k => { stroke(a, guideX(a, k), { steps: 3 }); for(let t = 0; t < gapMs; t += 16){ advance(a, 16); look(); } });
+    for(let t = 0; t < 120; t++){ advance(a, 16); look(); }
+    T('cuts ' + gapMs + ' ms apart still make one long nod, not a head bobbing between them', ac.roll.cuts.length === 3 && seen.length === 1,
+      seen.length + ' nods');
+  });
+  const cutsBefore = c.roll.cuts.length;
+  stroke(app, guideX(app, 4));
+  T('a cut in the middle of a reaction is not held up: it cuts at once', c.roll.cuts.length === cutsBefore + 1);
+
+  /* The finished roll: delight rises with the serving beat and has gone
+     by the time the next roll is ready; the beat itself is untouched. */
+  sub('delight at a finished roll lives inside the serving beat');
+  app = play(); c = app.ctx; ch = c.view3d.chef;
+  settleAll(app);
+  const phases = [];
+  let peak = 0, was = c.game.phase, t0 = null;
+  for(let i = 0; i < 4; i++) c.keyboardCut();
+  advance(app, 30);
+  c.keyboardCut();                                               // the last cut, while it is still nodding
+  t0 = c.__clock.now;
+  for(let t = 0; t < 200; t++){
+    advance(app, 10);
+    peak = Math.max(peak, c.chef.joy.x);
+    if(c.game.phase !== was){ phases.push([c.game.phase, Math.round(c.__clock.now - t0)]); was = c.game.phase; }
+  }
+  const at = p => (phases.find(q => q[0] === p) || [p, NaN])[1];
+  T('the pace between rolls is exactly as before', Math.abs(at('clear') - c.TUNING.holdMs) <= 10 &&
+    Math.abs(at('enter') - c.TUNING.holdMs - c.TUNING.clearMs) <= 10 && Math.abs(at('ready') - c.TUNING.holdMs - 2 * c.TUNING.clearMs) <= 10,
+    JSON.stringify(phases));
+  T('it is fully delighted while the roll is served', peak > 0.95, peak.toFixed(2));
+  T('delight takes its head over from the nod, rather than both at once', c.chef.nod.x < 0.05);
+  const ready = at('ready');
+  T('and within a moment of the next roll it is calm again', c.game.phase === 'ready' && c.chef.joy.x < 0.02 &&
+    c.__clock.now - t0 - ready < 800, c.chef.joy.x.toFixed(3));
+
+  sub('it never replays, and never goes on behind the tuning sheet');
+  app = play({ search: '?tune' }); c = app.ctx;
+  settleAll(app);
+  finishRollByKeys(app);
+  advance(app, 150);
+  const mid = c.chef.joy.x;
+  hide(app);
+  advance(app, 5000);
+  T('in the background it waits where it was', c.chef.joy.x === mid && c.chef.timer === 0 && c.__clock.pendingFrames() === 0);
+  show(app);
+  advance(app, 17);
+  T('coming back, it carries on from there instead of starting again', c.chef.joy.x >= mid && c.chef.joy.x < mid + 0.3,
+    mid.toFixed(2) + ' then ' + c.chef.joy.x.toFixed(2));
+  settleAll(app);
+  c.keyboardCut();
+  advance(app, 40);
+  const nodNow = c.chef.nod.x, pleasedNow = c.chef.pleased;
+  c.openTuning(); c.__flush();
+  advance(app, 3000);
+  T('behind the tuning sheet it holds still: no frame, no idle timer', c.chef.nod.x === nodNow && c.chef.pleased === pleasedNow &&
+    c.__clock.pendingFrames() === 0 && c.chef.timer === 0);
+  c.closeTuning(); c.__flush();
+  T('and when the sheet closes its idle timer is armed again, once', c.chef.timer !== 0 && owned(c) === c.__clock.liveTimers());
+  finishRollByKeys(app);
+  advance(app, 200);
+  c.newRollFromTuning();
+  T('a new roll from the sheet ends a reaction there and then', c.chef.joy.x === 0 && c.chef.nod.x === 0 &&
+    c.chef.pleased === 0 && c.chef.gesture === null);
+
+  /* At rest it only blinks, flicks an ear or glances at the player, now and
+     then, on one timer; it glances only when all is calm. */
+  sub('at rest, it is quiet');
+  app = play(); c = app.ctx;
+  settleAll(app);
+  const seen = [];
+  for(let t = 0; t < 60000; t += 50){
+    advance(app, 50);
+    const g = c.chef.gesture;
+    if(g && (!seen.length || seen[seen.length - 1].g !== g)) seen.push({ g: g, at: c.__clock.now, calm: c.game.phase === 'ready' });
+  }
+  T('a minute brings a handful of idle gestures, with quiet between', seen.length >= 60000 / C.quiet[1] - 1 && seen.length <= 60000 / C.quiet[0] + 1 &&
+    seen.every((s, i) => i === 0 || s.at - seen[i - 1].at >= C.quiet[0] - 60), seen.length + ' gestures');
+  T('mostly blinks; each brief', seen.filter(s => s.g.kind === 'blink').length >= seen.length / 2 &&
+    seen.every(s => C.idle[s.g.kind] <= 1500), seen.map(s => s.g.kind).join(' '));
+  T('and never more than its one timer', owned(c) === c.__clock.liveTimers() && c.__clock.liveTimers() <= 2);
+  let busy = 0;
+  for(let i = 0; i < 50; i++){ c.keyboardCut(); advance(app, 20); busy = Math.max(busy, c.__clock.liveTimers()); settleAll(app); }
+  T('fifty rolls of cuts leave no timer or listener behind', busy <= 2 && owned(c) === c.__clock.liveTimers() &&
+    listeners(app) === listeners(play()), busy + ' timers');
+
+  /* Reduced motion: its face changes in place and it holds still — no nod,
+     lean, turn, rise or lifted paws, and no idle gestures at all. */
+  sub('with reduced motion, it changes its face and holds still');
+  app = play({ reducedMotion: true }); c = app.ctx; ch = c.view3d.chef;
+  settleAll(app);
+  const frozen = () => JSON.stringify([ch.root.position, ch.torso.position, ch.torso.rotation.toArray(), ch.head.rotation.toArray(),
+    ch.arms.map(a => a.rotation.toArray()), ch.ears.map(e => e.rotation.toArray())]);
+  c.paintNow();
+  const still = frozen();
+  T('no idle gesture waits to happen', c.chef.timer === 0 && c.__clock.liveTimers() === 1);
+  c.keyboardCut();
+  advance(app, 20);
+  c.paintNow();
+  T('a cut pleases it at once, without a nod', c.chef.pleased === 1 && c.chef.nod.x === 0 && frozen() === still &&
+    ch.eyes.every(e => e.scale.y < 0.9));
+  advance(app, C.pleasedMs + 50);
+  T('its contentment ends on time, and then no frame waits', c.chef.pleased === 0 && c.__clock.pendingFrames() === 0);
+  finishRollByKeys(app);
+  advance(app, 20);
+  c.paintNow();
+  T('a finished roll shows its delight at once, as a face, not a movement', c.chef.joy.x === 1 && ch.happy.visible && frozen() === still);
+  advance(app, c.TUNING.holdMs + 50);
+  c.paintNow();
+  T('and it is calm again as the next roll comes', c.game.phase === 'ready' && c.chef.joy.x === 0 && !ch.happy.visible);
+  app = play(); c = app.ctx;
+  settleAll(app);
+  c.keyboardCut();
+  advance(app, 30);
+  c.__motion.set(true);
+  T('switched on in the middle of a nod, it settles at once and stops idling', c.chef.nod.x === 0 && c.chef.lean.x === 0 &&
+    c.chef.look.x === 0 && c.chef.gesture === null && c.chef.timer === 0);
+  c.__motion.set(false);
+  T('switched off again, its idle timer comes back', c.chef.timer !== 0);
+
+  /* It lives in the scene graph and outlives the GPU context: a restored
+     context draws the same chef, and a fresh renderer uploads it again. */
+  sub('a lost graphics context brings it back as it was');
+  app = play(); c = app.ctx; ch = c.view3d.chef;
+  settleAll(app);
+  finishRollByKeys(app);
+  advance(app, 150);
+  const parts = meshesOf(ch).map(m => m.geometry);
+  c.sceneEl.dispatch('webglcontextlost', { preventDefault(){} });
+  const joyLost = c.chef.joy.x;
+  advance(app, 800);
+  T('while the context is gone its reaction waits, like the rest of play', c.chef.joy.x === joyLost);
+  c.sceneEl.dispatch('webglcontextrestored', {});
+  advance(app, 17);
+  T('given back, the same chef is drawn again, built once', c.view3d.chef === ch &&
+    meshesOf(c.view3d.chef).every((m, i) => m.geometry === parts[i]) && app.gpu.renderers[0].live.geometries.has(parts[0]));
+  c.sceneEl.dispatch('webglcontextlost', { preventDefault(){} });
+  advance(app, c.SCENE.recoverMs + 50);
+  T('on a fresh renderer too, all of it', c.view3d.status === 'ready' && app.gpu.renderers.length === 2 &&
+    parts.filter((g, i) => meshesOf(ch)[i].visible).every(g => app.gpu.renderers[1].live.geometries.has(g)));
+  T('with no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+}
+
 module.exports = {
   T, section, sub, results, reset, testPortability, testSceneLifecycle, testVendoredLibrary,
   testBoot, testConfig, testStorage, testCollision, testMigration,
@@ -2842,5 +3221,5 @@ module.exports = {
   testMobile, testDesignSystem, testPWA, testRelease, testStress,
   testAccessibility, testContamination, testSourcesOfTruth,
   testCutModel, testStrokes, testGeometry, testRhythm, testLayout, testMotion,
-  testLifecycle, testPermanentRules, testCamera, testServing
+  testLifecycle, testPermanentRules, testCamera, testServing, testChef
 };

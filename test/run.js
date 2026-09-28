@@ -55,7 +55,8 @@ const SUITES = [
   C.testSceneLifecycle,
   C.testVendoredLibrary,
   C.testCamera,
-  C.testServing
+  C.testServing,
+  C.testChef
 ];
 
 async function main(){

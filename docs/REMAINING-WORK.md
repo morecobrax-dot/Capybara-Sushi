@@ -31,6 +31,25 @@ None of this is done. It is listed so nothing here reads as finished.
   a note instead). If they matter, an older Three.js release would need a
   deliberate decision.
 
+## Known limits (Phase 1C)
+
+- Chef Capybara is a first version. Its size is set by the room the food
+  leaves: its head is about 100–170 px wide on tablets and 60–70 px on phones
+  held upright, but only 45–50 px on a phone held sideways, where it stands in
+  the top corner beside the roll, and on a very small screen held sideways
+  (568 × 320) it stays away rather than crowd the food.
+- On tablets the food sits 100–200 px lower than in 0.3.0 to make room for
+  the chef above it; its size is unchanged. The counter now ends behind the
+  food, with a plain wall behind it.
+- The chef has no cast shadow, no fingers, a painted-on apron and bead eyes;
+  its clay is smooth, with no surface texture.
+- At rest the scene is drawn again only for the chef's idle gestures, about
+  three frames a second on average, where 0.3.0 drew nothing; the chef adds
+  a dozen draw calls, about 8,000 triangles and four shader programs (the
+  blush's is compiled when the first roll is finished, as 0.3.0 already
+  compiled one there), and 30–80 ms to the first draw on this machine. Frame
+  rates were unchanged in browser QA, which is not an Apple device.
+
 ## Known limits (Phase 1B)
 
 - Cuts are straight. A slanted swipe cuts straight down at the point where it

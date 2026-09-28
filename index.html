@@ -169,6 +169,15 @@
   --light-fill: #DCE6FF;
   --light-sky: #FFF4E6;
   --light-ground: #C8A07A;
+  /* Chef Capybara, after the approved moodboard figure: warm clay-brown
+     fur, a darker snout and paws, a soft cream hat and an indigo apron. */
+  --chef-fur: #8E5A41;
+  --chef-fur-dark: #5E3322;
+  --chef-hat: #FBF4E8;
+  --chef-apron: #52688C;
+  --chef-eye: #2A1912;
+  --chef-shine: #FFFFFF;
+  --chef-blush: #F29478;
   /* The flat layer over the scene: it has to read over dark nori and light
      wood alike, so light marks carry a soft dark edge. */
   --guide-mark: rgba(92,58,32,0.5);
@@ -1020,6 +1029,26 @@ const APP_FILES = [
    ========================================================= */
 const APP_UPDATES = [
   {
+    id: 'v0-4-0',
+    version: '0.4.0',
+    title: 'Chef Capybara',
+    date: '2026-09-28',
+    summary: 'A calm capybara chef now stands behind the counter, watches you slice and is pleased with every ' +
+             'cut. Still a development preview for trying by hand; the chef is a first version, not final.',
+    newFeatures: [
+      'Chef Capybara, in a tall chef\'s hat and apron, stands behind the counter and watches the roll',
+      'Every cut gets a small, pleased nod; a finished roll gets happy eyes, a smile and lifted paws',
+      'Now and then, while you rest, the chef blinks, flicks an ear or glances your way'
+    ],
+    improvements: [
+      'The counter now ends behind the food, and the chef stands where it never covers the roll, the swipe or the served plate',
+      'On tablets the food sits a little lower to make room for the chef above it; it is never made smaller',
+      'With Reduce Motion on, the chef\'s face changes but it does not move',
+      'The swipe, its forgiveness and the pace between rolls are the same as before'
+    ],
+    fixes: []
+  },
+  {
     id: 'v0-3-0',
     version: '0.3.0',
     title: 'Sushi you can see inside',
@@ -1666,24 +1695,27 @@ function renderAll(){
 /* =========================================================
    GAME DOMAIN — Slicing
    ---------------------------------------------------------
-   One salmon roll on a cutting board, drawn in 3D. A swipe down
-   across it cuts a piece; slow drags and quick flicks both count.
+   One salmon roll on a cutting board, drawn in 3D, with Chef
+   Capybara watching from behind the counter. A swipe down across
+   the roll cuts a piece; slow drags and quick flicks both count.
    Nothing here is saved: the roll, the tuning and every gesture
    live in memory.
 
    In the order a touch travels through it:
      TUNING     every feel value in one place, adjustable from ?tune
      MODEL      a roll is its cut positions; pieces are derived
-     LAYOUT     the camera for this screen, fitted inside the safe area
+     LAYOUT     the camera for this screen, fitted inside the safe area,
+                and where the chef stands on it
      GEOMETRY   pieceRects(): the one answer to "where is the food?",
                 used by the 3D scene and by hit testing alike
      GESTURE    one pointer owns the knife; a qualifying crossing cuts
      MOTION     springs, the jiggle and the finished-roll beat, one clock
+     CHEF       the chef's reactions, on the same clock; it only watches
      FRAMES     drawn only while something is moving
      LIFECYCLE  pause, resume, resize, reduced motion
      HUD        the knife's trail, the guides, the hint and the mark,
                 drawn flat on top of the scene
-     SCENE      the counter, board, roll and plate in 3D (Three.js)
+     SCENE      the counter, board, roll, plate and chef in 3D (Three.js)
      TUNING UI  the developer sheet, ?tune only
 
    It reaches the foundation only through the Domain seams at the
@@ -1821,6 +1853,62 @@ const SCENE = Object.freeze({
   strokeFast: 2,       // ... and a flick
   recoilRange: 0.3,    // a flick's recoil over a slow drag's, shared either side of 1
   recoilVary: 0.12,    // and each cut's own variation, either way
+  /* Chef Capybara, in its own units: it faces +z with its left toward +x
+     and stands about 7.7 tall to the top of its hat. The layout scales it
+     and stands it behind the counter (chefSpot). */
+  chef: Object.freeze({
+    head: Object.freeze({ c: Object.freeze([0, 5.0, 0.75]), rx: 1.3, ry: 1.02, rz: 1.78, p: 2.8 }),
+    hip: Object.freeze([0, 1.2, 0]),            // the body leans about this
+    neck: Object.freeze([0, 4.3, 0.35]),        // the head nods and turns about this
+    shoulder: Object.freeze([1.45, 3.35, 0.5]), // the left arm's; the right mirrors it
+    eyeDir: Object.freeze([0.64, 0.44, 0.46]),  // where on the head the left eye sits
+    earDir: Object.freeze([0.62, 0.72, -0.55]), // and the left ear
+    armRest: Object.freeze([-0.95, 0.12, -0.28]),
+    /* The chef as spheres, [x, y, z, radius], each bounding a cluster of its
+       vertices at rest: its body with its arms hanging and lifted, and its
+       face — head, snout, eyes, ears and hat — at the head's resting tip. The
+       layout poses them as the scene poses the chef (chefSpheres), and a
+       contract checks they hold the real model in each of those poses. */
+    bodyFit: Object.freeze([
+      Object.freeze([0.75, 2.41, -1.11, 2.06]), Object.freeze([0.32, 0.19, -0.01, 2.06]), Object.freeze([-0.16, 4.09, 0.29, 2.1]),
+      Object.freeze([-1.43, 1.61, 0.46, 2.05]), Object.freeze([0.58, 2.3, 1.43, 1.95]), Object.freeze([1.2, 2.62, 1.6, 0.69]),
+      Object.freeze([1.39, 3.21, 0.74, 0.72]), Object.freeze([-1.2, 2.62, 1.6, 0.69]), Object.freeze([-1.39, 3.21, 0.74, 0.72]),
+      Object.freeze([1.24, 3.47, 1.74, 0.72]), Object.freeze([1.41, 3.38, 0.7, 0.69]), Object.freeze([-1.24, 3.47, 1.74, 0.72]),
+      Object.freeze([-1.41, 3.38, 0.7, 0.69])
+    ]),
+    headFit: Object.freeze([
+      Object.freeze([-0.94, 5.43, 1.63, 1.41]), Object.freeze([0.02, 4, 0.81, 1.51]), Object.freeze([0.79, 6.19, 0.15, 1.47]),
+      Object.freeze([-0.76, 6.24, 0.18, 1.46]), Object.freeze([-0.17, 4.54, -0.39, 1.44]), Object.freeze([0.97, 5.43, 1.62, 1.4]),
+      Object.freeze([-0.01, 4.53, 2.48, 1.27]), Object.freeze([0.07, 6.5, 0.97, 1.35])
+    ]),
+    front: 2.3,          // how far its belly and paws stand out in front of its middle
+    stand: Object.freeze([1.8, 3.2]),  // the counter's top meets it at most this low, and at least this high
+    yaw: 0.3,            // radians it turns toward the camera
+    across: Object.freeze([0.5, 0.7, 0.3]),  // where across the stage it may stand, the middle first
+    deeper: Object.freeze([1.5, 3]),       // how much further back the counter may run when it stands beside the roll
+    gap: 8,              // px between the counter's far edge and the food, when it stands across it
+    headMin: 40,         // px: the least its head may show at, or it stays out
+    headMax: 1.1,        // and the most, in roll thicknesses
+    /* How it moves, in radians and its own units. */
+    headRest: 0.1,       // its head tips down a little, toward the counter
+    nod: 0.2,            // a small nod
+    lean: 0.09,          // leaning in to watch the knife
+    look: 0.15,          // its head follows the knife along the roll this far either way ...
+    turn: 0.4,           // ... and never turns further than this
+    rise: 0.12,          // how far it rises in delight
+    raise: 0.7,          // and lifts its paws
+    /* When, in ms on the game's clock. A nod holds while cuts keep coming. */
+    nodMs: 320,          // a cut holds its nod down this long: an unhurried nod ...
+    burstMs: 600,        // ... and a cut this soon after another holds it this long
+    pleasedMs: 520,      // ... and its contentment this long
+    warmMs: 60,          // contentment comes on this quickly ...
+    coolMs: 220,         // ... and fades this slowly
+    springs: Object.freeze({ nod: Object.freeze([15, 0.7]), lean: Object.freeze([7, 0.9]),
+                             look: Object.freeze([8, 0.9]), joy: Object.freeze([9, 0.8]) }),  // rad/s, damping
+    quiet: Object.freeze([2600, 6000]),  // at rest, the quiet between idle gestures, least and most
+    idle: Object.freeze({ blink: 150, flick: 380, glance: 1400 })  // and how long each takes
+  }),
+  counterLip: 1.0,     // how far the counter runs on behind the board and the plate
   pixelBudget: 3.2e6,  // the most drawing-buffer pixels the scene renders
   maxDpr: 2,           // and never more than this many per CSS pixel
   recoverMs: 2500,     // how long a lost 3D context gets to come back by itself
@@ -2052,14 +2140,50 @@ function computeLayout(W, H, ins, n, gapWanted, dpr){
   const fit = b => Math.min(area.w * 0.96 / (b.x1 - b.x0), area.h * 0.94 / (b.y1 - b.y0), cap);
   const Ffood = fit(frame.food), Fall = fit(frame.all), whole = Fall >= Ffood * 0.95;
   const F = whole ? Fall : Ffood, box = whole ? frame.all : frame.food;
-  const view = viewFor(spec, F, area.x + area.w / 2 - F * (box.x0 + box.x1) / 2,
-                                area.y + area.h / 2 - F * (box.y0 + box.y1) / 2);
-  const band = rollBand(view), ppw = view.ppw;
-  const B = SCENE.board, P = SCENE.plate, top = plateTop();
+  const sx = area.x + area.w / 2 - F * (box.x0 + box.x1) / 2, sy = area.y + area.h / 2 - F * (box.y0 + box.y1) / 2;
+  const B = SCENE.board, P = SCENE.plate, top = plateTop(), C = SCENE.chef;
+  /* Chef Capybara stands across the counter, above the food, where the
+     screen has room there: the food moves down into whatever the safe area
+     has spare, never shrinking, and only as far as the chef can use. Where
+     there is no such room — a phone on its side — the counter is shorter
+     and the chef stands beside the roll instead, or stays away. */
+  const lip = Math.min(-B.d / 2, plateZ - P.d / 2) - SCENE.counterLip;
+  const setup = (dy, across, deeper) => {
+    const view = viewFor(spec, F, sx, sy + dy), band = rollBand(view), T = band.bot - band.top;
+    const guard = chefGuards(view, band, plateX, plateZ, T);
+    let back = lip - deeper;
+    if(across){
+      /* The counter's far edge runs just above all the food does: the knife's
+         ground, the served pieces and their hop, and on a tall screen the
+         finished mark too, so there the chef can stand in the middle. */
+      const edge = guard.knife.concat(guard.served, [guard.hop], tall ? [{ x: guard.mark.x, y: guard.mark.y - guard.mark.r }] : []);
+      back = Math.min.apply(null, edge.map(p => counterAt(view, p.x, p.y - C.gap)));
+    }
+    const places = across ? (tall ? [0.5] : C.across) : null;
+    return { view: view, band: band, guard: guard, back: back,
+             chef: back <= lip ? chefSpot(view, W, ins, places, back, guard, T) : null };
+  };
+  /* The food may move down no further than the safe area has room for all
+     of it, the hint's ghost finger below the roll's ends included. */
+  const ub = rollBand(unit), dot = Math.max(12, (ub.hi - ub.lo) * unit.ppw * F * 0.15);
+  const low = Math.max(project(unit, -SCENE.rollLen / 2, 1.45 * ub.lo - 0.45 * ub.hi, 0).y,
+                       project(unit, SCENE.rollLen / 2, 1.45 * ub.lo - 0.45 * ub.hi, 0).y);
+  const spare = Math.max(0, Math.min(area.y + area.h - (sy + F * box.y1), H - ins.bottom - (sy + F * low) - dot - 1));
+  const above = sy + F * box.y0 - C.gap - (ins.top + 6);
+  const wanted = (Math.max.apply(null, C.headFit.map(h => h[1] + h[3])) - C.stand[0]) / (2 * C.head.rx) * C.headMax * frame.thick * F;
+  let set = setup(Math.min(spare, Math.max(0, wanted - above)), true, 0);
+  if(!set.chef){
+    /* A phone on its side: beside the roll's near end, on a counter as deep
+       as suits the chef there best. */
+    set = setup(0, false, 0);
+    C.deeper.forEach(d => { const o = setup(0, false, d); if(o.chef && (!set.chef || o.chef.head > set.chef.head * 1.1)) set = o; });
+  }
+  const view = set.view, band = set.band, ppw = view.ppw;
   const board = [B.w / 2, -B.h, 0, -B.d / 2, B.d / 2];
   const plate = [P.w / 2, top - P.h, top + 2 * SCENE.halfHeight, plateZ - P.d / 2, plateZ + P.d / 2, plateX];
   const away = (side, box) => clearDistance(view, W, side, box);
   return { W: W, H: H, dpr: dpr, ins: ins, area: area, spec: spec, view: view,
+    back: set.back, guard: set.guard, chef: set.chef,
     L: SCENE.rollLen * ppw, gap: Math.min(gapWanted, area.w * 0.14 / Math.max(1, n - 1)),
     top: band.top, bot: band.bot, mid: (band.top + band.bot) / 2, T: band.bot - band.top, cx: 0,
     plateX: plateX, plateZ: plateZ,
@@ -2145,6 +2269,196 @@ function visibleWidth(v, W, x, y, z){
   return l && r ? 2 * Math.min(x - l.x, r.x - x) : SCENE.rollLen;
 }
 
+/* What the chef must leave clear, on the stage, as convex outlines: where
+   the knife goes (the roll, cut and spread, from above where the hint's
+   swipe starts to below where it ends, its finger and all), where the
+   served pieces stand on the plate, and the finished mark; and the top of
+   the pieces' hop. None of the chef shows where the knife goes, and its
+   face never shows behind the served pieces or the mark. */
+function chefGuards(v, band, plateX, plateZ, T){
+  const S = SCENE, P = S.plate, h2 = 2 * S.halfHeight, top = plateTop(), Tw = band.hi - band.lo;
+  const dot = Math.max(12, T * 0.15) / v.ppw, half = S.rollLen * 0.56 + dot;
+  const knife = [[-half, band.hi + 0.75 * Tw + dot], [half, band.hi + 0.75 * Tw + dot],
+                 [half, band.lo - 0.45 * Tw - dot], [-half, band.lo - 0.45 * Tw - dot]]
+    .map(q => project(v, q[0], q[1], 0));
+  const row = P.w / 2 - P.bevel, corners = [];
+  [plateX - row, plateX + row].forEach(x => [top, top + h2].forEach(y => [plateZ - 1.7, plateZ + 1.7].forEach(z => corners.push(project(v, x, y, z)))));
+  const at = project(v, plateX, top + h2 + S.halfHeight, plateZ), r = T * 0.25 + 4;
+  return { knife: knife, served: convexOutline(corners), mark: { x: at.x, y: at.y - T * 0.55, r: r },
+           hop: project(v, plateX, top + h2 + S.hop, plateZ) };
+}
+/* The convex outline of some stage points, wound as the knife's is (so a
+   point inside is on the same side of every edge). */
+function convexOutline(pts){
+  const p = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y), cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [], upper = [];
+  p.forEach(q => { while(lower.length > 1 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop(); lower.push(q); });
+  p.slice().reverse().forEach(q => { while(upper.length > 1 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop(); upper.push(q); });
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+/* The part of a convex outline above the line through stage points a and b. */
+function clipAbove(poly, a, b){
+  const side = p => (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x), out = [];
+  for(let i = 0; i < poly.length; i++){
+    const p = poly[i], q = poly[(i + 1) % poly.length], sp = side(p), sq = side(q);
+    if(sp <= 0) out.push(p);
+    if((sp < 0 && sq > 0) || (sp > 0 && sq < 0)){ const t = sp / (sp - sq); out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }); }
+  }
+  return out;
+}
+/* Does a circle on the stage touch a convex outline? */
+function touches(c, poly){
+  let inside = true;
+  for(let i = 0; i < poly.length; i++){
+    const a = poly[i], b = poly[(i + 1) % poly.length], dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / l));
+    if(Math.hypot(c.x - a.x - t * dx, c.y - a.y - t * dy) < c.r) return true;
+    if(dx * (c.y - a.y) - dy * (c.x - a.x) < 0) inside = false;
+  }
+  return inside;
+}
+
+/* The chef's spheres in the world, standing at spot in pose q, posed as the
+   scene poses it (poseChef): its body leant q.lean about the hip and raised
+   q.rise, its head tipped q.tip more than at rest and turned q.turn about
+   the neck; its body only if q.body is not false. Each is [x, y, z,
+   radius, face]. */
+function chefSpheres(spot, q){
+  const C = SCENE.chef, hip = C.hip, neck = C.neck, s = spot.s;
+  const cw = Math.cos(spot.yaw), sw = Math.sin(spot.yaw), cl = Math.cos(q.lean), sl = Math.sin(q.lean);
+  const ct = Math.cos(q.tip), st = Math.sin(q.tip), cy = Math.cos(q.turn), sy = Math.sin(q.turn);
+  const place = (x, y, z, r, face) => {
+    const dy = y - hip[1], dz = z - hip[2], ly = hip[1] + dy * cl - dz * sl + q.rise, lz = hip[2] + dy * sl + dz * cl;
+    return [spot.x + s * (x * cw + lz * sw), spot.y + s * ly, spot.z + s * (lz * cw - x * sw), s * r, face];
+  };
+  const out = q.body === false ? [] : C.bodyFit.map(b => place(b[0], b[1], b[2], b[3], false));
+  C.headFit.forEach(h => {
+    const y = h[1] - neck[1], z = h[2] - neck[2], y1 = y * ct - z * st, z1 = y * st + z * ct;
+    out.push(place(neck[0] + h[0] * cy + z1 * sy, neck[1] + y1, neck[2] - h[0] * sy + z1 * cy, h[3], true));
+  });
+  return out;
+}
+/* Every pose it takes standing at (x, z): its head turned toward the roll's
+   middle, either way along it and toward the player, and at each of those
+   nodding while it leans in, or tipped back in delight as it rises. */
+function chefPoses(v, x, z){
+  const C = SCENE.chef, clamp = (a, m) => Math.max(-m, Math.min(m, a));
+  const base = clamp(Math.atan2(-x, -z) - C.yaw, C.turn - C.look), glance = clamp(Math.atan2(v.cx - x, v.cz - z) - C.yaw, C.turn);
+  const out = [];
+  const turns = [base - C.look, base, base + C.look];
+  if(turns.every(t => Math.abs(t - glance) > 0.05)) turns.push(glance);
+  turns.forEach((turn, i) => {
+    out.push({ turn: turn, tip: C.nod + 0.05, lean: C.lean, rise: 0, body: i === 0 },
+             { turn: turn, tip: -0.12, lean: -0.04, rise: C.rise, body: i === 0 });
+  });
+  return out;
+}
+
+/* Where Chef Capybara stands on this screen, and how big: behind the
+   counter, turned a little toward the player, as big as it can be while
+   its whole face shows inside the safe area above the counter's edge, no
+   part of it shows where the knife goes, and its face shows nowhere the
+   served pieces or the finished mark go — in every pose it takes there.
+   Across the counter it stands above the food, where it can be biggest,
+   the middle first; otherwise beside the roll, its near end first. Null
+   when its face cannot show at a readable size. */
+function chefSpot(v, W, ins, places, back, guard, T){
+  const C = SCENE.chef, yaw = C.yaw;
+  const top = ins.top + 6, left = ins.left + 6, right = W - ins.right - 6, floor = -SCENE.board.h;
+  const e0 = project(v, -30, floor, back), e1 = project(v, 30, floor, back);
+  const edgeY = x => e0.y + (e1.y - e0.y) * (x - e0.x) / (e1.x - e0.x);
+  const circles = spot => {
+    const out = [];
+    chefPoses(v, spot.x, spot.z).forEach(q => chefSpheres(spot, q).forEach(b => {
+      const p = project(v, b[0], b[1], b[2]);
+      out.push({ x: p.x, y: p.y, r: v.F * b[3] / depthOf(v, b[0], b[1], b[2]), face: b[4] });
+    }));
+    return out;
+  };
+  /* Its head's width on the stage. */
+  const headPx = spot => v.F * spot.s * 2 * C.head.rx / depthOf(v, spot.x, spot.y + spot.s * C.head.c[1], spot.z + spot.s * C.head.c[2]);
+  /* The top of its hat on the stage, in whichever pose it is highest. */
+  const crown = spot => {
+    let y = Infinity;
+    chefPoses(v, spot.x, spot.z).forEach(q => { q.body = false; chefSpheres(spot, q).forEach(b => {
+      if(b[1] < spot.y + spot.s * 6) return;
+      const p = project(v, b[0], b[1], b[2]);
+      y = Math.min(y, p.y - v.F * b[3] / depthOf(v, b[0], b[1], b[2]));
+    }); });
+    return y;
+  };
+  /* It stands with the height h of itself (in its own units) at the counter's
+     top, which hides it below there: from its waist up if the stage has room,
+     sinking toward its shoulders if it has not, but never below its chin. */
+  const stand = (s, x, z) => {
+    const at = h => ({ x: x, y: floor - s * h, z: z, s: s, yaw: yaw });
+    const lo = C.stand[0], hi = C.stand[1], yLo = crown(at(lo));
+    if(yLo >= top) return at(lo);
+    const yHi = crown(at(hi));
+    if(yHi < top) return null;
+    /* the crown sinks almost evenly as it does: a secant step, then one more */
+    let h = lo + (hi - lo) * (top - yLo) / (yHi - yLo);
+    const yH = crown(at(h));
+    if(yH < top) h += (hi - h) * (top - yH) / (yHi - yH);
+    return at(Math.min(hi, h + 1e-3));
+  };
+  /* Only what shows above the counter's edge counts, so the knife's ground
+     is cut to its part above the edge: below it the counter hides the chef. */
+  const knife = clipAbove(guard.knife, e0, e1), mark = guard.mark;
+  const clear = list => list.every(c =>
+    !((knife.length > 2 && touches(c, knife)) || (c.face && (touches(c, guard.served) || Math.hypot(c.x - mark.x, c.y - mark.y) < c.r + mark.r))));
+  const whole = list => list.every(c => !c.face || (c.y + c.r * 0.6 < edgeY(c.x) && c.x - c.r >= left && c.x + c.r <= right));
+  const z = s => back - 0.1 - s * C.front;
+  /* Where along the counter it stands to show at stage x. */
+  const along = (s, sx) => {
+    let x = 0;
+    for(let i = 0; i < 3; i++){
+      const a = project(v, x, 0, z(s)), b = project(v, x + 0.1, 0, z(s));
+      x += (sx - a.x) / ((b.x - a.x) / 0.1);
+    }
+    return x;
+  };
+  const fits = (s, x) => { const spot = stand(s, x, z(s)); if(!spot) return null; const list = circles(spot);
+    return clear(list) && whole(list) ? spot : null; };
+  /* Beside the roll, as close to the knife as it can stand: by its near end,
+     or failing that its far one. */
+  const beside = s => {
+    const ok = x => { const spot = stand(s, x, z(s)); return !!spot && clear(circles(spot)); };
+    for(const side of [1, -1]){
+      let lo = 0, hi = 40 * side;
+      if(!ok(hi)) continue;
+      for(let i = 0; i < 10; i++){ const m = (lo + hi) / 2; if(ok(m)) hi = m; else lo = m; }
+      const got = fits(s, hi);
+      if(got) return got;
+    }
+    return null;
+  };
+  const biggest = place => {
+    let lo = 0, hi = 4, best = null;
+    for(let i = 0; i < 9; i++){
+      const m = (lo + hi) / 2, got = place(m);
+      if(got && headPx(got) <= C.headMax * T){ lo = m; best = got; } else hi = m;
+    }
+    return best;
+  };
+  let best = null;
+  (places || [null]).forEach(f => {
+    const got = biggest(s => f === null ? beside(s) : fits(s, along(s, left + (right - left) * f)));
+    if(got && (!best || headPx(got) > headPx(best) * 1.15)) best = got;
+  });
+  if(!best || headPx(best) < C.headMin) return null;
+  return { x: best.x, y: best.y, z: best.z, s: best.s, yaw: yaw, head: headPx(best) };
+}
+
+/* How far back the counter's top shows at stage pixel (sx, sy): where the
+   sight line through that pixel meets it, or far back past the horizon. */
+function counterAt(v, sx, sy){
+  const a = (sx - v.px0) / v.F, b = (v.py0 - sy) / v.F;
+  const wy = v.uy * b - v.by, wz = v.rz * a + v.uz * b - v.bz;
+  if(!(wy < -1e-9)) return -60;
+  return Math.max(-60, v.cz + (-SCENE.board.h - v.cy) / wy * wz);
+}
+
 /* The canvas cannot read env(). The probe carries the insets as padding. */
 function readInsets(){
   const probe = document.getElementById('safeProbe');
@@ -2164,6 +2478,8 @@ const COLOR_TOKENS = Object.freeze({
   salmon: '--salmon', salmonDeep: '--salmon-deep', salmonFat: '--salmon-fat',
   shadow: '--scene-shadow', flash: '--roll-flash',
   keyLight: '--light-key', fillLight: '--light-fill', skyLight: '--light-sky', groundLight: '--light-ground',
+  fur: '--chef-fur', furDark: '--chef-fur-dark', hat: '--chef-hat', apron: '--chef-apron',
+  eye: '--chef-eye', shine: '--chef-shine', blush: '--chef-blush',
   guide: '--guide-mark', blade: '--blade-trail', bladeEdge: '--blade-edge', incision: '--incision',
   hint: '--hint-ghost', hudShade: '--hud-shade', done: '--done-mark', doneDisc: '--done-disc'
 });
@@ -2468,6 +2784,7 @@ function commitCut(index, u, g){
     pieces.forEach((p, i) => { p.vel += (i <= index ? -1 : 1) * TUNING.pop; });
     recoil(index, u, force);
   }
+  chefCut(u);
   const remaining = roll.n - 1 - roll.cuts.length;
   announce(remaining > 0 ? 'Cut. ' + remaining + ' to go.' : 'Roll finished. Here comes another.');
   if(rollComplete(roll)) finishRoll();
@@ -2642,6 +2959,7 @@ function stepMotion(ms){
     if(hint.showing) hint.t += ms;
   }
   stepPhase(ms);
+  stepChef(ms);
 }
 
 /* One step of the jiggle. Each point pulls on the points it is still
@@ -2859,6 +3177,154 @@ function startRoll(){
   relayout();
 }
 
+/* ---------- CHEF ---------- */
+/* Chef Capybara watches the roll and is pleased with every cut. Its
+   reactions run on the one clock as springs and envelopes that coalesce
+   rather than queue: a cut while it is still nodding holds the nod a little
+   longer, delight at a finished roll takes its head over from a nod, and
+   everything settles back to calm. Delight is read from the finished-roll
+   beat itself, so it rises and fades inside that beat and cannot replay. A
+   stroke that does not cut gets no reaction, and no reaction is a frown, a
+   verdict or a wait: nothing in play waits for the chef. With reduced
+   motion its face changes in place and it holds still. At rest it only
+   blinks, flicks an ear or glances at the player now and then, on one
+   timer, with quiet in between. */
+const chef = {
+  sinceCut: Infinity,         // ms since the last cut, on the game clock
+  hold: 0,                    // how long that cut holds its nod down
+  cutU: 0.5,                  // where along the roll that cut was
+  nod: { x: 0, v: 0 },        // its head's nod, following its aim on a spring
+  lean: { x: 0, v: 0 },       // leaning in while the player holds the knife
+  look: { x: 0, v: 0 },       // where along the roll it looks: −1 the far end, 1 the near
+  joy: { x: 0, v: 0 },        // delight at a finished roll
+  pleased: 0,                 // a cut's contentment, 0 to 1
+  gesture: null,              // an idle gesture under way: { kind, t, side }
+  timer: 0,                   // the wait until the next one
+  seq: 0                      // idle gestures so far, which picks the next
+};
+
+/* A cut, of any kind and anywhere: a small nod, and contentment. A cut
+   that follows another closely holds the nod down through the burst, so
+   quick cuts make one long nod rather than a head bobbing between them. */
+function chefCut(u){
+  chef.hold = chef.sinceCut < SCENE.chef.burstMs ? SCENE.chef.burstMs : SCENE.chef.nodMs;
+  chef.sinceCut = 0;
+  chef.cutU = u;
+}
+
+/* What each part of its mood is heading for, from the game's own state. */
+function chefAims(){
+  const C = SCENE.chef, joy = chefJoyAim();
+  return { joy: joy, pleased: chef.sinceCut < C.pleasedMs ? 1 : 0, nod: chef.sinceCut < chef.hold ? 1 - joy : 0,
+           lean: gesture ? 1 : 0, look: chefLookAim() };
+}
+/* Delight: all through the finished roll's show and its leaving, fading as
+   the next roll arrives. */
+function chefJoyAim(){
+  if(game.phase === 'done' || game.phase === 'clear') return 1;
+  if(game.phase !== 'enter') return 0;
+  const len = phaseLength();
+  return len > 0 ? 1 - clamp01(game.phaseT / len) : 0;
+}
+/* Where along the roll it looks: at the knife while the player holds it,
+   at the cut just made, or at the next place a cut can go. */
+function chefLookAim(){
+  if(gesture && layout){
+    const q = toRoll(gesture.last);
+    if(q) return Math.max(-1, Math.min(1, q.x / (layout.L / 2)));
+  }
+  if(chef.sinceCut < SCENE.chef.pleasedMs) return chef.cutU * 2 - 1;
+  const t = game.phase === 'ready' ? cutTarget(roll) : null;
+  return t ? t.u * 2 - 1 : 0;
+}
+
+/* One step toward `aim` on a spring of frequency w (rad/s) and damping z. */
+function follow(s, aim, w, z, h){
+  s.v += (-w * w * (s.x - aim) - 2 * z * w * s.v) * h;
+  s.x += s.v * h;
+}
+function atRest(s, aim){ return Math.abs(s.x - aim) < 1e-3 && Math.abs(s.v) < 1e-2; }
+
+function stepChef(ms){
+  chef.sinceCut += ms;
+  const C = SCENE.chef, a = chefAims();
+  if(motionReduced()){
+    /* Its face changes in place, and it holds still: a changed face is
+       drawn once. */
+    const was = chef.pleased + chef.joy.x;
+    settleChef();
+    if(chef.pleased + chef.joy.x !== was) view3d.stale = true;
+    return;
+  }
+  const steps = Math.max(1, Math.ceil(ms / 8)), h = ms / 1000 / steps;
+  for(let i = 0; i < steps; i++){
+    follow(chef.nod, a.nod, C.springs.nod[0], C.springs.nod[1], h);
+    follow(chef.lean, a.lean, C.springs.lean[0], C.springs.lean[1], h);
+    follow(chef.look, a.look, C.springs.look[0], C.springs.look[1], h);
+    follow(chef.joy, a.joy, C.springs.joy[0], C.springs.joy[1], h);
+  }
+  [[chef.nod, a.nod], [chef.lean, a.lean], [chef.look, a.look], [chef.joy, a.joy]].forEach(p => {
+    if(atRest(p[0], p[1])){ p[0].x = p[1]; p[0].v = 0; }
+  });
+  chef.pleased += Math.max(-ms / C.coolMs, Math.min(ms / C.warmMs, a.pleased - chef.pleased));
+  const g = chef.gesture;
+  if(g && (g.t += ms) >= C.idle[g.kind]) chef.gesture = null;
+}
+
+/* Straight to where its mood is heading, no gesture under way: for reduced
+   motion, a new layout and a fresh start. */
+function settleChef(){
+  const a = chefAims();
+  [[chef.nod, a.nod], [chef.lean, a.lean], [chef.look, a.look], [chef.joy, a.joy]].forEach(p => { p[0].x = p[1]; p[0].v = 0; });
+  if(motionReduced()){ chef.nod.x = chef.lean.x = chef.look.x = 0; }
+  chef.pleased = a.pleased;
+  chef.gesture = null;
+}
+/* Calm, as if nothing had happened: a new roll from the tuning sheet. */
+function calmChef(){
+  chef.sinceCut = Infinity;
+  chef.hold = 0;
+  settleChef();
+}
+
+/* Does the chef need frames, and does the scene need drawing for it? With
+   reduced motion a changed face is drawn once, but frames still run while
+   a cut's contentment lasts, so it ends on time. */
+function chefBusy(){
+  if(!layout || !layout.chef) return false;
+  if(!motionReduced()) return chefMoving();
+  const a = chefAims();
+  return chef.sinceCut < SCENE.chef.pleasedMs || chef.pleased !== a.pleased || chef.joy.x !== a.joy;
+}
+function chefMoving(){
+  if(!layout || !layout.chef || motionReduced()) return false;
+  const a = chefAims();
+  return !!chef.gesture || chef.pleased !== a.pleased || !(atRest(chef.nod, a.nod) && atRest(chef.lean, a.lean) &&
+         atRest(chef.look, a.look) && atRest(chef.joy, a.joy));
+}
+
+/* At rest, now and then: mostly a blink, sometimes an ear flick, and when
+   all is calm a glance at the player. One timer, with quiet in between;
+   seeded, so play runs the same way every time it is tested. */
+function armChef(){
+  quietChef();
+  if(!wired || isPaused() || motionReduced() || !layout || !layout.chef) return;
+  const q = SCENE.chef.quiet, r = seeded(0x2545F491 + chef.seq * 7919)();
+  chef.timer = setTimeout(chefIdle, q[0] + (q[1] - q[0]) * r);
+}
+function quietChef(){
+  if(chef.timer){ clearTimeout(chef.timer); chef.timer = 0; }
+}
+function chefIdle(){
+  chef.timer = 0;
+  if(isPaused() || motionReduced() || !layout || !layout.chef) return;
+  const r = seeded(0x51ED270B + chef.seq++ * 104729)();
+  const calm = game.phase === 'ready' && !gesture && chef.sinceCut > SCENE.chef.quiet[0] && chef.joy.x === 0;
+  chef.gesture = { kind: calm && r < 0.2 ? 'glance' : r < 0.4 ? 'flick' : 'blink', t: 0, side: r * 10 % 1 < 0.5 ? 1 : -1 };
+  requestFrame();
+  armChef();
+}
+
 /* ---------- FRAMES ---------- */
 let frameId = 0;              // the one pending animation frame, or 0
 let lastFrameAt = null;       // null restarts the clock: a pause never counts as time
@@ -2893,7 +3359,7 @@ function paintNow(){
 }
 function needsFrames(){
   if(isPaused() || !layout) return false;
-  if(game.phase !== 'ready' || healing.length || wobble.active) return true;
+  if(game.phase !== 'ready' || healing.length || wobble.active || chefBusy()) return true;
   if(!motionReduced() && (trail.length || hint.showing)) return true;
   return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
                           p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
@@ -2931,12 +3397,14 @@ function pausePlay(why){
   pauses.add(why);
   endGesture();
   hideHint();
+  quietChef();
   cancelFrame();
   paintNow();
 }
 function resumePlay(why){
   if(!pauses.delete(why) || pauses.size) return;
   armHint();
+  armChef();
   requestFrame();                // cancelFrame() restarted the clock when play paused
 }
 
@@ -2949,9 +3417,11 @@ function onStageResize(){
        everything in motion comes to rest in the new geometry. */
     endGesture();
     settleSprings();
+    settleChef();
     healing = [];
     trail = [];
   }
+  if(changed || (!had && layout)) armChef();       // it may now have a place to stand, or none
   if(isPaused()) paintNow(); else requestFrame();
 }
 
@@ -2960,10 +3430,12 @@ function setReducedMotion(on){
   if(reducedMotion){
     /* Everything decorative stops where it would have come to rest. */
     settleSprings();
+    settleChef();
+    quietChef();
     healing = [];
     if(!gesture) trail = [];
     gx = groupOffset();
-  }
+  } else armChef();
   if(isPaused()) paintNow(); else requestFrame();
 }
 
@@ -3169,6 +3641,7 @@ const view3d = {
   renderer: null, scene: null, camera: null,
   kit: null,                  // textures, materials and shapes every roll shares
   props: null,                // the counter, the board, the plate and their shadows
+  chef: null,                 // Chef Capybara: its root, and the parts that move
   pieceGroup: null,
   views: [],                  // one per piece, in the order of piecesOf(roll)
   bent: false,                // the pieces' vertices are away from rest
@@ -3407,6 +3880,8 @@ function buildWorld(){
   Object.keys(view3d.props).forEach(k => scene.add(view3d.props[k]));
   view3d.pieceGroup = new T3.Group();
   scene.add(view3d.pieceGroup);
+  view3d.chef = makeChef();
+  scene.add(view3d.chef.root);
 }
 
 /* The shared textures, materials and the shadow's shape. Nothing here is
@@ -3439,16 +3914,29 @@ function makeKit(C){
     plate: new T3.MeshStandardMaterial({ color: new T3.Color(C.plate), roughness: 0.42, metalness: 0 }),
     shadow: new T3.MeshBasicMaterial({ color: new T3.Color(C.shadow), alphaMap: blob, transparent: true,
                                        depthWrite: false, opacity: 0.6, fog: false }),
+    /* The chef is matte clay, its colours carried per vertex; only its eyes
+       are glossy. */
+    clay: new T3.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0, fog: false }),
+    eye: new T3.MeshStandardMaterial({ color: new T3.Color(C.eye), roughness: 0.25, metalness: 0, fog: false }),
+    shine: new T3.MeshBasicMaterial({ color: new T3.Color(C.shine), fog: false }),
+    blush: new T3.MeshBasicMaterial({ color: new T3.Color(C.blush), transparent: true, opacity: 0, depthWrite: false, fog: false }),
     blobGeo: blobGeo
   };
 }
 
 function makeProps(){
   const T3 = THREE, K = view3d.kit, B = SCENE.board, P = SCENE.plate;
+  /* The counter ends behind the board and the plate (layout.back), in a
+     softly rounded edge; the chef stands behind it. */
   const counterGeo = new T3.PlaneGeometry(100, 100);
   counterGeo.rotateX(-Math.PI / 2);
+  counterGeo.translate(0, 0, 50);
   const counter = new T3.Mesh(counterGeo, K.counter);
   counter.position.y = -B.h;
+  const edgeGeo = new T3.CylinderGeometry(0.14, 0.14, 100, 12, 1);
+  edgeGeo.rotateZ(Math.PI / 2);
+  const edge = new T3.Mesh(edgeGeo, K.counter);
+  edge.position.y = -B.h - 0.14;
   const board = new T3.Mesh(slab(B.w, B.d, B.h, B.round, B.bevel), K.wood);
   const plate = new T3.Mesh(slab(P.w, P.d, P.h, P.round, P.bevel), K.plate);
   plate.position.y = plateTop();
@@ -3458,7 +3946,7 @@ function makeProps(){
   const plateShadow = blobMesh(0.5);
   plateShadow.scale.set(P.w + 1.1, 1, P.d + 1.1);
   plateShadow.position.y = -B.h + 0.006;
-  return { counter: counter, boardShadow: boardShadow, board: board, plateShadow: plateShadow, plate: plate };
+  return { counter: counter, edge: edge, boardShadow: boardShadow, board: board, plateShadow: plateShadow, plate: plate };
 }
 
 /* A soft contact shadow: a blurred blob under something, instead of a
@@ -4026,6 +4514,7 @@ function poseView(v, q, s, i, n, deform){
 
 function placeProps(){
   const P = view3d.props, at = propsAt();
+  P.counter.position.z = P.edge.position.z = layout.back;
   P.board.visible = P.boardShadow.visible = at.board !== null;
   P.plate.visible = P.plateShadow.visible = at.plate !== null;
   if(at.board !== null){ P.board.position.x = at.board; P.boardShadow.position.x = at.board; }
@@ -4035,10 +4524,301 @@ function placeProps(){
   }
 }
 
+/* ---------- Chef Capybara ---------- */
+/* One character behind the counter, after the approved moodboard figure: a
+   chunky pear of a body, stubby arms with darker paws, a long blocky head
+   with a broad, blunt muzzle and a darker snout, small rounded ears, calm
+   bead eyes with a spark of light, a tall puffy hat and a plain apron.
+   It is built from smooth rounded shapes, and parts that move together and
+   share a finish are baked into one geometry with their colours carried
+   per vertex from the tokens, so the whole chef costs a dozen draws. In its
+   own units it faces +z, its left is +x, and it stands about 7.7 tall to the
+   top of its hat; the layout scales it and stands it where it covers nothing
+   the player needs (chefSpot). */
+
+/* A smooth surface from f(u, v): u runs round it from the front toward the
+   chef's left, v up from its bottom to its top. Its normals are worked out
+   from the surface itself, so no seam shows where it closes. These run tens
+   of thousands of times, so they keep their helpers in local names. */
+function surface(f, nu, nv){
+  const pos = [], nrm = [], idx = [], e = 1e-3, min = Math.min, max = Math.max, sqrt = Math.sqrt;
+  for(let j = 0; j <= nv; j++){
+    const v = j / nv, w = min(1 - 2 * e, max(e, v));
+    for(let i = 0; i <= nu; i++){
+      const u = i / nu, p = f(u, v), a = v === w ? p : f(u, w), b = f(u + e, w), d = f(u, w + e);
+      const tx = b[0] - a[0], ty = b[1] - a[1], tz = b[2] - a[2];
+      const sx = d[0] - a[0], sy = d[1] - a[1], sz = d[2] - a[2];
+      const nx = ty * sz - tz * sy, ny = tz * sx - tx * sz, nz = tx * sy - ty * sx;
+      const k = 1 / (sqrt(nx * nx + ny * ny + nz * nz) || 1);
+      pos.push(p[0], p[1], p[2]);
+      nrm.push(nx * k, ny * k, nz * k);
+    }
+  }
+  for(let j = 0; j < nv; j++){
+    for(let i = 0; i < nu; i++){
+      const a = j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1;
+      idx.push(a, b, c, b, d, c);
+    }
+  }
+  return { pos: pos, nrm: nrm, idx: idx };
+}
+
+/* A rounded block round centre c: half-sizes rx, ry, rz, and squareness p
+   (2 is an egg; higher is boxier). `shape` may bend it afterwards. */
+function roundBlock(c, rx, ry, rz, p, shape){
+  const sin = Math.sin, cos = Math.cos, pow = Math.pow, abs = Math.abs, PI = Math.PI;
+  return (u, v) => {
+    const f = 2 * PI * u, t = PI * v, st = sin(t);
+    const dx = st * sin(f), dy = -cos(t), dz = st * cos(f);
+    const k = pow(pow(abs(dx / rx), p) + pow(abs(dy / ry), p) + pow(abs(dz / rz), p), -1 / p);
+    const q = shape ? shape(dx * k, dy * k, dz * k) : [dx * k, dy * k, dz * k];
+    return [c[0] + q[0], c[1] + q[1], c[2] + q[2]];
+  };
+}
+
+/* A turned shape from [radius, height] points, bottom to top, smoothed
+   between them, `depth` deep for every unit wide; `ripple(u, v)` may swell
+   it round its side. */
+function turned(points, depth, ripple){
+  const n = points.length - 1, min = Math.min, max = Math.max, floor = Math.floor, sin = Math.sin, cos = Math.cos, PI = Math.PI;
+  const at = v => {
+    const x = min(n, max(0, v * n)), i = min(n - 1, floor(x)), t = x - i;
+    const p0 = points[Math.max(0, i - 1)], p1 = points[i], p2 = points[i + 1], p3 = points[Math.min(n, i + 2)];
+    const cr = (a, b, c, d) => 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t);
+    return [cr(p0[0], p1[0], p2[0], p3[0]), cr(p0[1], p1[1], p2[1], p3[1])];
+  };
+  return (u, v) => {
+    const q = at(v), f = 2 * PI * u, r = max(0, q[0]) * (ripple ? ripple(u, v) : 1);
+    return [r * sin(f), q[1], r * depth * cos(f)];
+  };
+}
+
+/* The same shape seen through a matrix, with its normals kept true. */
+function placed(shape, m){
+  const T3 = THREE, p = new T3.Vector3(), n = new T3.Vector3(), nm = new T3.Matrix3().getNormalMatrix(m);
+  const pos = [], nrm = [];
+  for(let i = 0; i < shape.pos.length; i += 3){
+    p.set(shape.pos[i], shape.pos[i + 1], shape.pos[i + 2]).applyMatrix4(m);
+    n.set(shape.nrm[i], shape.nrm[i + 1], shape.nrm[i + 2]).applyMatrix3(nm).normalize();
+    pos.push(p.x, p.y, p.z);
+    nrm.push(n.x, n.y, n.z);
+  }
+  return { pos: pos, nrm: nrm, idx: shape.idx };
+}
+/* A library shape as plain arrays, so it can be baked with the others. */
+function shapeOf(geo){
+  const out = { pos: Array.from(geo.attributes.position.array), nrm: Array.from(geo.attributes.normal.array),
+                idx: Array.from(geo.index.array) };
+  geo.dispose();
+  return out;
+}
+/* Shapes as one geometry, each painted per vertex: a colour, or a function
+   of where the vertex is on its own shape. */
+function bake(parts){
+  const T3 = THREE, pos = [], nrm = [], col = [], idx = [];
+  const painted = parts.every(p => p.color);
+  parts.forEach(part => {
+    const s = part.shape, base = pos.length / 3;
+    for(let i = 0; i < s.pos.length; i += 3){
+      pos.push(s.pos[i], s.pos[i + 1], s.pos[i + 2]);
+      nrm.push(s.nrm[i], s.nrm[i + 1], s.nrm[i + 2]);
+      if(painted){
+        const c = typeof part.color === 'function' ? part.color(s.pos[i], s.pos[i + 1], s.pos[i + 2]) : part.color;
+        col.push(c.r, c.g, c.b);
+      }
+    }
+    for(let i = 0; i < s.idx.length; i++) idx.push(base + s.idx[i]);
+  });
+  const g = new T3.BufferGeometry();
+  g.setAttribute('position', new T3.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new T3.Float32BufferAttribute(nrm, 3));
+  if(painted) g.setAttribute('color', new T3.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  return g;
+}
+
+/* The chef's head, round its middle: a long rounded block that narrows a
+   little toward the muzzle, its crown sloping gently down to a broad,
+   blunt nose. headPoint() finds its surface in a direction, so the eyes,
+   ears, snout and hat sit exactly on it. headShape() runs for every point of
+   the head, so it keeps the head's length in a name of its own. */
+const CHEF_RZ = SCENE.chef.head.rz;
+function headShape(x, y, z){
+  const f = z <= 0 ? 0 : z >= CHEF_RZ ? 1 : z / CHEF_RZ;          // 0 mid-head, 1 at the nose
+  return [x * (1 - 0.1 * f), y > 0 ? y * (1 - 0.3 * f * f) : y * (1 - 0.08 * f), z];
+}
+function headPoint(dx, dy, dz){
+  const H = SCENE.chef.head, l = Math.hypot(dx, dy, dz), x = dx / l, y = dy / l, z = dz / l;
+  const k = Math.pow(Math.pow(Math.abs(x / H.rx), H.p) + Math.pow(Math.abs(y / H.ry), H.p) + Math.pow(Math.abs(z / H.rz), H.p), -1 / H.p);
+  const q = headShape(x * k, y * k, z * k);
+  return [H.c[0] + q[0], H.c[1] + q[1], H.c[2] + q[2]];
+}
+/* A patch of the head's own surface round the direction (dx, dy, 1), raised
+   a little in its middle and meeting the head at its rim: the snout and
+   the blush follow the head's curve exactly. */
+function headPad(dx, dy, ax, ay, lift){
+  const c = SCENE.chef.head.c;
+  return (u, v) => {
+    const f = 2 * Math.PI * u, p = headPoint(dx + ax * v * Math.sin(f), dy + ay * v * Math.cos(f), 1);
+    const k = 1 + lift * (1 - Math.pow(v, 4));
+    return [c[0] + (p[0] - c[0]) * k, c[1] + (p[1] - c[1]) * k, c[2] + (p[2] - c[2]) * k];
+  };
+}
+
+/* Build the chef once. Its pivots: the body leans about its hips, the head
+   nods and turns about the neck, each arm swings at its shoulder, each ear
+   flicks at its root, and each eye blinks about its own middle. */
+function makeChef(){
+  const T3 = THREE, K = view3d.kit, C = colors, P = SCENE.chef;
+  const fur = new T3.Color(C.fur), dark = new T3.Color(C.furDark), hat = new T3.Color(C.hat);
+  const apron = new T3.Color(C.apron), eye = new T3.Color(C.eye);
+  const M = (x, y, z, rx, ry, rz) => new T3.Matrix4().compose(new T3.Vector3(x, y, z),
+    new T3.Quaternion().setFromEuler(new T3.Euler(rx || 0, ry || 0, rz || 0, 'YXZ')), new T3.Vector3(1, 1, 1));
+  const from = o => new T3.Matrix4().makeTranslation(-o[0], -o[1], -o[2]);
+  const group = (o, base) => { const g = new T3.Group(); g.position.set(o[0] - base[0], o[1] - base[1], o[2] - base[2]); return g; };
+  const hip = P.hip, neck = P.neck, toHip = from(hip), toNeck = from(neck);
+
+  /* The body: a chunky pear, broad at the shoulders where the head sits on
+     it, and an apron over its front, strapped over the shoulders. They share
+     one profile, so the apron lies on the body. */
+  const profile = [[0, 0], [1.25, 0.08], [1.78, 0.55], [1.95, 1.3], [1.93, 2.05], [1.8, 2.8],
+                   [1.58, 3.45], [1.28, 4.0], [0.85, 4.4], [0, 4.62]];
+  const body = turned(profile, 0.9), bib = turned(profile.map(q => [q[0] * 1.03, q[1]]), 0.9);
+  const strap = u => placed(surface((a, b) => bib(u - 0.018 + 0.036 * a, 0.64 + 0.2 * b), 3, 8), toHip);
+  const torso = group(hip, [0, 0, 0]);
+  torso.add(new T3.Mesh(bake([
+    { shape: placed(surface(body, 30, 22), toHip), color: fur },
+    { shape: placed(surface((u, v) => bib(-0.15 + 0.3 * u, 0.3 + 0.35 * v), 14, 10), toHip), color: apron },
+    { shape: strap(0.11), color: apron }, { shape: strap(-0.11), color: apron }
+  ]), K.clay));
+
+  /* The arms: stubby, darker at the paw, hanging forward from the shoulder. */
+  const arms = [1, -1].map(side => {
+    const len = 1.55, pivot = group([side * P.shoulder[0], P.shoulder[1], P.shoulder[2]], hip);
+    pivot.rotation.set(P.armRest[0], side * P.armRest[1], side * P.armRest[2], 'YXZ');
+    pivot.add(new T3.Mesh(bake([{ shape: surface(roundBlock([0, -len / 2, 0], 0.42, len / 2 + 0.3, 0.42, 2.3), 14, 12),
+                                  color: (x, y) => y < -len * 0.8 ? dark : fur }]), K.clay));
+    torso.add(pivot);
+    return pivot;
+  });
+
+  /* The head, with its snout, nostrils and hat, nodding and turning about
+     the neck. */
+  const head = group(neck, hip);
+  torso.add(head);
+  const H = P.head, hatAt = headPoint(0, 1, -0.32);
+  const hatShape = turned([[0, 0], [0.78, 0.0], [0.8, 0.22], [0.83, 0.5], [0.84, 0.62], [0.95, 0.74],
+                           [1.1, 0.95], [1.13, 1.2], [1.02, 1.43], [0.7, 1.6], [0, 1.68]], 1,
+    (u, v) => 1 + 0.075 * Math.cos(16 * Math.PI * u) * Math.max(0, Math.min(1, (v - 0.47) / 0.1)) * Math.max(0, Math.min(1, (0.93 - v) / 0.12)));
+  const nostril = side => {
+    const s = headPoint(side * 0.24, 0.0, 1);
+    return placed(surface(roundBlock([0, 0, 0], 0.12, 0.06, 0.07, 2), 10, 6), M(s[0], s[1], s[2] + 0.02, -0.7, side * 0.25, side * 0.3).premultiply(toNeck));
+  };
+  /* A soft brow over each eye, so the eye sits a little hooded: calm. */
+  const brow = side => {
+    const d = P.eyeDir, s = headPoint(side * d[0], d[1] + 0.2, d[2]);
+    return placed(surface(roundBlock([0, 0, 0], 0.32, 0.13, 0.16, 2.2), 12, 8),
+      M(s[0] - side * d[0] * 0.08, s[1] - 0.06, s[2] - d[2] * 0.08, -0.12, Math.atan2(side * d[0], d[2]) * 0.55, 0).premultiply(toNeck));
+  };
+  head.add(new T3.Mesh(bake([
+    { shape: placed(surface(roundBlock(H.c, H.rx, H.ry, H.rz, H.p, headShape), 32, 24), toNeck), color: fur },
+    { shape: placed(surface(headPad(0, -0.2, 0.78, 0.52, 0.03), 28, 8), toNeck), color: dark },
+    { shape: nostril(1), color: eye }, { shape: nostril(-1), color: eye },
+    { shape: brow(1), color: fur }, { shape: brow(-1), color: fur },
+    { shape: placed(surface(hatShape, 32, 18), M(hatAt[0], hatAt[1] - 0.18, hatAt[2], -0.22).premultiply(toNeck)), color: hat }
+  ]), K.clay));
+
+  /* The eyes: glossy beads with a spark of light, each on its own pivot so
+     it can blink, squint or open wide, tucked a little under a soft brow for
+     the calm, unbothered look; and, for delight, two happy arcs instead. */
+  const arcs = [], eyes = [1, -1].map(side => {
+    const d = P.eyeDir, s = headPoint(side * d[0], d[1], d[2]);
+    const frame = M(s[0] - side * d[0] * 0.07, s[1] - 0.03, s[2] - d[2] * 0.07, -0.12, Math.atan2(side * d[0], d[2]) * 0.55, 0).premultiply(toNeck);
+    const pivot = new T3.Group();
+    frame.decompose(pivot.position, pivot.quaternion, pivot.scale);
+    pivot.add(new T3.Mesh(bake([{ shape: surface(roundBlock([0, 0, 0], 0.23, 0.29, 0.14, 2), 16, 12) }]), K.eye),
+              new T3.Mesh(bake([{ shape: surface(roundBlock([0.06, 0.06, 0.135], 0.065, 0.065, 0.02, 2), 8, 6) }]), K.shine));
+    head.add(pivot);
+    arcs.push({ shape: placed(shapeOf(new T3.TorusGeometry(0.19, 0.042, 6, 16, Math.PI * 0.8)), M(0, -0.08, 0.12, 0, 0, Math.PI * 0.1).premultiply(frame)) });
+    return pivot;
+  });
+  const happy = new T3.Mesh(bake(arcs), K.eye);
+  happy.visible = false;
+  head.add(happy);
+
+  /* A small smile under the nose, which widens with delight, and a warm
+     blush on each cheek that shows only then. */
+  const m = headPoint(0, -0.34, 1), mouth = group([m[0], m[1], m[2] + 0.08], neck);
+  mouth.rotation.x = 0.33;
+  mouth.add(new T3.Mesh(bake([{ shape: placed(shapeOf(new T3.TorusGeometry(0.21, 0.04, 6, 16, Math.PI * 0.62)),
+    M(0, 0.2, 0, 0, 0, Math.PI * 1.2)) }]), K.eye));
+  head.add(mouth);
+  const blush = new T3.Mesh(bake([1, -1].map(side => ({ shape: placed(surface(headPad(side * 1.05, -0.22, 0.26, 0.16, 0.012), 16, 4), toNeck) }))), K.blush);
+  blush.visible = false;
+  head.add(blush);
+
+  /* The ears: small and rounded, set high and well back, darker inside. */
+  const ears = [1, -1].map(side => {
+    const s = headPoint(side * P.earDir[0], P.earDir[1], P.earDir[2]), root = group([s[0], s[1] - 0.05, s[2]], neck);
+    root.rotation.set(-0.1, side * 0.35, side * -0.5, 'YXZ');
+    root.add(new T3.Mesh(bake([
+      { shape: surface(roundBlock([0, 0.26, 0], 0.34, 0.38, 0.14, 2.2), 14, 10), color: fur },
+      { shape: surface(roundBlock([0, 0.28, 0.1], 0.2, 0.24, 0.06, 2), 10, 6), color: dark }
+    ]), K.clay));
+    head.add(root);
+    return root;
+  });
+
+  const root = new T3.Group();
+  root.add(torso);
+  const rest = o => ({ x: o.rotation.x, y: o.rotation.y, z: o.rotation.z });
+  return { root: root, torso: torso, head: head, arms: arms, ears: ears, eyes: eyes, mouth: mouth,
+           happy: happy, blush: blush, rest: { arms: arms.map(rest), ears: ears.map(rest) } };
+}
+
+/* Stand the chef where the layout says, in the pose its mood gives: its
+   head nods, follows the knife along the roll and now and then glances at
+   the player; it leans in to watch, and in delight rises a little and lifts
+   its paws; its eyes blink, squint with contentment or close into happy
+   arcs; its smile widens, and its ears perk or flick. */
+function poseChef(){
+  const ch = view3d.chef, spot = layout.chef, C = SCENE.chef;
+  ch.root.visible = !!spot;
+  if(!spot) return;
+  ch.root.position.set(spot.x, spot.y, spot.z);
+  ch.root.rotation.y = spot.yaw;
+  ch.root.scale.setScalar(spot.s);
+  const joy = chef.joy.x, pleased = chef.pleased, lean = chef.lean.x, g = chef.gesture;
+  const moves = motionReduced() ? 0 : 1;              // with reduced motion only its face changes
+  const bump = g ? Math.sin(Math.PI * clamp01(g.t / C.idle[g.kind])) : 0;
+  /* Its head turns toward the roll's middle, as far as leaves it room to
+     follow the knife either way, and now and then toward the player. */
+  const toward = (x, z) => Math.max(-C.turn, Math.min(C.turn, Math.atan2(x - spot.x, z - spot.z) - spot.yaw));
+  const room = C.turn - C.look;
+  let turn = Math.max(-room, Math.min(room, toward(0, 0))) + C.look * chef.look.x;
+  if(g && g.kind === 'glance') turn += (toward(layout.view.cx, layout.view.cz) - turn) * bump;
+  ch.torso.rotation.x = (C.lean * lean - 0.04 * joy) * moves;
+  ch.torso.position.y = C.hip[1] + C.rise * joy * moves;
+  ch.head.rotation.set(C.headRest + (C.nod * chef.nod.x + 0.05 * lean - 0.12 * joy) * moves, turn, 0.08 * joy * moves, 'YXZ');
+  const blink = g && g.kind === 'blink' ? bump : 0, happy = joy >= 0.5;
+  const open = Math.max(0.08, (0.9 + 0.1 * lean - 0.25 * pleased) * (1 - 0.85 * Math.min(1, joy / 0.5)) * (1 - blink));
+  ch.eyes.forEach(e => { e.scale.y = open; e.visible = !happy; });
+  ch.happy.visible = happy;
+  ch.mouth.scale.set(1 + 0.25 * pleased + 0.45 * joy, 1 + 0.4 * pleased + 0.8 * joy, 1);
+  ch.blush.visible = joy > 0.02;
+  ch.blush.material.opacity = 0.55 * joy;
+  const perk = Math.max(joy, 0.5 * lean, 0.4 * pleased) * moves;
+  ch.ears.forEach((e, i) => {
+    const r = ch.rest.ears[i], side = i === 0 ? 1 : -1, flick = g && g.kind === 'flick' && g.side === side ? bump : 0;
+    e.rotation.set(r.x - 0.3 * perk, r.y, r.z - side * 0.45 * flick, 'YXZ');
+  });
+  ch.arms.forEach((a, i) => { const r = ch.rest.arms[i]; a.rotation.set(r.x - C.raise * joy * moves, r.y, r.z, 'YXZ'); });
+}
+
 /* Is anything in the scene itself moving? The hint, the trail and the
    incision are flat marks: they need frames, but not the scene. */
 function sceneMoving(){
-  if(game.phase !== 'ready' || wobble.active || view3d.bent) return true;
+  if(game.phase !== 'ready' || wobble.active || view3d.bent || chefMoving()) return true;
   return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
                           p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
 }
@@ -4054,6 +4834,7 @@ function renderScene(rects, force){
   syncViews();
   const list = rects || pieceRects(), n = list.length;
   placeProps();
+  poseChef();
   const deform = wobble.active || view3d.bent;
   for(let i = 0; i < n; i++){
     if(view3d.views[i]) poseView(view3d.views[i], list[i], pieces[i] || AT_REST, i, n, deform);
@@ -4114,6 +4895,7 @@ function newRollFromTuning(){
   game.phaseT = 0;
   gx = 0;
   startRoll();
+  calmChef();
   paintNow();
 }
 

@@ -37,14 +37,17 @@ brief and moodboard. **Since Phase 1A the scene is real 3D, drawn with
 Three.js (WebGL 2)**, vendored locally; the Phase 0B prototype used Canvas 2D.
 Since Phase 1B it is seen three-quarters on, so the food's inside shows: soft
 rounded forms, warm light, matte nori, gently textured rice and glossy,
-simplified fish.
+simplified fish. Since Phase 1C Chef Capybara stands behind the counter: a
+chunky, pear-shaped capybara in matte clay, with a long, blunt muzzle and a
+darker snout, small rounded ears, calm bead eyes, stubby arms with darker
+paws, a tall puffy hat and an indigo apron.
 
 ## Roadmap
 
 0. Foundations and a slicing prototype. **(0B: gray-box prototype, v0.1.0.)**
 1. One polished roll and counter, with satisfying slicing and chef reactions.
    **(1A: the first 3D slicing scene, v0.2.0. 1B: appearance, camera and
-   motion, v0.3.0. No chef yet.)**
+   motion, v0.3.0. 1C: Chef Capybara, v0.4.0.)**
 2. Customers, orders, more rolls, plating, short shifts.
 3. Rewards, recipes, decorations, outfits, local save.
 4. A small Tokyo neighbourhood.
@@ -151,6 +154,43 @@ The swipe, its forgiveness, the pace between rolls and every tuning value
 are unchanged. Deliberately not in this phase: the chef, customers,
 restaurant systems, sound, haptics and more recipes.
 
+## Phase 1C — Chef Capybara joins the slicing scene
+
+One character, so the player feels they are helping a calm, friendly chef.
+"Chef Capybara" is a working name; a personal name is still to be decided.
+Neither the chef nor the food is approved until it has been seen on a device.
+
+- **The character.** Built after the approved moodboard figure: a chunky
+  pear of a body, a long blocky head with a broad, blunt muzzle and a darker
+  snout, small rounded ears set high and back, glossy bead eyes with a spark
+  of light under a soft brow, stubby arms with darker paws, a tall puffy
+  hat and an indigo apron. The eyes are larger than the reference's slits,
+  as the moodboard asks, so the face reads at phone size. It is real 3D in
+  the same Three.js scene, made of smooth shapes baked into a dozen meshes,
+  with no new library, asset or download.
+- **Where it stands.** Behind the counter, which now ends in a soft edge
+  behind the food; the edge hides the chef below its waist or shoulders.
+  It never shows where the knife goes, from above where a swipe starts to
+  below where it ends, and its face never shows behind the served pieces or
+  the finished mark. On tablets and upright phones it stands across the
+  counter above the food, and on tablets the food moves down to make room,
+  at the same size. On a phone held sideways, where the food fills the
+  screen, it stands small beside the roll's near end. The camera and the
+  food's size are unchanged.
+- **How it reacts.** At rest it is calm, and now and then blinks, flicks an
+  ear or glances at the player. While a finger is down it leans in a little
+  and its head follows the knife along the roll. Every cut, neat or not,
+  gets a small, pleased nod with a contented squint and smile; quick cuts
+  make one longer nod, not a string of them. A finished roll gets delight —
+  happy closed eyes, a wider smile, a blush, a small rise and lifted paws —
+  inside the serving beat, and it is calm again as the next roll arrives.
+  It never frowns, scolds or judges, and it never holds play up.
+- **Reduced motion.** Its face still changes, but it does not move.
+
+The swipe, its forgiveness, the camera, the food's size and every tuning
+value and timing are unchanged. Deliberately not in this phase: customers,
+orders, an economy, the neighbourhood, sound and haptics, a naming screen.
+
 ## Decisions so far
 
 - APP_ID `capybara-sushi`, name **Capybara Sushi**, short name **Capy Sushi**
@@ -164,6 +204,9 @@ restaurant systems, sound, haptics and more recipes.
 - Phase 1B: a three-quarter camera with a shifted picture, and hit testing
   on the roll's own plane through that camera; the plate waits behind the
   board in portrait. No new dependency.
+- Phase 1C: Chef Capybara, built in the same scene from smooth shapes, with
+  no new dependency or asset. The counter gained a back edge, and the food
+  moves down on tablets to make room above it, never shrinking.
 - Gameplay and tuning are kept in memory; nothing is saved.
 - Gray-box visuals and the placeholder icons.
 - Phase 0C, with the user's approval: pushed to `main` and published on GitHub

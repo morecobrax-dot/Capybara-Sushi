@@ -1,4 +1,4 @@
-# Device QA — Phase 1B, sushi you can see inside
+# Device QA — Phase 1C, Chef Capybara
 
 **Status: not done on a device.** Nothing on this list has been tried on a
 real phone or tablet. Browser QA ran in headless Edge on Windows, on an Intel
@@ -19,7 +19,7 @@ on the device for offline play.
   and `?tune` on the end for tuning. It uses HTTPS, so the service worker,
   offline play and home-screen install all work there. Pages can take up to
   10 minutes to show a new push. The identity panel in `?tune` shows which
-  version a device is running (0.3.0 for this phase).
+  version a device is running (0.4.0 for this phase).
 - **Same Wi-Fi, for quick feel testing.** On the PC, run
   `npx --yes http-server -p 8395 -c-1 .` in the repository. On the device,
   open `http://<the PC's local IP>:8395/`. A plain-http address is not a
@@ -74,14 +74,36 @@ The new movement and look:
 - [ ] With Reduce Motion on, a cut (its gap and lit faces) and a finished
       roll (its plate and mark) are still unmistakable, and nothing wobbles.
 
+Chef Capybara (new in 0.4.0; a first version, not an approved look):
+
+- [ ] It reads as a capybara at a glance — not a bear, hamster or beaver —
+      and as calm and friendly, on a phone held either way and on a tablet.
+- [ ] Its face is readable: the eyes and their spark, the snout, the smile.
+      On a phone held sideways it is small, in the top corner beside the
+      roll: is it still worth having there, and is it big enough?
+- [ ] It never gets in the way: swipe straight down through every guide, far
+      end to near end, on each device; nothing of the chef is where your
+      finger starts or goes, nor behind the served plate or the tick mark.
+- [ ] A cut gets a small, pleased nod; quick cuts make one longer nod, not a
+      bobbing head; a stroke that does not cut gets nothing. It never looks
+      cross or disappointed.
+- [ ] A finished roll gets happy eyes, a smile, a blush and lifted paws, and
+      the chef is calm again as the next roll arrives; the pace between
+      rolls feels as before.
+- [ ] While you rest it only blinks, flicks an ear or glances your way now
+      and then, and never feels busy or distracting.
+- [ ] With Reduce Motion on its face still changes, but it never moves.
+- [ ] The counter's far edge, with the plain wall behind it, looks right;
+      on a tablet the food sits a little lower than in 0.3.0.
+
 Paste the **Copy** summary from `?tune` into the next brief to make any
 values you prefer the new defaults.
 
 ## Checks only a real device can do
 
-- [ ] Frame rate while the roll jiggles, at 60 Hz and 120 Hz, and in Low Power
-      Mode. Warmth and battery after ten minutes of play, on the oldest device
-      you have.
+- [ ] Frame rate while the roll jiggles and the chef reacts, at 60 Hz and
+      120 Hz, and in Low Power Mode. Warmth and battery after ten minutes of
+      play, on the oldest device you have.
 - [ ] How the lighting, textures and colours look on an Apple screen: the
       desktop GPU and colour pipeline are not Safari's. The nori's sheen and
       the salmon's gloss come from a reflection that only an Apple GPU can
@@ -105,6 +127,6 @@ values you prefer the new defaults.
 - [ ] Apple Pencil.
 - [ ] Home-screen install, standalone launch, and an offline launch after
       one online visit; storage and cache names `capybara-sushi.` and
-      `capybara-sushi-v0.3.0` (the identity panel in `?tune` shows them).
+      `capybara-sushi-v0.4.0` (the identity panel in `?tune` shows them).
 - [ ] If you have a device on iOS older than 16.4: it shows the note and
       the try-again button, not a blank screen.

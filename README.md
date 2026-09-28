@@ -4,12 +4,14 @@ A cozy children's game set in a tiny Tokyo neighbourhood, where a calm
 capybara chef runs a sushi counter. At its heart is satisfying sushi slicing:
 order, slice, the pieces separate, the chef reacts, plate, serve, next roll.
 
-**Status: a development preview (v0.3.0), not a release for children.** One
+**Status: a development preview (v0.4.0), not a release for children.** One
 3D scene, seen three-quarters on so the rice and salmon show: a salmon roll
-on a cutting board, which squashes, wobbles and rocks as you cut it, and a
-plate where the finished pieces are served with their faces showing. There is no chef,
-no customers, and no sound, saving, final branding or final icons yet.
-**Real-device testing of the 3D scene is pending**
+on a cutting board, which squashes, wobbles and rocks as you cut it, a plate
+where the finished pieces are served with their faces showing, and Chef
+Capybara behind the counter, who watches and is pleased with every cut.
+There are no customers, and no sound, saving, final branding or final icons
+yet. The chef and the food are first versions, not approved looks.
+**Real-device testing of the 3D scene and the chef is pending**
 ([docs/DEVICE-QA.md](docs/DEVICE-QA.md)). It needs WebGL 2 and, on iPhone
 and iPad, iOS or iPadOS 16.4 or newer. See [docs/PRODUCT.md](docs/PRODUCT.md)
 for the product and roadmap, and [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)

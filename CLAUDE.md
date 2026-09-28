@@ -225,7 +225,9 @@ prototype. Each carries its reason; keep the reason with the rule.
     background never makes anything jump. A pause (hidden, the tuning sheet,
     or the scene not showing) keeps play in place and lets no time pass. The 3D
     scene is drawn only while something in it moves; flat marks alone never
-    redraw it.
+    redraw it. At rest the only movement is Chef Capybara's occasional idle
+    gesture — a blink, an ear flick, a glance — each brief, on one timer, with
+    quiet between (rule 55).
 41. **Feel values live in `TUNING`, rules in `SLICE`, the 3D presentation in
     `SCENE`.** A new feel value is a `TUNING_DEFAULTS` entry and a
     `TUNING_SPEC` line. The three Jiggle values scale the springs and impulses
@@ -277,6 +279,35 @@ prototype. Each carries its reason; keep the reason with the rule.
     screen: giving it reflections and full shading pushed a modest GPU from
     12 to 18 ms a frame. It is plain matte, the board and plate have no
     reflection, and contract 22 keeps it that way.
+
+## Chef Capybara
+
+54. **The chef covers nothing the player needs, and never shrinks the food.**
+    It stands behind the counter's far edge (`layout.back`), which hides it
+    below its waist or shoulders. `chefSpot()` fits it by spheres posed as
+    the scene poses it (`chefPoses()`, `chefSpheres()`), so in every pose it
+    takes none of it shows where the knife goes — the roll cut and spread,
+    from above where the hint's swipe starts to below where it ends — its face
+    never shows behind the served pieces or the finished mark, and its whole
+    face and hat stay inside the safe area, above the counter. The food's
+    scale is decided before the chef is placed; where the safe area has spare
+    height the food moves down into it, only as far as the chef can use. It
+    stands across the counter above the food where there is room, beside the
+    roll's near end on a phone on its side, and on a tiny screen it stays
+    away. Contract 32 checks the real model against all of it on a dozen
+    screens.
+55. **The chef only watches: nothing in play waits for it.** Its mood
+    (`chef`) is springs and envelopes on the one clock (`stepChef()`),
+    started by `commitCut()` and read from the finished-roll beat, so it never
+    delays, blocks or changes a cut, never lengthens the beat, pauses with
+    play and cannot replay. Quick cuts make one held nod, never a queue;
+    delight takes the head over from a nod. It reacts to every cut alike and
+    to nothing else — no score, no verdict, never a frown. At rest it blinks,
+    flicks an ear or glances at the player on one timer (`armChef()`), with
+    quiet between.
+56. **With reduced motion, only the chef's face changes.** No nod, lean,
+    turn, rise, lifted paws or idle gestures: contentment and delight show as
+    a changed face, drawn once.
 
 ## Development
 

@@ -1,4 +1,4 @@
-# Device QA — noren, breathing, praise (0.6.0)
+# Device QA — the first customer (0.7.0)
 
 **Status: not done on a device.** Nothing on this list has been tried on a
 real phone or tablet. Browser QA ran in headless Edge on Windows, on an Intel
@@ -19,7 +19,7 @@ on the device for offline play.
   and `?tune` on the end for tuning. It uses HTTPS, so the service worker,
   offline play and home-screen install all work there. Pages can take up to
   10 minutes to show a new push. The identity panel in `?tune` shows which
-  version a device is running (0.6.0 for this phase).
+  version a device is running (0.7.0 for this phase).
 - **Same Wi-Fi, for quick feel testing.** On the PC, run
   `npx --yes http-server -p 8395 -c-1 .` in the repository. On the device,
   open `http://<the PC's local IP>:8395/`. A plain-http address is not a
@@ -73,6 +73,23 @@ The new movement and look:
       either way.
 - [ ] With Reduce Motion on, a cut (its gap and lit faces) and a finished
       roll (its plate and mark) are still unmistakable, and nothing wobbles.
+
+The first customer (new in 0.7.0; none of it approved yet):
+
+- [ ] The cat reads as a sleepy, warm regular — content, not bored, annoyed
+      or impatient — and as a customer, not a second chef.
+- [ ] Its picture order is obviously the cat's, and obviously the salmon
+      maki, to a child who does not read.
+- [ ] The plate sliding along the counter to the cat, and its happy bob,
+      read as "served"; the whole visit feels brisk, not a ceremony (2.1 s
+      from the last cut to the next roll).
+- [ ] Three visits in a row feel like the same cat coming back, not a chore.
+- [ ] The ginger and wasabi read as garnish, small and calm.
+- [ ] On a phone held upright the cat, the chef and the plate never crowd
+      each other; on a phone held sideways, where the cat waits off the
+      counter's end, the order at the counter's end still makes sense.
+- [ ] With Reduce Motion on, the cat and the plate simply appear, and the
+      visit still reads.
 
 The noren and the breath (new in 0.6.0; not approved yet):
 
@@ -164,6 +181,6 @@ values you prefer the new defaults.
 - [ ] Apple Pencil.
 - [ ] Home-screen install, standalone launch, and an offline launch after
       one online visit; storage and cache names `capybara-sushi.` and
-      `capybara-sushi-v0.6.0` (the identity panel in `?tune` shows them).
+      `capybara-sushi-v0.7.0` (the identity panel in `?tune` shows them).
 - [ ] If you have a device on iOS older than 16.4: it shows the note and
       the try-again button, not a blank screen.

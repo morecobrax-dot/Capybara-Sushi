@@ -178,6 +178,14 @@
   --chef-eye: #2A1912;
   --chef-shine: #FFFFFF;
   --chef-blush: #F29478;
+  /* The sleepy cat, the first regular: a soft ginger coat, a cream muzzle
+     and chest, a pink nose. */
+  --cat-fur: #E8A25C;
+  --cat-cream: #FBEBD3;
+  --cat-nose: #E88A80;
+  /* A little pickled ginger and a dab of wasabi on the served plate. */
+  --garnish-ginger: #F4BFAE;
+  --garnish-wasabi: #9DBB5C;
   /* The flat layer over the scene: it has to read over dark nori and light
      wood alike, so light marks carry a soft dark edge. */
   --guide-mark: rgba(92,58,32,0.5);
@@ -188,6 +196,9 @@
   --hud-shade: rgba(74,46,26,0.38);
   --done-mark: #4E8F6B;
   --done-disc: rgba(255,251,242,0.94);
+  /* The customer's order: a picture in a cream bubble. */
+  --order-bubble: #FFFBF2;
+  --order-edge: rgba(92,58,32,0.42);
   /* A cut's stars and sparkle: warm gold with a dark edge, so they read
      over nori and wood alike; the number of stars carries the meaning. */
   --rating-star: #F4B942;
@@ -1104,6 +1115,25 @@ const APP_FILES = [
    ========================================================= */
 const APP_UPDATES = [
   {
+    id: 'v0-7-0',
+    version: '0.7.0',
+    title: 'The first customer',
+    date: '2026-09-28',
+    summary: 'A sleepy cat now visits the counter and asks for salmon maki with a picture. ' +
+             'Each finished roll slides along the counter to it, the cat is pleased, and the next visit begins. Still a development preview.',
+    newFeatures: [
+      'A sleepy cat regular sits at the counter and shows its order, a salmon maki, in a picture bubble',
+      'The finished roll is served with a little ginger and wasabi, then slides along the counter to the cat, who smiles and bobs happily',
+      'The cat and the plate leave together as the next roll arrives, and the cat comes back for another'
+    ],
+    improvements: [
+      'Every finished roll is accepted, however it was cut; the order never runs out and nothing is timed',
+      'With Reduce Motion on, the cat simply sits down and the plate is simply there in front of it',
+      'The noren gives way to the cat on phones held upright; on a phone held sideways the cat waits just off the counter\'s end'
+    ],
+    fixes: []
+  },
+  {
     id: 'v0-6-0',
     version: '0.6.0',
     title: 'A noren and a breathing chef',
@@ -1935,6 +1965,29 @@ const SCENE = Object.freeze({
   board: Object.freeze({ w: 10.6, d: 4.6, h: 0.5, round: 0.55, bevel: 0.14 }),
   plate: Object.freeze({ w: 11.2, d: 4.0, h: 0.3, round: 1.4, bevel: 0.15 }),
   hop: 1.1,            // how high the pieces hop onto the plate
+  /* A little ginger and a dab of wasabi at the front of the plate, toward
+     its upstream end, clear of the served row. */
+  garnish: Object.freeze({ x: 3.55, z: 1.5 }),
+  /* The sleepy cat, in the chef's units: it sits behind the counter, hidden
+     below its chest, turned a little toward the counter's middle. The layout
+     fits it by these spheres ([x, y, z, r]: its head and ears first, then
+     its body). */
+  cat: Object.freeze({
+    fit: Object.freeze([Object.freeze([0, 3.55, 0.2, 1.45]), Object.freeze([0.8, 4.75, 0.05, 0.5]), Object.freeze([-0.8, 4.75, 0.05, 0.5]),
+                        Object.freeze([0, 1.3, 0, 1.85]), Object.freeze([0, 2.3, 0.1, 1.5])]),
+    neck: Object.freeze([0, 2.7, 0.15]),
+    hide: 1.2,           // how much of it (own units) the counter hides
+    front: 1.9,          // from its middle to its front: it sits behind the counter's edge
+    yaw: 0.3,            // turned this far toward the counter's middle
+    size: Object.freeze([0.9, 0.78, 0.66, 0.56]),   // its scale against the chef's, largest first
+    alone: Object.freeze([0.62, 0.52, 0.44]),       // its scale where the chef is away
+    headMin: 30,         // the least its head may be across on the stage (px)
+    hop: 0.3             // how high a pleased cat bobs up, once
+  }),
+  /* A visit: the cat arrives and orders; the finished roll is served, then
+     delivered along the counter to it; it is pleased, and goes as the next
+     roll arrives, and the next visit begins (ms). */
+  visit: Object.freeze({ arriveMs: 700, deliverMs: 400, thanksMs: 450 }),
   /* The noren: a curtain of a few cloth panels on a wooden rod, hung
      beside the chef as at the kitchen's doorway, in the chef's own units
      and scale. It is placed per screen where it covers nothing (norenSpot),
@@ -2174,15 +2227,21 @@ function rateCut(r, index, u, pxPerU){
    parallel to piecesOf(roll): one entry of presentation state per piece —
    its slide along the board, its tip onto one bottom edge, its rock toward
    and away from the camera, and the glow on its two newest faces.
-   phase: ready (cuttable), done (the finished roll is served), clear (the
-   plate leaves), enter (the next roll arrives). */
+   phase: ready (cuttable), done (the finished roll is served), deliver
+   (the plate goes along the counter to the customer), thanks (it is
+   pleased), clear (it and the plate leave), enter (the next roll arrives,
+   and the next visit begins).
+   visit: the one customer at the counter, and its one order. Its state:
+   arriving, waiting (its order shows), pleased (served), leaving. It lives
+   in memory only. */
 function newPieceState(){
   return { off: 0, vel: 0, flashL: 0, flashR: 0, tilt: 0, tiltV: 0, rock: 0, rockV: 0 };
 }
 const AT_REST = Object.freeze(newPieceState());
 let roll = newRoll(TUNING.pieces);
 let pieces = [newPieceState()];
-const game = { phase: 'ready', phaseT: 0, rolls: 0, gathered: false };
+const game = { phase: 'ready', phaseT: 0, rolls: 0, gathered: false,
+               visit: null, visits: 0, served: 0, delivering: 0 };
 let gx = 0;                   // the whole roll's offset while it leaves or arrives
 
 /* The jiggle, worked out for the roll as one soft body: how squashed it is
@@ -2358,21 +2417,32 @@ function computeLayout(W, H, ins, n, gapWanted, dpr){
   const board = [B.w / 2, -B.h, 0, -B.d / 2, B.d / 2];
   const plate = [P.w / 2, top - P.h, top + 2 * SCENE.halfHeight, plateZ - P.d / 2, plateZ + P.d / 2, plateX];
   const away = (side, box) => clearDistance(view, W, side, box);
-  return { W: W, H: H, dpr: dpr, ins: ins, area: area, spec: spec, view: view,
-    back: set.back, guard: set.guard, chef: set.chef,
-    noren: set.chef ? norenSpot(view, W, ins, set.chef, set.guard, set.back, band.bot - band.top) : null,
+  /* The customer sits where the served food goes: toward the right if it
+     fits there, and everything flows that way — the next roll arrives from
+     the other side. */
+  const seat = catSpot(view, W, ins, set.chef, set.guard, set.back, band.bot - band.top);
+  const flow = seat ? seat.side : 1;
+  const out = { W: W, H: H, dpr: dpr, ins: ins, area: area, spec: spec, view: view,
+    back: set.back, guard: set.guard, chef: set.chef, seat: seat, flow: flow,
+    noren: set.chef ? norenSpot(view, W, ins, set.chef, set.guard, set.back, band.bot - band.top, seat) : null,
     L: SCENE.rollLen * ppw, gap: Math.min(gapWanted, area.w * 0.14 / Math.max(1, n - 1)),
     top: band.top, bot: band.bot, mid: (band.top + band.bot) / 2, T: band.bot - band.top, cx: 0,
     plateX: plateX, plateZ: plateZ,
     /* How far things travel to leave or enter the stage, in world units:
        the group as it clears and as the next roll arrives, and on a wide
        screen the board and plate as they trade places. */
-    exit: tall ? Math.max(away(1, board), away(1, plate)) : away(1, plate),
-    enter: tall ? Math.max(away(-1, board), away(-1, plate)) : away(-1, board),
-    span: Math.max(away(1, board), away(-1, plate)),
+    exit: tall ? Math.max(away(flow, board), away(flow, plate)) : away(flow, plate),
+    enter: tall ? Math.max(away(-flow, board), away(-flow, plate)) : away(-flow, board),
+    span: Math.max(away(flow, board), away(-flow, plate)),
     /* How wide a row of served pieces may be: the plate's top, or on a tall
        screen what the stage shows at the plate's depth, if less. */
     serveRoom: Math.min(P.w - 2 * P.bevel - 0.5, visibleWidth(view, W, plateX, top + SCENE.halfHeight, plateZ) - 0.5) };
+  /* Its order's bubble, and where along the counter the served plate goes
+     to reach it; with no seat on this stage, a corner bubble and a plate
+     that goes off toward it. */
+  out.bubble = seat ? seat.bubble : cornerBubble(out);
+  out.delivery = seat ? deliveryFor(out) : { dx: flow * out.exit, dz: 0 };
+  return out;
 }
 
 /* On a tall screen the plate waits behind the board: this is where along
@@ -2641,10 +2711,11 @@ function counterAt(v, sx, sy){
    its head and hat, on whichever side has more room first. Its box on the
    stage must stay above the counter's edge and clear of the chef in every
    pose, of where the knife goes (and the praise above a cut), of the served
-   pieces and the mark, and of the grown-ups' button; it may run off the
-   stage's edge, but not mostly. Smaller if it must, or null: on a small
-   screen the scenery gives way, never the food. */
-function norenSpot(v, W, ins, chef, guard, back, T){
+   pieces and the mark, of the customer and its order, and of the
+   grown-ups' button; it may run off the stage's edge, but not mostly.
+   Smaller if it must, or null: on a small screen the scenery gives way,
+   never the food or the customer. */
+function norenSpot(v, W, ins, chef, guard, back, T, seat){
   const Nr = SCENE.noren, floor = -SCENE.board.h;
   const e0 = project(v, -30, floor, back), e1 = project(v, 30, floor, back);
   const edgeY = x => e0.y + (e1.y - e0.y) * (x - e0.x) / (e1.x - e0.x);
@@ -2658,11 +2729,9 @@ function norenSpot(v, W, ins, chef, guard, back, T){
     boxOf(guard.served), { x0: mk.x - mk.r, y0: mk.y - mk.r, x1: mk.x + mk.r, y1: mk.y + mk.r },
     { x0: ins.left, y0: ins.top, x1: ins.left + 64, y1: ins.top + 64 }                         // the grown-ups' button
   ].map(b => grow(b, 6));
-  const circles = [];
-  chefPoses(v, chef.x, chef.z).forEach(q => chefSpheres(chef, q).forEach(b => {
-    const p = project(v, b[0], b[1], b[2]);
-    circles.push({ x: p.x, y: p.y, r: v.F * b[3] / depthOf(v, b[0], b[1], b[2]) + 6 });
-  }));
+  /* the chef in every pose, and the customer resting or pleased */
+  const circles = chefCircles(v, chef, 6).concat(seat ? seat.circles.map(c => ({ x: c.x, y: c.y, r: c.r + 6 })) : []);
+  if(seat) keep.push(grow(seat.bubble, 6));
   const wide = Nr.panels * Nr.panel + (Nr.panels - 1) * Nr.gapX;
   const at = project(v, chef.x, chef.y + chef.s * 5, chef.z);
   const room = side => side > 0 ? W - ins.right - at.x : at.x - ins.left;
@@ -2699,6 +2768,153 @@ function norenSpot(v, W, ins, chef, guard, back, T){
   return null;
 }
 
+/* The chef on the stage, in every pose it takes: a circle per sphere, grown
+   by pad. None when it is away. */
+function chefCircles(v, chef, pad){
+  const out = [];
+  if(chef) chefPoses(v, chef.x, chef.z).forEach(q => chefSpheres(chef, q).forEach(b => {
+    const p = project(v, b[0], b[1], b[2]);
+    out.push({ x: p.x, y: p.y, r: v.F * b[3] / depthOf(v, b[0], b[1], b[2]) + pad, face: b[4] });
+  }));
+  return out;
+}
+
+/* Where the sleepy cat sits on this screen: behind the counter, as far
+   toward the stage's edge as it can while its face shows above the
+   counter's edge and all of it inside the safe area, with its order's
+   bubble above its head (or beside it) — clear of the chef in every pose,
+   of where the knife goes and the praise above a cut, of the served plate
+   and the mark, and of the grown-ups' button, resting or bobbing up when
+   pleased. The right first, where the served food flows; smaller if it
+   must. Null where nothing fits (cornerBubble then shows its order). The
+   noren is placed after it and gives way to it. */
+function catSpot(v, W, ins, chef, guard, back, T){
+  const Ct = SCENE.cat, floor = -SCENE.board.h;
+  const e0 = project(v, -30, floor, back), e1 = project(v, 30, floor, back);
+  const edgeY = x => e0.y + (e1.y - e0.y) * (x - e0.x) / (e1.x - e0.x);
+  const boxOf = pts => pts.reduce((b, p) => ({ x0: Math.min(b.x0, p.x), y0: Math.min(b.y0, p.y), x1: Math.max(b.x1, p.x), y1: Math.max(b.y1, p.y) }),
+    { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+  const meets = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+  const knife = boxOf(guard.knife), mk = guard.mark;
+  const keep = [{ x0: knife.x0 - 6, y0: knife.y0 - Math.max(16, T * 0.25) - 6, x1: knife.x1 + 6, y1: knife.y1 },  // the knife's ground, and the praise above a cut
+                boxOf(guard.served), { x0: mk.x - mk.r, y0: mk.y - mk.r, x1: mk.x + mk.r, y1: mk.y + mk.r },
+                { x0: ins.left, y0: ins.top, x1: ins.left + 70, y1: ins.top + 70 }];                  // the grown-ups' button
+  const chefs = chefCircles(v, chef, 4);
+  const hitsChef = b => chefs.some(o => o.x + o.r > b.x0 && o.x - o.r < b.x1 && o.y + o.r > b.y0 && o.y - o.r < b.y1);
+  /* A circle's part above the counter's edge: below it the counter hides the cat. */
+  const shown = c => ({ x0: c.x - c.r, y0: c.y - c.r, x1: c.x + c.r, y1: Math.min(c.y + c.r, edgeY(c.x)) });
+  const place = (x, s, side, lift) => {
+    const yaw = -side * Ct.yaw, cw = Math.cos(yaw), sw = Math.sin(yaw);
+    const y = floor - s * Ct.hide + lift, z = back - 0.1 - s * Ct.front;
+    return Ct.fit.map((f, i) => {
+      const wx = x + s * (f[0] * cw + f[2] * sw), wy = y + s * f[1], wz = z + s * (f[2] * cw - f[0] * sw);
+      const p = project(v, wx, wy, wz);
+      return { x: p.x, y: p.y, r: v.F * s * f[3] / depthOf(v, wx, wy, wz), face: i < 3 };
+    });
+  };
+  /* along the counter from what shows at the stage's middle, at its depth */
+  const middle = s => {
+    const z = back - 0.1 - s * Ct.front, y = floor + s;
+    let x = 0;
+    for(let i = 0; i < 4; i++){ const a = project(v, x, y, z), c = project(v, x + 0.1, y, z); x += (W / 2 - a.x) / ((c.x - a.x) / 0.1); }
+    return x;
+  };
+  const scales = chef ? Ct.size.map(k => chef.s * k) : Ct.alone.slice();
+  for(const s of scales){
+    const mid = middle(s);
+    for(const side of [1, -1]){
+      for(let d = 40; d >= 0; d -= 0.25){
+        const x = mid + side * d, rest = place(x, s, side, 0), up = place(x, s, side, s * Ct.hop), face = rest[0];
+        if(face.r * 2 < Ct.headMin) break;
+        const all = rest.concat(up).filter(c => c.y - c.r < edgeY(c.x));
+        if(all.some(c => c.x - c.r < ins.left + 4 || c.x + c.r > W - ins.right - 4 || c.y - c.r < ins.top + 4)) continue;
+        if(face.y + face.r * 0.6 > edgeY(face.x)) continue;
+        if(all.some(c => { const b = shown(c); return hitsChef(b) || keep.some(o => meets(b, o)); })) continue;
+        /* its order: above its head, else beside it toward the middle */
+        const w = Math.max(48, Math.min(96, face.r * 1.3)), h = Math.round(w * 0.82);
+        const headTop = Math.min.apply(null, up.slice(0, 3).map(c => c.y - c.r));
+        const tries = [{ x: face.x - w / 2 - side * w * 0.12, y: headTop - h - 12 },
+                       { x: side > 0 ? face.x - face.r - 14 - w : face.x + face.r + 14, y: face.y - face.r - h * 0.35 }];
+        const bubble = tries.map(b => ({ x0: b.x, y0: b.y, x1: b.x + w, y1: b.y + h, w: w, h: h, tx: face.x, ty: face.y - face.r * 0.35 }))
+          .find(b => b.x0 >= ins.left + 4 && b.x1 <= W - ins.right - 4 && b.y0 >= ins.top + 4 &&
+                     !keep.some(o => meets(b, o)) && !hitsChef(b) && !all.some(c => meets(b, shown(c))));
+        if(!bubble) continue;
+        /* how far it slides along the counter to come and go: off the stage */
+        let slide = 0.5;
+        while(slide < 80 && place(x + side * slide, s, side, 0).some(c => c.x + c.r > 0 && c.x - c.r < W)) slide += 0.5;
+        return { x: x, y: floor - s * Ct.hide, z: back - 0.1 - s * Ct.front, s: s, side: side, yaw: -side * Ct.yaw,
+                 slide: slide + 0.5, circles: all, face: face, bubble: bubble, head: face.r * 2 };
+      }
+    }
+  }
+  return null;
+}
+/* Where the cat's order shows when it has no seat on the stage — a phone
+   on its side, where the food and the chef fill the wall: at the counter's
+   right-hand end, its tail pointing off the stage where the cat sits and
+   the plate goes, clear of the chef, the knife, the praise above a cut, the
+   mark and the grown-ups' button; else a top corner. It steps aside while
+   the finished roll is on show and on its way (drawOrder), so the served
+   plate may pass where it stands. */
+function cornerBubble(L){
+  const w = 52, h = 43, ins = L.ins, g = L.guard, mk = g.mark, v = L.view;
+  const chefs = chefCircles(L.view, L.chef, 4);
+  const knife = g.knife.reduce((b, p) => ({ x0: Math.min(b.x0, p.x), y0: Math.min(b.y0, p.y), x1: Math.max(b.x1, p.x), y1: Math.max(b.y1, p.y) }),
+    { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+  const keep = [{ x0: knife.x0, y0: knife.y0 - Math.max(16, L.T * 0.25), x1: knife.x1, y1: knife.y1 },
+                { x0: mk.x - mk.r, y0: mk.y - mk.r, x1: mk.x + mk.r, y1: mk.y + mk.r },
+                { x0: ins.left, y0: ins.top, x1: ins.left + 70, y1: ins.top + 70 }];
+  const at = (x0, y0, edge) => ({ x0: x0, y0: y0, x1: x0 + w, y1: y0 + h, w: w, h: h, tx: edge ? L.W + 40 : null, ty: edge ? y0 + h / 2 : null });
+  const edgeY = project(v, 30, -SCENE.board.h, L.back).y, right = L.W - ins.right - 6 - w, tries = [];
+  for(let y = Math.max(ins.top + 8, edgeY + 10); y + h <= L.H - ins.bottom - 8; y += 8) tries.push(at(right, y, true));
+  tries.push(at(right, ins.top + 8, true), at(ins.left + 76, ins.top + 8), at((L.W - w) / 2, ins.top + 8));
+  return tries.find(b => !chefs.some(o => o.x + o.r > b.x0 && o.x - o.r < b.x1 && o.y + o.r > b.y0 && o.y - o.r < b.y1) &&
+                         !keep.some(o => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0)) || tries[0];
+}
+/* Where the served plate goes: along the counter until it stands in front
+   of the cat, and back toward it as far as it can while no piece, nor the
+   plate, anywhere on the way, covers the chef's face, the cat's face or its
+   bubble, or the grown-ups' button — it may pass in front of their bodies,
+   below the counter's edge as food is served. World units, from where it
+   is served. */
+function deliveryFor(L){
+  const v = L.view, S = SCENE, P = S.plate, seat = L.seat, top = plateTop(), n = TUNING.pieces, ins = L.ins;
+  const lens = []; for(let i = 0; i < n; i++) lens.push(S.rollLen / n);
+  const spots = plateSpots(lens, L.serveRoom), faces = chefCircles(v, L.chef, 4).concat(seat.circles).filter(c => c.face), b = seat.bubble;
+  const boxesAt = (dx, dz) => {
+    const out = spots.map((sp, i) => poseBox(v, placePose(L.plateX + sp.x + dx, top, L.plateZ + sp.z + dz, lens[i], 0, 0, sp.turn)));
+    let q = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    [-1, 1].forEach(a => [-1, 1].forEach(c => [top - P.h, top].forEach(y => {
+      const p = project(v, L.plateX + dx + a * P.w / 2, y, L.plateZ + dz + c * P.d / 2);
+      q = { x0: Math.min(q.x0, p.x), y0: Math.min(q.y0, p.y), x1: Math.max(q.x1, p.x), y1: Math.max(q.y1, p.y) };
+    })));
+    out.push(q);
+    return out;
+  };
+  const covers = q => faces.some(o => o.x + o.r > q.x0 && o.x - o.r < q.x1 && o.y + o.r > q.y0 && o.y - o.r < q.y1) ||
+    (b.x0 < q.x1 && b.x1 > q.x0 && b.y0 < q.y1 && b.y1 > q.y0) || (ins.left + 70 > q.x0 && ins.top + 70 > q.y0);
+  /* where along the counter, at depth z, shows right under the cat's face */
+  const under = z => {
+    let x = seat.x;
+    for(let i = 0; i < 4; i++){
+      const a = project(v, x, top, z), c = project(v, x + 0.1, top, z);
+      x += (seat.face.x - a.x) / ((c.x - a.x) / 0.1);
+    }
+    return x;
+  };
+  /* the cat's face two thirds of the way along the plate: in front of it,
+     with the plate on the stage as far as it can be */
+  const dzBack = Math.min(0, L.back + P.d / 2 + 0.3 - L.plateZ);
+  for(const f of [1, 0.66, 0.33, 0]){
+    const dz = dzBack * f, far = under(L.plateZ + dz) - seat.side * P.w * 0.17 - L.plateX;
+    for(let k = 0; k <= 16; k++){
+      const dx = far * (1 - k / 20);
+      if(![0.25, 0.5, 0.75, 1].some(t => boxesAt(dx * t, dz * t).some(covers))) return { dx: dx, dz: dz };
+    }
+  }
+  return { dx: (under(L.plateZ) - L.plateX) * 0.2, dz: 0 };
+}
+
 /* The canvas cannot read env(). The probe carries the insets as padding. */
 function readInsets(){
   const probe = document.getElementById('safeProbe');
@@ -2722,7 +2938,9 @@ const COLOR_TOKENS = Object.freeze({
   eye: '--chef-eye', shine: '--chef-shine', blush: '--chef-blush',
   guide: '--guide-mark', blade: '--blade-trail', bladeEdge: '--blade-edge', incision: '--incision',
   hint: '--hint-ghost', hudShade: '--hud-shade', done: '--done-mark', doneDisc: '--done-disc',
-  star: '--rating-star', starEdge: '--rating-edge', sparkle: '--sparkle'
+  star: '--rating-star', starEdge: '--rating-edge', sparkle: '--sparkle',
+  catFur: '--cat-fur', catCream: '--cat-cream', catNose: '--cat-nose',
+  ginger: '--garnish-ginger', wasabi: '--garnish-wasabi', bubble: '--order-bubble', bubbleEdge: '--order-edge'
 });
 function readColors(){
   const cs = typeof getComputedStyle === 'function' ? getComputedStyle(document.documentElement) : null;
@@ -2817,8 +3035,8 @@ function placePose(x, y, z, len, tip, rock, turn){
    its spot on the plate, turning as it hops. The plate's own place moves
    with the group as it clears. */
 function servedPose(board, spot, i, n){
-  const e = easeInOut(hopT(i, n)), home = gx / layout.view.ppw + layout.plateX + spot.x;
-  return placePose(board.x + (home - board.x) * e, board.y, (layout.plateZ + spot.z) * e, board.len,
+  const d = deliveryAt(), e = easeInOut(hopT(i, n)), home = gx / layout.view.ppw + layout.plateX + spot.x + d.x;
+  return placePose(board.x + (home - board.x) * e, board.y, (layout.plateZ + spot.z) * e + d.z, board.len,
                    board.tip, board.rock, spot.turn * e);
 }
 
@@ -3320,26 +3538,110 @@ function arrive(){
   if(pieces[0]) pieces[0].tiltV -= SCENE.tipKick * 0.35 * TUNING.jiggle;
 }
 
+/* Delivery and thanks keep their length with reduced motion: there the
+   plate simply stands in front of the cat, and it simply looks pleased. */
 function phaseLength(){
   if(game.phase === 'done') return TUNING.holdMs;
+  if(game.phase === 'deliver') return SCENE.visit.deliverMs;
+  if(game.phase === 'thanks') return SCENE.visit.thanksMs;
   if(game.phase === 'clear' || game.phase === 'enter') return motionReduced() ? 0 : TUNING.clearMs;
   return Infinity;
 }
 
+/* The one clock moves the roll and the visit on together. The finished
+   roll waits, served, until the cat has sat down and ordered; the order is
+   delivered once, to the visit it belongs to, when the plate reaches it;
+   the next visit begins as the next roll arrives. */
 function stepPhase(ms){
+  stepVisit(ms);
   if(game.phase !== 'ready'){
     const before = game.phaseT;
     game.phaseT += ms;
     if(game.phase === 'done' && !game.gathered && game.phaseT >= TUNING.holdMs * SLICE.gatherAt) gather();
     if(game.phase === 'done' && game.gathered) landings(before, game.phaseT);
-    for(let guard = 0; guard < 4 && game.phase !== 'ready' && game.phaseT >= phaseLength(); guard++){
+    for(let guard = 0; guard < 6 && game.phase !== 'ready' && game.phaseT >= phaseLength(); guard++){
+      if(game.phase === 'done' && !orderWaiting()){ game.phaseT = phaseLength(); break; }
       game.phaseT -= phaseLength();
-      if(game.phase === 'done') game.phase = 'clear';
-      else if(game.phase === 'clear'){ game.rolls++; startRoll(); game.phase = 'enter'; }
+      if(game.phase === 'done'){ game.phase = 'deliver'; game.delivering = game.visit.order.id; }
+      else if(game.phase === 'deliver'){ serveOrder(game.delivering); game.phase = 'thanks'; }
+      else if(game.phase === 'thanks'){ game.phase = 'clear'; game.visit.state = 'leaving'; }
+      else if(game.phase === 'clear'){ game.rolls++; startRoll(); newVisit(); game.phase = 'enter'; }
       else { game.phase = 'ready'; game.phaseT = 0; armHint(); arrive(); }
     }
   }
   gx = groupOffset();
+}
+
+/* ---------- THE CUSTOMER ---------- */
+/* One regular, a sleepy cat, one visit at a time, each with one order: the
+   salmon maki, shown as a picture. The order never runs out and asks for
+   nothing but a finished roll: every roll is accepted, however it was cut. */
+const CUSTOMER = Object.freeze({
+  dish: 'salmon-maki',
+  says: Object.freeze({
+    order: 'A sleepy cat sits at the counter. It would like salmon maki.',
+    served: 'The cat is happy with its salmon maki.'
+  }),
+  label: 'A sushi roll on a cutting board. Swipe down across it to cut a piece, or press Space.'
+});
+function newVisit(){
+  game.visits++;
+  game.visit = { n: game.visits, state: 'arriving', t: 0, order: { id: game.visits, dish: CUSTOMER.dish, served: false } };
+  game.delivering = 0;
+  stageLabel(false);
+}
+/* It sits down; then its order shows, and is said. */
+function stepVisit(ms){
+  if(!game.visit) newVisit();
+  const v = game.visit;
+  if(v.state !== 'arriving') return;
+  v.t += ms;
+  if(motionReduced() || !layout || !layout.seat || v.t >= SCENE.visit.arriveMs){
+    v.state = 'waiting';
+    paint.flatWas = true;          // the bubble is drawn this frame
+    announce(CUSTOMER.says.order);
+    stageLabel(true);
+  }
+}
+function orderWaiting(){ return !!game.visit && game.visit.state === 'waiting' && !game.visit.order.served; }
+/* The order is served once, and only to the visit it belongs to. */
+function serveOrder(id){
+  const v = game.visit;
+  if(!v || !id || v.order.id !== id || v.order.served) return false;
+  v.order.served = true;
+  v.state = 'pleased';
+  game.served++;
+  game.delivering = 0;
+  announce(CUSTOMER.says.served);
+  stageLabel(false);
+  return true;
+}
+function stageLabel(ordering){
+  const el = stageEl || (typeof document !== 'undefined' && document.getElementById ? document.getElementById('stage') : null);
+  if(el && typeof el.setAttribute === 'function') el.setAttribute('aria-label', (ordering ? CUSTOMER.says.order + ' ' : '') + CUSTOMER.label);
+}
+/* The cat coming: it slides along the counter from its side. */
+function catArriving(){ return !!game.visit && game.visit.state === 'arriving'; }
+/* How the cat looks this frame: how far off along the counter toward its
+   side (0 in its seat, 1 off the stage), how far up it bobs, and whether
+   it is pleased. Read from the visit and the phase, never kept. */
+function catPose(){
+  const v = game.visit, moves = motionReduced() ? 0 : 1, V = SCENE.visit;
+  if(!v) return null;
+  let off = 0, hop = 0;
+  if(v.state === 'arriving'){ const k = 1 - clamp01(v.t / V.arriveMs); off = moves * k * k * k; }
+  if(v.state === 'leaving' && game.phase === 'clear'){ const len = phaseLength(), t = len > 0 ? clamp01(game.phaseT / len) : 1; off = moves * t * t * t; }
+  if(game.phase === 'thanks') hop = moves * Math.sin(Math.PI * clamp01(game.phaseT / V.thanksMs));
+  return { off: off, hop: hop, happy: v.state === 'pleased' || v.state === 'leaving' };
+}
+/* Where the served plate is along the counter, from where it was served
+   (world units): on its way to the cat, there, or gone on with it. */
+function deliveryAt(){
+  if(!layout) return { x: 0, z: 0 };
+  const d = layout.delivery, ph = game.phase;
+  const k = ph === 'deliver' ? (motionReduced() ? 1 : easeInOut(clamp01(game.phaseT / SCENE.visit.deliverMs)))
+          : ph === 'thanks' || ph === 'clear' ? 1 : 0;
+  return { x: d.dx * k, z: d.dz * k };
 }
 
 /* The finished roll is served together: from wherever they were cut,
@@ -3355,8 +3657,9 @@ function serveTiming(){
   return { at: at, ms: Math.max(1, (TUNING.holdMs - at) * 0.8) };
 }
 function serveLag(n, ms){ return Math.min(SCENE.staggerMs, ms * 0.4 / Math.max(1, n - 1)); }
+function servedBy(){ return game.phase === 'deliver' || game.phase === 'thanks' || game.phase === 'clear'; }
 function serveProgress(){
-  if(game.phase === 'clear') return 1;
+  if(servedBy()) return 1;
   if(game.phase !== 'done' || !game.gathered) return 0;
   if(motionReduced()) return 1;
   const st = serveTiming();
@@ -3364,7 +3667,7 @@ function serveProgress(){
 }
 /* How far piece i is through its hop, 0 on the board to 1 on the plate. */
 function hopT(i, n){
-  if(game.phase === 'clear') return 1;
+  if(servedBy()) return 1;
   if(game.phase !== 'done' || !game.gathered) return 0;
   if(motionReduced()) return 1;
   const st = serveTiming(), lag = serveLag(n, st.ms);
@@ -3428,29 +3731,30 @@ function easeInOut(t){ return t < 0.5 ? 2 * t * t : 1 - Math.pow(2 - 2 * t, 2) /
 
 /* Where the board and the plate are along the counter, or null when out of
    the scene, and how far back the plate stands. Everything flows one way,
-   left to right: a roll arrives on its board, the plate pushes the board out
-   as the pieces are served, and the plate leaves with them. On a tall
-   screen the plate waits behind the board instead, and the two come and go
+   toward the customer (layout.flow): a roll arrives on its board, the plate
+   pushes the board out as the pieces are served, goes on to the customer
+   with them, and leaves. On a tall screen the plate waits behind the board
+   instead; it goes to the customer alone, and the two leave and come back
    together. */
 function propsAt(){
   if(!layout) return { board: 0, plate: null, z: 0 };
-  const g = gx / layout.view.ppw;
-  if(layout.plateZ !== 0) return { board: g, plate: g + layout.plateX, z: layout.plateZ };
-  if(game.phase === 'clear') return { board: null, plate: g, z: 0 };
+  const g = gx / layout.view.ppw, d = deliveryAt(), f = layout.flow;
+  if(layout.plateZ !== 0) return { board: g, plate: g + layout.plateX + d.x, z: layout.plateZ + d.z };
+  if(servedBy()) return { board: null, plate: g + d.x, z: d.z };
   if(game.phase !== 'done' || !game.gathered) return { board: g, plate: null, z: 0 };
   const e = easeInOut(serveProgress());
-  return { board: e >= 1 ? null : e * layout.span, plate: (e - 1) * layout.span, z: 0 };
+  return { board: e >= 1 ? null : f * e * layout.span, plate: f * (e - 1) * layout.span, z: 0 };
 }
 
-/* The whole group's slide, in the knife's pixels: off to the right as it
-   clears, in from the left as the next roll arrives — each far enough,
-   through this camera, to leave or enter the stage completely. */
+/* The whole group's slide, in the knife's pixels: on toward the customer's
+   side as it clears, in from the other as the next roll arrives — each far
+   enough, through this camera, to leave or enter the stage completely. */
 function groupOffset(){
   if(!layout || motionReduced()) return 0;
   const len = phaseLength();
   const t = len > 0 && isFinite(len) ? Math.min(1, game.phaseT / len) : 1;
-  if(game.phase === 'clear') return t * t * t * layout.exit * layout.view.ppw;
-  if(game.phase === 'enter'){ const k = 1 - t; return -k * k * k * layout.enter * layout.view.ppw; }
+  if(game.phase === 'clear') return layout.flow * t * t * t * layout.exit * layout.view.ppw;
+  if(game.phase === 'enter'){ const k = 1 - t; return -layout.flow * k * k * k * layout.enter * layout.view.ppw; }
   return 0;
 }
 
@@ -3514,10 +3818,10 @@ function chefAims(){
            nod: chef.sinceCut < chef.hold ? 1 - joy : 0,
            lean: gesture ? 1 : 0, look: chefLookAim() };
 }
-/* Delight: all through the finished roll's show and its leaving, fading as
-   the next roll arrives. */
+/* Delight: all through the finished roll's show, its delivery and its
+   leaving, fading as the next roll arrives. */
 function chefJoyAim(){
-  if(game.phase === 'done' || game.phase === 'clear') return 1;
+  if(game.phase === 'done' || servedBy()) return 1;
   if(game.phase !== 'enter') return 0;
   const len = phaseLength();
   return len > 0 ? 1 - clamp01(game.phaseT / len) : 0;
@@ -3603,9 +3907,10 @@ function chefBusy(){
 }
 /* Its breath, 0 out to 1 in, smooth at both ends; none with reduced motion. */
 function breathOf(){ return motionReduced() ? 0 : (1 - Math.cos(2 * Math.PI * chef.breath / SCENE.chef.breath.ms)) / 2; }
-/* It breathes whenever it is on the stage and play runs: the only motion
-   that never ends, so it alone is drawn at a slower pace (onFrame). */
-function chefBreathing(){ return !!layout && !!layout.chef && !motionReduced() && !isPaused(); }
+/* It breathes whenever it is on the stage and play runs — and the cat, on
+   the same breath, whenever it sits there: the only motion that never ends,
+   so it alone is drawn at a slower pace (onFrame). */
+function chefBreathing(){ return !!layout && (!!layout.chef || !!layout.seat) && !motionReduced() && !isPaused(); }
 function chefMoving(){
   if(!layout || !layout.chef || motionReduced()) return false;
   const a = chefAims();
@@ -3675,17 +3980,21 @@ function starsBox(st, whole){
 /* Where a cut's stars show: above the cut. A roll's last cut is served at
    once, and the pieces hop past there — onto a plate waiting behind the
    board on a tall screen — so its stars go to the first place that stays
-   clear of every piece all through the hop, of the finished mark and of
-   the grown-ups' button, inside the safe area: above the cut, below the
+   clear of every piece all through the hop, of the finished mark, the
+   customer and its order, the chef's face and the grown-ups' button,
+   inside the safe area: above the cut, below the
    food, above it, or beside it. Where nothing is wholly clear — a small
    phone on its side, filled by the food — the place that covers least. */
 function praiseSpot(x, n){
   const L = layout, at = toStage(x, L.top - L.T * 0.6);
   if(!rollComplete(roll)) return at;
   const z = starsSize(n), ins = L.ins, mk = L.guard.mark;
-  const keep = serveBoxes().concat([{ x0: mk.x - mk.r - 6, y0: mk.y - mk.r - 6, x1: mk.x + mk.r + 6, y1: mk.y + mk.r + 6 },
-                                    { x0: ins.left, y0: ins.top, x1: ins.left + 64, y1: ins.top + 64 }]);
-  const food = keep.slice(0, keep.length - 2);
+  const bb = L.bubble, food = serveBoxes();
+  const faces = chefCircles(L.view, L.chef, 2).filter(c => c.face).concat(L.seat ? L.seat.circles : [])
+    .map(c => ({ x0: c.x - c.r, y0: c.y - c.r, x1: c.x + c.r, y1: c.y + c.r }));
+  const keep = food.concat([{ x0: mk.x - mk.r - 6, y0: mk.y - mk.r - 6, x1: mk.x + mk.r + 6, y1: mk.y + mk.r + 6 },
+                            { x0: ins.left, y0: ins.top, x1: ins.left + 64, y1: ins.top + 64 },
+                            { x0: bb.x0 - 6, y0: bb.y0 - 6, x1: bb.x1 + 6, y1: bb.y1 + 6 }], faces);
   const lo = Math.max.apply(null, food.map(b => b.y1)), hi = Math.min.apply(null, food.map(b => b.y0));
   const half = z.w / 2 + z.pad, cx = Math.max(ins.left + half + 4, Math.min(L.W - ins.right - half - 4, at.x));
   const left = Math.min.apply(null, food.map(b => b.x0)), right = Math.max.apply(null, food.map(b => b.x1));
@@ -4085,7 +4394,7 @@ function onFrame(t){
 /* Is anything on the flat layer changing: a stroke, its trail or a closing
    incision, the hint, a cut's stars or sparkle, or the finished-roll beat? */
 function flatMoving(){
-  return !!gesture || trail.length > 0 || healing.length > 0 || hint.showing || feedbackBusy() || game.phase !== 'ready';
+  return !!gesture || trail.length > 0 || healing.length > 0 || hint.showing || feedbackBusy() || game.phase !== 'ready' || catArriving();
 }
 /* Draw now, outside the frame scheduler: after a pause, a resize or a
    tuning change. One geometry serves both layers. */
@@ -4096,7 +4405,7 @@ function paintNow(){
 }
 function needsFrames(){
   if(isPaused() || !layout) return false;
-  if(game.phase !== 'ready' || healing.length || wobble.active || chefBusy() || feedbackBusy() || chefBreathing()) return true;
+  if(game.phase !== 'ready' || catArriving() || healing.length || wobble.active || chefBusy() || feedbackBusy() || chefBreathing()) return true;
   if(!motionReduced() && (trail.length || hint.showing)) return true;
   return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
                           p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
@@ -4210,8 +4519,89 @@ function draw(rects){
   drawIncisions(c, list);
   drawTrail(c);
   drawFeedback(c);
-  if(game.gathered && serveProgress() >= 0.7) drawDoneMark(c, list);
+  if(game.phase === 'done' && game.gathered && serveProgress() >= 0.7) drawDoneMark(c, list);
+  drawOrder(c);
   if(hint.showing && game.phase === 'ready' && !gesture) drawHint(c, list);
+}
+
+/* The customer's order: a picture of one slice of salmon maki in a cream
+   bubble whose tail points to the cat — no words. Where the cat has no
+   seat, the bubble stands at the counter's end, steps aside while the
+   finished roll is on show and on its way off the stage to the cat, and
+   shows a heart when it has arrived. Drawn with the flat layer, never on
+   its own clock. */
+function drawOrder(c){
+  const v = game.visit, L = layout, b = L.bubble;
+  if(!v || !b) return;
+  const waiting = v.state === 'waiting' && !v.order.served && (!!L.seat || !(game.phase === 'done' || game.phase === 'deliver'));
+  const heart = !L.seat && v.order.served && game.phase === 'thanks';
+  if(!waiting && !heart) return;
+  const C = colors, r = Math.min(b.w, b.h) * 0.3, cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+  c.save();
+  c.globalAlpha = 1;
+  c.fillStyle = C.bubble;
+  c.strokeStyle = C.bubbleEdge;
+  c.lineWidth = 2;
+  c.lineJoin = 'round';
+  c.beginPath();
+  c.moveTo(b.x0 + r, b.y0);
+  c.arcTo(b.x1, b.y0, b.x1, b.y1, r);
+  c.arcTo(b.x1, b.y1, b.x0, b.y1, r);
+  c.arcTo(b.x0, b.y1, b.x0, b.y0, r);
+  c.arcTo(b.x0, b.y0, b.x1, b.y0, r);
+  c.closePath();
+  if(b.tx !== null){
+    /* the tail, from the edge nearest the cat's face, most of the way to it */
+    const below = b.ty > b.y1, bx = below ? Math.max(b.x0 + r, Math.min(b.x1 - r, b.tx)) : (b.tx > b.x1 ? b.x1 : b.x0);
+    const by = below ? b.y1 : Math.max(b.y0 + r, Math.min(b.y1 - r, b.ty)), half = Math.min(b.w, b.h) * 0.13;
+    const dx = b.tx - bx, dy = b.ty - by, len = Math.hypot(dx, dy) || 1, reach = Math.min(len * 0.6, b.h * 0.5);
+    c.moveTo(below ? bx - half : bx, below ? by : by - half);
+    c.lineTo(bx + dx / len * reach, by + dy / len * reach);
+    c.lineTo(below ? bx + half : bx, below ? by : by + half);
+  }
+  c.stroke();
+  c.fill('nonzero');
+  if(waiting) drawMaki(c, cx, cy, Math.min(b.w, b.h) * 0.78);
+  else drawHeart(c, cx, cy, Math.min(b.w, b.h) * 0.5);
+  c.restore();
+}
+/* One slice of salmon maki standing on its end, seen from a little above:
+   the nori's side, and on top the ring of nori, the rice and the salmon. */
+function drawMaki(c, cx, cy, s){
+  const C = colors, rx = s * 0.4, ry = s * 0.26, side = s * 0.2, top = cy - side / 2;
+  c.fillStyle = C.noriDark;
+  c.beginPath();
+  c.ellipse(cx, top + side, rx, ry, 0, 0, Math.PI);
+  c.lineTo(cx - rx, top);
+  c.ellipse(cx, top, rx, ry, 0, Math.PI, 0, true);
+  c.closePath();
+  c.fill();
+  c.fillStyle = C.nori;
+  c.beginPath(); c.ellipse(cx, top, rx, ry, 0, 0, Math.PI * 2); c.fill();
+  c.fillStyle = C.rice;
+  c.beginPath(); c.ellipse(cx, top, rx * 0.84, ry * 0.8, 0, 0, Math.PI * 2); c.fill();
+  c.fillStyle = C.riceShade;
+  [[-0.5, -0.3], [0.45, -0.35], [-0.55, 0.3], [0.5, 0.28], [0.05, -0.62], [0, 0.62]].forEach(q => {
+    c.beginPath(); c.ellipse(cx + q[0] * rx * 0.84, top + q[1] * ry * 0.8, s * 0.035, s * 0.022, 0, 0, Math.PI * 2); c.fill();
+  });
+  const w = rx * 0.34, h = ry * 0.36, k = Math.min(w, h) * 0.6;
+  c.fillStyle = C.salmon;
+  c.beginPath();
+  c.moveTo(cx - w + k, top - h);
+  c.arcTo(cx + w, top - h, cx + w, top + h, k);
+  c.arcTo(cx + w, top + h, cx - w, top + h, k);
+  c.arcTo(cx - w, top + h, cx - w, top - h, k);
+  c.arcTo(cx - w, top - h, cx + w, top - h, k);
+  c.closePath();
+  c.fill();
+}
+function drawHeart(c, cx, cy, s){
+  c.fillStyle = colors.salmon;
+  c.beginPath();
+  c.moveTo(cx, cy + s * 0.42);
+  c.bezierCurveTo(cx - s * 0.62, cy - s * 0.02, cx - s * 0.32, cy - s * 0.5, cx, cy - s * 0.18);
+  c.bezierCurveTo(cx + s * 0.32, cy - s * 0.5, cx + s * 0.62, cy - s * 0.02, cx, cy + s * 0.42);
+  c.fill();
 }
 
 /* Subtle ticks above and below the roll, only where a cut can still go. Each
@@ -4440,6 +4830,7 @@ const view3d = {
   kit: null,                  // textures, materials and shapes every roll shares
   props: null,                // the counter, the board, the plate and their shadows
   chef: null,                 // Chef Capybara: its root, and the parts that move
+  cat: null,                  // the sleepy cat, the one customer
   pieceGroup: null,
   views: [],                  // one per piece, in the order of piecesOf(roll)
   bent: false,                // the pieces' vertices are away from rest
@@ -4680,6 +5071,8 @@ function buildWorld(){
   scene.add(view3d.pieceGroup);
   view3d.chef = makeChef();
   scene.add(view3d.chef.root);
+  view3d.cat = makeCat();
+  scene.add(view3d.cat.root);
 }
 
 /* The shared textures, materials and the shadow's shape. Nothing here is
@@ -4745,7 +5138,88 @@ function makeProps(){
   plateShadow.scale.set(P.w + 1.1, 1, P.d + 1.1);
   plateShadow.position.y = -B.h + 0.006;
   return { counter: counter, edge: edge, boardShadow: boardShadow, board: board, plateShadow: plateShadow, plate: plate,
-           noren: makeNoren() };
+           garnish: makeGarnish(), noren: makeNoren() };
+}
+
+/* A small fan of pickled ginger and a dab of wasabi, in the chef's clay:
+   one mesh, placed at the front of the plate toward its upstream end
+   (placeProps). Ginger on the outside. */
+function makeGarnish(){
+  const T3 = THREE, K = view3d.kit, ginger = new T3.Color(colors.ginger), wasabi = new T3.Color(colors.wasabi);
+  const M = (x, y, z, ry, rz) => new T3.Matrix4().compose(new T3.Vector3(x, y, z),
+    new T3.Quaternion().setFromEuler(new T3.Euler(0, ry, rz, 'YXZ')), new T3.Vector3(1, 1, 1));
+  const petal = i => ({ shape: placed(surface(roundBlock([0, 0, 0], 0.26, 0.05, 0.17, 2.2), 12, 6),
+                                      M(-0.36 + i * 0.1, 0.06 + i * 0.05, (i - 1) * 0.07, 0.5 - i * 0.45, 0.25)), color: ginger });
+  const mesh = new T3.Mesh(bake([petal(0), petal(1), petal(2),
+    { shape: surface(roundBlock([0.36, 0.08, 0], 0.2, 0.15, 0.18, 2.4), 12, 8), color: wasabi }]), K.clay);
+  mesh.visible = false;
+  return mesh;
+}
+
+/* The sleepy cat, built once in the chef's units: a seated ginger pear
+   with a cream chest and muzzle, a round head with small pointed ears, a
+   pink nose and a small smile, and two paws resting at the counter. Its
+   eyes are soft closed curves, content and sleepy; pleased, they turn up
+   into happy arcs and its cheeks go pink. Five meshes in the chef's
+   materials (its blush a copy, so the two never share an opacity). */
+function makeCat(){
+  const T3 = THREE, K = view3d.kit, C = colors, Ct = SCENE.cat;
+  const fur = new T3.Color(C.catFur), cream = new T3.Color(C.catCream), pink = new T3.Color(C.catNose);
+  const M = (x, y, z, rx, ry, rz) => new T3.Matrix4().compose(new T3.Vector3(x, y, z),
+    new T3.Quaternion().setFromEuler(new T3.Euler(rx || 0, ry || 0, rz || 0, 'YXZ')), new T3.Vector3(1, 1, 1));
+  const root = new T3.Group(), body = new T3.Group(), head = new T3.Group();
+  const profile = [[0, 0], [1.3, 0.08], [1.72, 0.6], [1.76, 1.35], [1.52, 2.05], [1.12, 2.55], [0.6, 2.82], [0, 2.9]];
+  body.add(new T3.Mesh(bake([
+    { shape: surface(turned(profile, 0.9), 28, 18), color: fur },
+    { shape: surface(roundBlock([0, 1.8, 1.08], 0.78, 0.72, 0.36, 2.2), 16, 12), color: cream },
+    { shape: surface(roundBlock([0.6, 1.3, 1.42], 0.42, 0.3, 0.5, 2.2), 12, 8), color: cream },
+    { shape: surface(roundBlock([-0.6, 1.3, 1.42], 0.42, 0.3, 0.5, 2.2), 12, 8), color: cream }
+  ]), K.clay));
+  const nk = Ct.neck;
+  head.position.set(nk[0], nk[1], nk[2]);
+  const ear = (side, inner) => placed(surface(turned(inner ? [[0, 0], [0.28, 0.02], [0.05, 0.5], [0, 0.53]] : [[0, 0], [0.48, 0.02], [0.08, 0.8], [0, 0.84]], inner ? 0.3 : 0.55), 12, 6),
+    M(side * 0.78, 1.5, inner ? 0.12 : 0, -0.15, 0, -side * 0.35));
+  head.add(new T3.Mesh(bake([
+    { shape: surface(roundBlock([0, 0.85, 0.05], 1.38, 1.1, 1.12, 2.3), 28, 20), color: fur },
+    { shape: surface(roundBlock([0, 0.47, 0.92], 0.62, 0.4, 0.34, 2), 16, 10), color: cream },
+    { shape: surface(roundBlock([0, 0.66, 1.28], 0.15, 0.1, 0.07, 2), 8, 6), color: pink },
+    { shape: ear(1, false), color: fur }, { shape: ear(-1, false), color: fur },
+    { shape: ear(1, true), color: pink }, { shape: ear(-1, true), color: pink }
+  ]), K.clay));
+  /* Eyes: arcs on the face. Sleepy: curving down, softly shut; pleased: up. */
+  const arcs = up => [1, -1].map(side => ({ shape: placed(shapeOf(new T3.TorusGeometry(0.21, 0.06, 6, 14, Math.PI * 0.8)),
+    M(side * 0.5, up ? 0.92 : 1.06, 1.12, 0, side * 0.42, up ? Math.PI * 0.1 : Math.PI * 1.1)) }));
+  const sleepy = new T3.Mesh(bake(arcs(false)), K.eye), happy = new T3.Mesh(bake(arcs(true)), K.eye);
+  happy.visible = false;
+  const mouth = new T3.Mesh(bake([1, -1].map(side => ({ shape: placed(shapeOf(new T3.TorusGeometry(0.1, 0.03, 5, 10, Math.PI)),
+    M(side * 0.1, 0.46, 1.27, 0.2, 0, Math.PI)) }))), K.eye);
+  const blushMat = K.blush.clone();
+  blushMat.opacity = 0.55;
+  const blush = new T3.Mesh(bake([1, -1].map(side => ({ shape: surface(roundBlock([side * 0.8, 0.55, 0.9], 0.24, 0.14, 0.06, 2), 10, 6) }))), blushMat);
+  blush.visible = false;
+  head.add(sleepy, happy, mouth, blush);
+  body.add(head);
+  root.add(body);
+  root.visible = false;
+  return { root: root, body: body, head: head, sleepy: sleepy, happy: happy, blush: blush };
+}
+
+/* Seat the cat where the layout says, coming, going, waiting or pleased:
+   at rest it breathes with the chef's breath and its head leans a little,
+   sleepily; pleased, its eyes smile, its cheeks go pink and it bobs up
+   once. With reduced motion it only appears, and only its face changes. */
+function poseCat(){
+  const ct = view3d.cat, seat = layout.seat, q = catPose();
+  ct.root.visible = !!seat && !!q && q.off < 1;
+  if(!ct.root.visible) return;
+  const Ct = SCENE.cat, br = breathOf();
+  ct.root.position.set(seat.x + seat.side * seat.slide * q.off, seat.y + seat.s * Ct.hop * q.hop, seat.z);
+  ct.root.rotation.y = seat.yaw;
+  ct.root.scale.setScalar(seat.s);
+  ct.body.scale.set(1 + 0.012 * br, 1 + 0.006 * br, 1 + 0.012 * br);
+  ct.head.rotation.set(q.happy ? -0.1 : 0.06, 0, q.happy ? 0 : seat.side * 0.1, 'YXZ');
+  ct.sleepy.visible = !q.happy;
+  ct.happy.visible = ct.blush.visible = q.happy;
 }
 
 /* The noren, built once in its own units (the chef's): a wooden rod and a
@@ -5348,9 +5822,13 @@ function placeProps(){
   P.noren.visible = !!nr;
   if(nr){ P.noren.position.set(nr.x, nr.y, nr.z); P.noren.scale.setScalar(nr.s); }
   if(at.board !== null){ P.board.position.x = at.board; P.boardShadow.position.x = at.board; }
+  P.garnish.visible = at.plate !== null;
   if(at.plate !== null){
     P.plate.position.set(at.plate, plateTop(), at.z);
     P.plateShadow.position.set(at.plate, P.plateShadow.position.y, at.z);
+    const G = SCENE.garnish, f = layout.flow;
+    P.garnish.position.set(at.plate - f * G.x, plateTop(), at.z + G.z);
+    P.garnish.rotation.y = f > 0 ? 0 : Math.PI;
   }
 }
 
@@ -5654,7 +6132,7 @@ function poseChef(){
 /* Is anything in the scene itself moving? The hint, the trail and the
    incision are flat marks: they need frames, but not the scene. */
 function sceneMoving(){
-  if(game.phase !== 'ready' || wobble.active || view3d.bent || chefMoving()) return true;
+  if(game.phase !== 'ready' || (catArriving() && !motionReduced()) || wobble.active || view3d.bent || chefMoving()) return true;
   return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
                           p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
 }
@@ -5671,6 +6149,7 @@ function renderScene(rects, force){
   const list = rects || pieceRects(), n = list.length;
   placeProps();
   poseChef();
+  poseCat();
   const deform = wobble.active || view3d.bent;
   for(let i = 0; i < n; i++){
     if(view3d.views[i]) poseView(view3d.views[i], list[i], pieces[i] || AT_REST, i, n, deform);
@@ -5727,7 +6206,13 @@ function resetTuning(){
   paintNow();
   renderTuning();
 }
+/* A fresh roll from the tuning sheet serves nothing: an order still
+   waiting goes on waiting for it; one already served makes way for the next
+   visit. */
 function newRollFromTuning(){
+  if(!game.visit || game.visit.order.served) newVisit();
+  else if(game.visit.state !== 'arriving') game.visit.state = 'waiting';
+  game.delivering = 0;
   game.phase = 'ready';
   game.phaseT = 0;
   gx = 0;
@@ -5790,6 +6275,7 @@ function wirePlay(){
   stageEl = document.getElementById('stage');
   if(!stageEl) return;
   wired = true;
+  if(!game.visit) newVisit();
   sceneEl = document.getElementById('scene');
   try{ ctx2d = typeof stageEl.getContext === 'function' ? stageEl.getContext('2d') : null; }
   catch(e){ ctx2d = null; }

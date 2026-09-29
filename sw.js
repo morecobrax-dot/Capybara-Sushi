@@ -16,7 +16,7 @@
  */
 
 /* APP-CACHE-BEGIN */
-const CACHE_NAME = 'capybara-sushi-v0.6.0';
+const CACHE_NAME = 'capybara-sushi-v0.7.0';
 /* APP-CACHE-END */
 
 /* The precache list is DERIVED too: config:sync writes it from APP_FILES in

@@ -729,7 +729,8 @@ const BRIDGE = [
   'game', 'roll', 'pieces', 'gesture', 'layout', 'colors', 'hint', 'trail', 'healing', 'paint', 'wobble',
   'pauses', 'frameId', 'lastFrameAt', 'reducedMotion', 'gx', 'stageEl', 'ctx2d', 'wired',
   'THREE_URL', 'THREE', 'sceneEl', 'view3d', 'chef',
-  'RATING', 'TIERS', 'PRAISE', 'FEEDBACK', 'feedback', 'SOUND', 'sound', 'prefs', 'PREFS_KEY', 'PREF_DEFAULTS', 'gate'
+  'RATING', 'TIERS', 'PRAISE', 'FEEDBACK', 'feedback', 'SOUND', 'sound', 'prefs', 'PREFS_KEY', 'PREF_DEFAULTS', 'gate',
+  'CUSTOMER'
 ];
 
 const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };

@@ -410,6 +410,30 @@ prototype. Each carries its reason; keep the reason with the rule.
     every pose, of the knife's ground and the praise above a cut, of the plate
     and the mark, and of the grown-ups' button; smaller if it must, or not at
     all. It is static and adds one mesh in the chef's clay.
+61. **One customer, one order, served exactly once.** `game.visit` is the one
+    visit at the counter (arriving, waiting, pleased, leaving) with its one
+    order; the phase machine owns it: done → deliver → thanks → clear →
+    enter. The order is served only by `serveOrder(id)` at the end of the
+    delivery, only to the visit it belongs to, and only once; nothing is
+    inferred from an animation, and no timer belongs to a visit. A finished
+    roll waits, served, until the cat has ordered. Every finished roll is
+    accepted: ratings never change what the customer thinks. There is no
+    patience, countdown, penalty, currency or saved customer history, and a
+    fresh roll from `?tune` never serves. Contract 35.
+62. **The customer is seated after the food and the chef.** `catSpot()`
+    places the cat behind the counter toward the stage's edge — the right
+    first, and everything flows toward it (`layout.flow`) — clear of the chef
+    in every pose, the knife's ground and the praise above a cut, the served
+    plate, the mark and the grown-ups' button, with its order's bubble above
+    its head or beside it; the noren gives way to it. Where the wall has no
+    room (a phone on its side) it waits off the counter's end: its bubble
+    stands there, pointing off the stage, and steps aside while the served
+    plate is on show and on its way. `deliveryFor()` works out where the
+    plate goes so no piece covers a face or the order.
+63. **The order is a picture, drawn with the flat layer.** `drawOrder()`
+    draws the maki from the food's own tokens in a bubble with a tail to the
+    cat, with no words and no clock of its own; the order is said through
+    `#playStatus` and on the stage's label.
 
 ## Development
 

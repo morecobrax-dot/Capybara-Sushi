@@ -1174,7 +1174,13 @@ function testPortability(){
 
 /* ---------- shared helpers ---------- */
 const TABLET = { width: 1024, height: 768, dpr: 2 };
-function play(opts){ return H.loadApp(Object.assign({ viewport: TABLET }, opts || {})); }
+/* The page opened, and the first customer seated: it sits down as play
+   opens, and a finished roll waits for it. */
+function play(opts){
+  const app = H.loadApp(Object.assign({ viewport: TABLET }, opts || {}));
+  if(app.ctx.game && app.ctx.game.visit && app.ctx.SCENE.visit) app.ctx.__advance(app.ctx.SCENE.visit.arriveMs + 50);
+  return app;
+}
 function stageOf(app){ return app.dom.document.getElementById('stage'); }
 /* A pointer event at the stage. Contracts name what matters; the rest is
    a plain primary touch. */
@@ -1218,7 +1224,8 @@ function screenX(app, u){
 }
 function guideX(app, k){ return screenX(app, k / app.ctx.roll.n); }
 function advance(app, ms){ app.ctx.__advance(ms); }
-function settleAll(app){ advance(app, 1500); }
+/* a finished roll served, delivered, and the next one arrived */
+function settleAll(app){ advance(app, 2600); }
 function finishRollByKeys(app){
   for(let i = 0; i < 12 && app.ctx.game.phase === 'ready'; i++) app.ctx.keyboardCut();
 }
@@ -1248,7 +1255,13 @@ function restNow(app){
 }
 /* What the scene is made of once, for good: the counter, its edge, the
    board, the plate and the shadow blob, and each of the chef's meshes. */
-function sceneryShapes(c){ let n = 0; c.view3d.chef.root.traverse(o => { if(o.isMesh) n++; }); return 5 + n + (c.layout && c.layout.noren ? 1 : 0); }
+/* The counter, its edge, the board, the plate and their shadows are 5, the
+   garnish on the plate 1; the chef's meshes, the noren where it hangs, and
+   the cat's where it has a seat. */
+function sceneryShapes(c){
+  const count = root => { let n = 0; root.traverse(o => { if(o.isMesh) n++; }); return n; };
+  return 6 + count(c.view3d.chef.root) + (c.layout && c.layout.noren ? 1 : 0) + (c.layout && c.layout.seat ? count(c.view3d.cat.root) : 0);
+}
 
 /* =========================================================
    CONTRACT 20 — THE CUT MODEL
@@ -1427,7 +1440,9 @@ function testStrokes(){
   stroke(app, xm, { from: 0.3, to: 1.8 });
   T('starting on the roll near its top still cuts', c.roll.cuts.length === 1);
   T('no penalty state exists to record any of it',
-    Object.keys(c.game).sort().join(',') === 'gathered,phase,phaseT,rolls', Object.keys(c.game).join(','));
+    Object.keys(c.game).sort().join(',') === 'delivering,gathered,phase,phaseT,rolls,served,visit,visits' &&
+    Object.keys(c.game.visit).sort().join(',') === 'n,order,state,t' && Object.keys(c.game.visit.order).sort().join(',') === 'dish,id,served',
+    Object.keys(c.game).join(','));
 
   sub('one gesture, one result');
   app = play(); c = app.ctx; c.TUNING.pull = 0;
@@ -1764,10 +1779,14 @@ function testRhythm(){
   c.keyboardCut();
   T('swipes and keys during the show do nothing', c.roll.id === shown && c.roll.cuts.length === 5);
   advance(app, c.TUNING.holdMs + 50);
-  T('the roll leaves', c.game.phase === 'clear' && c.gx > 0, c.game.phase + ' ' + c.gx);
+  T('the plate goes to the customer', c.game.phase === 'deliver', c.game.phase);
+  stroke(app, c.layout.cx);
+  c.keyboardCut();
+  advance(app, c.SCENE.visit.deliverMs + c.SCENE.visit.thanksMs);
+  T('the roll leaves, on toward the customer\'s side', c.game.phase === 'clear' && c.gx * c.layout.flow > 0, c.game.phase + ' ' + c.gx);
   stroke(app, c.layout.cx);
   advance(app, c.TUNING.clearMs);
-  T('the next arrives from the other side', c.game.phase === 'enter' && c.gx < 0, c.game.phase + ' ' + c.gx);
+  T('the next arrives from the other side', c.game.phase === 'enter' && c.gx * c.layout.flow < 0, c.game.phase + ' ' + c.gx);
   stroke(app, c.layout.cx);
   settleAll(app);
   T('and is untouched by what happened in between', c.game.phase === 'ready' && c.roll.cuts.length === 0);
@@ -2024,6 +2043,9 @@ function testMotion(){
   T('a finished roll is still shown, marked on its plate', c.game.phase === 'done');
   advance(app, c.TUNING.holdMs);
   T('the plate appeared without sliding', c.gx === 0);
+  T('and is simply there in front of the cat, delivered without travel', c.game.phase === 'deliver' &&
+    c.deliveryAt().x === c.layout.delivery.dx && c.propsAt().plate === c.layout.delivery.dx, c.game.phase);
+  advance(app, c.SCENE.visit.deliverMs + c.SCENE.visit.thanksMs);
   T('the next roll arrives without sliding either', c.game.phase === 'ready' && c.gx === 0);
   advance(app, c.TUNING.hintS * 1000 + 50);
   T('the hint is a still picture that needs no frames', c.hint.showing && c.__clock.pendingFrames() === 0);
@@ -2037,10 +2059,10 @@ function testMotion(){
   T('they stop where they would have come to rest, at once', c.pieces.every(p => p.off === 0 && p.vel === 0));
   finishRollByKeys(app);
   c.__setReducedMotion(false);
-  advance(app, c.TUNING.holdMs + 20);
-  T('with motion back, a roll slides away', c.game.phase === 'clear');
+  advance(app, c.TUNING.holdMs + c.SCENE.visit.deliverMs + c.SCENE.visit.thanksMs + 20);
+  T('with motion back, a roll is delivered and slides away', c.game.phase === 'clear');
   advance(app, c.TUNING.clearMs * 0.5);
-  T('and is caught mid-slide', c.gx > 0);
+  T('and is caught mid-slide', c.gx * c.layout.flow > 0);
   c.__setReducedMotion(true);
   T('switching mid-slide puts it where it was going', c.gx === 0);
   advance(app, 17);
@@ -2205,14 +2227,17 @@ function testMotion(){
   advance(app, st.at + st.ms * 0.35 - c.game.phaseT);
   T('then they hop, one after another', lifts().every(y => y > top) && lifts()[0] > lifts()[n() - 1],
     lifts().map(y => y.toFixed(2)).join(' '));
-  T('while the board slides out and the plate slides in', c.propsAt().board > 0 && c.propsAt().plate < 0);
+  T('while the board slides out and the plate slides in', c.propsAt().board * c.layout.flow > 0 && c.propsAt().plate * c.layout.flow < 0);
   advance(app, st.at + st.ms + 5 - c.game.phaseT);
   T('and they land on the plate', lifts().every(y => near(y, top, 1e-9)) &&
     c.propsAt().board === null && c.propsAt().plate === 0, lifts().join(' '));
   T('each landing squashes it a little', c.wobble.active);
   T('the finished-roll beat is as long as ever', c.game.phase === 'done');
   advance(app, c.TUNING.holdMs - c.game.phaseT + 40);
-  T('then the plate leaves with them', c.game.phase === 'clear' && c.propsAt().plate > 0 && c.propsAt().board === null);
+  T('then the plate goes along the counter to the customer with them', c.game.phase === 'deliver' &&
+    c.propsAt().plate * c.layout.delivery.dx > 0 && c.propsAt().board === null);
+  advance(app, c.SCENE.visit.deliverMs + c.SCENE.visit.thanksMs);
+  T('and leaves with them', c.game.phase === 'clear' && (c.propsAt().plate - c.layout.delivery.dx) * c.layout.flow > 0 && c.propsAt().board === null);
   app = play({ reducedMotion: true }); c = app.ctx;
   finishRollByKeys(app);
   advance(app, c.serveTiming().at + 40);
@@ -3105,14 +3130,19 @@ function testChef(){
   advance(app, 30);
   c.keyboardCut();                                               // the last cut, while it is still nodding
   t0 = c.__clock.now;
-  for(let t = 0; t < 200; t++){
+  for(let t = 0; t < 280; t++){
     advance(app, 10);
     peak = Math.max(peak, c.chef.joy.x);
     if(c.game.phase !== was){ phases.push([c.game.phase, Math.round(c.__clock.now - t0)]); was = c.game.phase; }
   }
-  const at = p => (phases.find(q => q[0] === p) || [p, NaN])[1];
-  T('the pace between rolls is exactly as before', Math.abs(at('clear') - c.TUNING.holdMs) <= 10 &&
-    Math.abs(at('enter') - c.TUNING.holdMs - c.TUNING.clearMs) <= 10 && Math.abs(at('ready') - c.TUNING.holdMs - 2 * c.TUNING.clearMs) <= 10,
+  const at = p => (phases.find(q => q[0] === p) || [p, NaN])[1], V = c.SCENE.visit, hold = c.TUNING.holdMs;
+  /* The pace between rolls: the finished-roll beat as before, then the
+     delivery and the customer's thanks, then the clear and the next roll
+     as before. */
+  T('the pace between rolls: served, delivered, thanked, cleared, next', Math.abs(at('deliver') - hold) <= 10 &&
+    Math.abs(at('thanks') - hold - V.deliverMs) <= 10 && Math.abs(at('clear') - hold - V.deliverMs - V.thanksMs) <= 10 &&
+    Math.abs(at('enter') - hold - V.deliverMs - V.thanksMs - c.TUNING.clearMs) <= 10 &&
+    Math.abs(at('ready') - hold - V.deliverMs - V.thanksMs - 2 * c.TUNING.clearMs) <= 10,
     JSON.stringify(phases));
   T('it is fully delighted while the roll is served', peak > 0.95, peak.toFixed(2));
   T('delight takes its head over from the nod, rather than both at once', c.chef.nod.x < 0.05);
@@ -3193,7 +3223,7 @@ function testChef(){
   advance(app, 20);
   c.paintNow();
   T('a finished roll shows its delight at once, as a face, not a movement', c.chef.joy.x === 1 && ch.happy.visible && frozen() === still);
-  advance(app, c.TUNING.holdMs + 50);
+  advance(app, c.TUNING.holdMs + c.SCENE.visit.deliverMs + c.SCENE.visit.thanksMs + 50);
   c.paintNow();
   T('and it is calm again as the next roll comes', c.game.phase === 'ready' && c.chef.joy.x === 0 && !ch.happy.visible);
   app = play(); c = app.ctx;
@@ -3577,7 +3607,7 @@ function testFeedback(){
   const heard = listeners(app);
   for(let r = 0; r < 50; r++){
     while(c.game.phase === 'ready'){ c.keyboardCut(); advance(app, 45); }
-    advance(app, 1500);
+    advance(app, 2600);
   }
   T('fifty rolls, every cut praised', c.game.rolls === 50 && c.feedback.seq === 50 * (c.roll.n - 1), c.feedback.seq);
   T('one audio context, and at most a few voices', w.fa.contexts.length === 1 && c.sound.voices.length <= c.SOUND.voices);
@@ -3706,8 +3736,8 @@ function testFinish(){
     advance(app, 200);
     const nr = c.view3d.props.noren;
     if(!L.noren){
-      T(name + ': only a phone on its side, or a screen too small for the chef, goes without', /landscape/.test(name) && h < 500 &&
-        !nr.visible, name);
+      T(name + ': only a phone on its side, a screen too small for the chef, or a phone whose wall the customer needs goes without',
+        ((/landscape/.test(name) && h < 500) || (!!L.seat && Math.min(w, h) < 500)) && !nr.visible, name);
       return;
     }
     hung++;
@@ -3727,8 +3757,10 @@ function testFinish(){
       'the grown-ups\' button and every part of the chef', nr.visible && onScreen >= 0.6 && b.y1 < Math.min(edge(b.x0), edge(b.x1)) &&
       !meets34(b, knife) && !meets34(b, served) && !meets34(b, { x0: ins.left, y0: ins.top, x1: ins.left + 60, y1: ins.top + 60 }) &&
       pts.every(p => !(p.x > b.x0 && p.x < b.x1 && p.y > b.y0 && p.y < b.y1)), JSON.stringify(b));
+    T(name + ': and clear of the customer and its order', !meets34(b, L.bubble) &&
+      (!L.seat || L.seat.circles.every(q => !meets34(b, { x0: q.x - q.r, y0: q.y - q.r, x1: q.x + q.r, y1: q.y + q.r }))));
   });
-  T('it hangs on every tablet and every phone held upright', hung === SCREENS_34.filter(s => !/landscape/.test(s[0]) || s[2] >= 700).length,
+  T('it still hangs on every tablet, beside the customer', hung === SCREENS_34.filter(s => Math.min(s[1], s[2]) >= 700).length,
     String(hung));
   {
     const app = play({ viewport: { width: 820, height: 1180, dpr: 2 } }), c = app.ctx, nr = c.view3d.props.noren;
@@ -3737,8 +3769,8 @@ function testFinish(){
     finishRollByKeys(app); advance(app, 400); advance(app, 2000);
     T('it is still: the same place through cuts, a serve and the next roll', JSON.stringify([nr.position, nr.scale]) === at);
     T('one mesh in the chef\'s clay: no new material, texture or shader', nr.material === c.view3d.kit.clay && nr.isMesh);
-    T('the food keeps its size: the noren is placed after the food and the chef, never before',
-      /chef: set\.chef,\s*noren: set\.chef \? norenSpot/.test(js()));
+    T('the food keeps its size: the noren is placed after the food, the chef and the customer, never before',
+      /seat: seat, flow: flow,\s*noren: set\.chef \? norenSpot\([^)]*seat\)/.test(js()));
   }
 
   sub('the chef breathes: slowly, planted, drawn sparingly');
@@ -3766,7 +3798,7 @@ function testFinish(){
     T('a cut blends in: the nod and the breath share one pose, nothing resets',
       near(ch.head.rotation.x, c.SCENE.chef.headRest + c.SCENE.chef.nod * c.chef.nod.x + 0.05 * c.chef.lean.x - 0.12 * c.chef.joy.x -
         B.chin * c.breathOf(), 1e-9) && ((c.chef.breath - phase + B.ms) % B.ms) >= 16 && ((c.chef.breath - phase + B.ms) % B.ms) <= 60);
-    finishRollByKeys(app); advance(app, 1600);
+    finishRollByKeys(app); advance(app, 2600);
     T('through a serve and the next roll the breath runs on', c.game.phase === 'ready' && c.chef.breath !== phase);
     const before = c.chef.breath;
     hide(app); advance(app, 3000);
@@ -3782,6 +3814,303 @@ function testFinish(){
   }
 }
 
+/* =========================================================
+   CONTRACT 35 — THE FIRST CUSTOMER
+   One sleepy cat at a time, one picture order, never timed: the
+   finished roll is served, delivered along the counter to it exactly
+   once, it is pleased, and the next visit begins. Nothing an
+   interruption, a reset or a stale input does can serve an order
+   twice, serve the wrong visit, or leave anything behind.
+   ========================================================= */
+function testCustomer(){
+  section('CONTRACT 35 — one customer, one picture order, served exactly once, visit after visit');
+  let app, c;
+  const V = () => c.SCENE.visit;
+  const trace = (a, ms) => {
+    /* the phases and the orders served, every 10 ms */
+    const out = [], ac = a.ctx;
+    let was = ac.game.phase, served = ac.game.served;
+    for(let t = 0; t < ms; t += 10){
+      a.ctx.__advance(10);
+      if(ac.game.served !== served){ out.push('SERVED#' + (ac.game.served - served)); served = ac.game.served; }
+      if(ac.game.phase !== was){ out.push(ac.game.phase); was = ac.game.phase; }
+    }
+    return out;
+  };
+  const cutUneven = (a, us) => {
+    const tiers = [];
+    us.forEach(u => {
+      if(a.ctx.game.phase !== 'ready') return;
+      stroke(a, screenX(a, u), { steps: 4 });
+      tiers.push((said(a).match(/^(Nice|Great|Perfect)/) || [''])[0]);
+      advance(a, 60);
+    });
+    return tiers;
+  };
+  const boxOf = pts => pts.reduce((b, p) => ({ x0: Math.min(b.x0, p.x), y0: Math.min(b.y0, p.y), x1: Math.max(b.x1, p.x), y1: Math.max(b.y1, p.y) }),
+    { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+
+  sub('one sleepy cat sits at the counter and orders salmon maki, in a picture');
+  app = play(); c = app.ctx;
+  const cat = c.view3d.cat, L0 = c.layout;
+  T('it has sat down, one visit, one order: the salmon maki', c.game.visit.n === 1 && c.game.visit.state === 'waiting' &&
+    c.game.visit.order.dish === 'salmon-maki' && c.game.visit.order.served === false && !!L0.seat);
+  c.paintNow();
+  T('it shows: in its seat, sleepy-eyed and content, not yet pleased', cat.root.visible && cat.root.scale.x === L0.seat.s &&
+    cat.sleepy.visible && !cat.happy.visible && !cat.blush.visible);
+  const ctx = stageOf(app).getContext('2d');
+  ctx.recording = true; ctx.log = []; c.paintNow(); ctx.recording = false;
+  const b = L0.bubble, inB = e => e.args[0] >= b.x0 && e.args[0] <= b.x1 && e.args[1] >= b.y0 && e.args[1] <= b.y1;
+  const pic = ctx.log.filter(e => e.m === 'ellipse' && inB(e));
+  T('its order is a picture in a bubble: nori, rice and salmon, drawn from their own tokens, and no words',
+    pic.some(e => e.fillStyle === c.colors.nori) && pic.some(e => e.fillStyle === c.colors.rice) &&
+    ctx.log.some(e => e.m === 'fill' && e.fillStyle === c.colors.salmon) && ctx.log.some(e => e.m === 'fill' && e.fillStyle === c.colors.bubble) &&
+    !ctx.log.some(e => e.m === 'fillText' || e.m === 'strokeText'), pic.length + ' ellipses in the bubble');
+  T('the bubble\'s tail points at the cat', b.tx !== null && Math.abs(b.tx - L0.seat.face.x) < 1 && b.ty > b.y1);
+  T('the order is said for assistive technology, and described on the stage',
+    said(app) === c.CUSTOMER.says.order && stageOf(app).getAttribute('aria-label').indexOf(c.CUSTOMER.says.order) === 0);
+  const orderId = c.game.visit.order.id, timers = c.__clock.liveTimers();
+  advance(app, 120000);
+  T('it waits as long as the player likes: two minutes on, the same order, still waiting, no timer of its own',
+    c.game.visit.order.id === orderId && c.game.visit.state === 'waiting' && c.__clock.liveTimers() <= timers && c.__clock.liveTimers() <= 2);
+  T('and it has nothing like patience to lose: a visit is its number, its state, its arrival and its order',
+    Object.keys(c.game.visit).sort().join(',') === 'n,order,state,t');
+  T('no separate clock or frame is kept for the order picture', !/requestAnimationFrame|setTimeout|setInterval/.test(c.drawOrder.toString()));
+
+  sub('three visits in a row, uneven rolls and mixed ratings, each served exactly once');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  const cuts = [[0.12, 0.31, 0.5, 0.66, 0.9], [1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6], [0.2, 0.27, 0.58, 0.74, 0.8]];
+  const tiersSeen = new Set(), ids = [], sequences = [];
+  cuts.forEach(us => {
+    ids.push(c.game.visit.order.id);
+    cutUneven(app, us).forEach(t => tiersSeen.add(t));
+    T('visit ' + c.game.visit.n + ': the finished roll is served on the plate at once', c.game.phase === 'done' && c.game.visit.state === 'waiting');
+    sequences.push(trace(app, 2600).join(' > '));
+  });
+  T('the ratings were mixed', tiersSeen.size >= 2, [...tiersSeen].join(', '));
+  const expected = 'deliver > SERVED#1 > thanks > clear > enter > ready';          // served as the plate arrives, and thanks begin
+  T('every visit: delivered, served once as the plate arrives, thanked, cleared, and the next roll', sequences.every(q => q === expected),
+    sequences.join(' | '));
+  T('three orders served, one each, and a fourth visit waiting for the next roll', c.game.served === 3 && c.game.visit.n === 4 &&
+    new Set(ids).size === 3 && c.game.visit.state === 'waiting' && c.game.phase === 'ready');
+  T('its thanks are said', app.dom.document.getElementById('playStatus').textContent === c.CUSTOMER.says.order);
+
+  sub('the transitions are the only ones there are');
+  app = play(); c = app.ctx;
+  T('an order is served only to the visit it belongs to, and only once', c.serveOrder(c.game.visit.order.id + 1) === false &&
+    c.serveOrder(0) === false && c.game.served === 0 && c.game.visit.state === 'waiting');
+  finishRollByKeys(app);
+  advance(app, c.TUNING.holdMs + 20);
+  const id = c.game.delivering;
+  T('the delivery belongs to this visit\'s order', c.game.phase === 'deliver' && id === c.game.visit.order.id);
+  T('it cannot be served early, twice or from outside the delivery',
+    c.serveOrder(id) === true && c.serveOrder(id) === false && c.game.served === 1);
+  advance(app, V().deliverMs + 20);
+  T('and when the plate arrives the machine does not serve it again', c.game.served === 1 && c.game.phase === 'thanks');
+  settleAll(app);
+  T('the next visit carries on as normal', c.game.phase === 'ready' && c.game.visit.n === 2 && c.game.visit.state === 'waiting');
+  /* a finished roll waits for a cat that is still sitting down */
+  app = play(); c = app.ctx;
+  c.game.visit.state = 'arriving'; c.game.visit.t = 0;
+  finishRollByKeys(app);
+  advance(app, c.TUNING.holdMs + 30);
+  T('a roll finished before the cat has sat down waits, served, on the plate', c.game.phase === 'done' && c.game.visit.state === 'arriving' &&
+    c.game.phaseT === c.TUNING.holdMs);
+  advance(app, V().arriveMs - c.TUNING.holdMs + 20);
+  T('and goes to it once it has ordered', c.game.served === 0 && c.game.visit.state === 'waiting' && c.game.phase === 'deliver');
+  settleAll(app);
+  T('served once', c.game.served === 1);
+
+  sub('a held finger, stray swipes and a flurry of keys cannot skip or repeat anything');
+  app = play(); c = app.ctx; c.TUNING.pull = 0;
+  for(let k = 1; k <= 4; k++){ stroke(app, guideX(app, k)); advance(app, 40); }
+  const last = guideX(app, 5);
+  pr(app, 'pointerdown', last, yAt(app, -0.8));
+  pr(app, 'pointermove', last, yAt(app, 1.8));
+  const rollId = c.roll.id, phases = [];
+  let prev = c.game.phase;
+  for(let t = 0; t < 2600; t += 10){
+    advance(app, 10);
+    if(c.game.phase !== 'ready'){ c.keyboardCut(); key(app, ' '); key(app, 'Enter'); }
+    pr(app, 'pointermove', last, yAt(app, (t / 100) % 2 - 0.8));
+    if(c.game.phase !== prev){ phases.push(c.game.phase); prev = c.game.phase; }
+  }
+  T('keys and a finger held throughout skip nothing: every step of the visit happens, in order, once',
+    phases.join(' > ') === 'deliver > thanks > clear > enter > ready' && c.game.served === 1, phases.join(' > '));
+  T('and the finger still held cannot cut the next customer\'s roll', c.roll.id !== rollId && c.roll.cuts.length === 0);
+  pr(app, 'pointerup', last, yAt(app, 1.8));
+
+  sub('backgrounding, the grown-ups\' gate, turning the screen and losing the GPU, during the delivery');
+  const midDelivery = opts => {
+    const w = withAudio(opts), a = w.app;
+    a.ctx.unlockAudio();
+    a.ctx.TUNING.pull = 0;
+    finishRollByKeys(a);
+    advance(a, a.ctx.TUNING.holdMs + a.ctx.SCENE.visit.deliverMs * 0.5);
+    return w;
+  };
+  {
+    const w = midDelivery(), a = w.app, ac = a.ctx, t0 = ac.game.phaseT, sounds = w.fa.started, speech = said(a);
+    hide(a); advance(a, 10 * 60 * 1000);
+    T('hidden mid-delivery: no time passes, nothing is served', ac.game.phase === 'deliver' && ac.game.phaseT === t0 && ac.game.served === 0);
+    show(a); advance(a, 48);
+    T('back: the plate goes on from where it was, and no praise, sound or thanks is replayed',
+      ac.game.phase === 'deliver' && ac.game.phaseT > t0 && ac.game.phaseT < t0 + 60 && w.fa.started === sounds && said(a) === speech &&
+      ac.feedback.stars === null);
+    settleAll(a);
+    T('then it is served, once', ac.game.served === 1 && ac.game.visit.n === 2 && w.fa.started === sounds);
+  }
+  {
+    const w = midDelivery(), a = w.app, ac = a.ctx, t0 = ac.game.phaseT;
+    ac.openGate(); ac.__flush(); advance(a, 5000);
+    T('behind the grown-ups\' gate the delivery waits too', ac.game.phase === 'deliver' && ac.game.phaseT === t0 && ac.game.served === 0);
+    ac.closeGate(); ac.__flush(); settleAll(a);
+    T('and finishes once it is closed, served once', ac.game.served === 1 && ac.game.phase === 'ready');
+  }
+  {
+    const w = midDelivery(), a = w.app, ac = a.ctx, visit = ac.game.visit;
+    ac.__resize(768, 1024); advance(a, 16);
+    T('turning the screen mid-delivery keeps the same visit and its delivery', ac.game.visit === visit && ac.game.phase === 'deliver' &&
+      ac.game.served === 0 && a.errors.length === 0);
+    settleAll(a);
+    T('which is served once, in the new layout', ac.game.served === 1 && ac.game.visit.n === 2 && a.errors.length === 0);
+  }
+  {
+    const w = midDelivery(), a = w.app, ac = a.ctx, visit = ac.game.visit, catBefore = ac.view3d.cat, t0 = ac.game.phaseT;
+    ac.sceneEl.dispatch('webglcontextlost', { preventDefault(){} });
+    advance(a, 1000);
+    T('losing the GPU mid-delivery pauses it', ac.pauses.has('scene') && ac.game.phaseT === t0 && ac.game.served === 0);
+    ac.sceneEl.dispatch('webglcontextrestored', {});
+    T('getting it back neither recreates nor completes the order', ac.game.visit === visit && ac.game.served === 0 &&
+      ac.game.phase === 'deliver' && ac.view3d.cat === catBefore);
+    ac.sceneEl.dispatch('webglcontextlost', { preventDefault(){} });
+    advance(a, ac.SCENE.recoverMs + 50);
+    T('nor does a fresh renderer on a fresh canvas', ac.view3d.status === 'ready' && ac.game.visit === visit && ac.game.served === 0 &&
+      ac.view3d.cat === catBefore);
+    settleAll(a);
+    T('and the order is served once when the plate arrives', ac.game.served === 1 && ac.game.visit.n === 2 && a.errors.length === 0);
+  }
+
+  sub('a fresh roll from the tuning sheet never serves');
+  app = play({ search: '?tune' }); c = app.ctx;
+  finishRollByKeys(app);
+  c.newRollFromTuning();
+  T('during the finished-roll show: the order goes on waiting for the new roll', c.game.served === 0 && c.game.visit.n === 1 &&
+    c.game.visit.state === 'waiting' && c.game.phase === 'ready');
+  finishRollByKeys(app);
+  advance(app, c.TUNING.holdMs + 50);
+  c.newRollFromTuning();
+  T('during the delivery: nothing is served, and the cat waits on', c.game.served === 0 && c.game.visit.n === 1 &&
+    c.game.visit.state === 'waiting' && c.game.delivering === 0);
+  settleAll(app);
+  T('and nothing arrives late from it', c.game.served === 0 && c.game.phase === 'ready');
+  finishRollByKeys(app);
+  advance(app, c.TUNING.holdMs + V().deliverMs + 50);
+  c.newRollFromTuning();
+  T('after it was served: the next visit begins, and nothing is served again', c.game.served === 1 && c.game.visit.n === 2 &&
+    c.game.visit.state === 'arriving' && c.game.phase === 'ready');
+
+  sub('with reduced motion: clear changes of state, no travel and no bounce');
+  app = play({ reducedMotion: true }); c = app.ctx;
+  c.paintNow();
+  T('the cat is simply in its seat, and its order shows', c.game.visit.state === 'waiting' && c.catPose().off === 0 &&
+    c.view3d.cat.root.position.x === c.layout.seat.x);
+  finishRollByKeys(app);
+  advance(app, c.TUNING.holdMs + 20);
+  T('the plate is simply there in front of it', c.game.phase === 'deliver' && c.deliveryAt().x === c.layout.delivery.dx && c.deliveryAt().z === c.layout.delivery.dz);
+  advance(app, V().deliverMs);
+  c.paintNow();
+  T('it is pleased without a hop: only its face changes', c.game.phase === 'thanks' && c.catPose().hop === 0 &&
+    c.view3d.cat.happy.visible && c.view3d.cat.root.position.y === c.layout.seat.y);
+  advance(app, V().thanksMs + 20);
+  c.paintNow();
+  T('and the next cat is simply there, already ordering, with no frame left waiting at rest', c.game.phase === 'ready' &&
+    c.game.visit.n === 2 && c.game.visit.state === 'waiting' && c.view3d.cat.root.position.x === c.layout.seat.x &&
+    (advance(app, c.TUNING.hintS * 1000 - 100), c.__clock.pendingFrames() === 0));
+
+  sub('on every screen the customer and its order cover nothing, and nothing covers them');
+  SCREENS_34.forEach(([name, w, h, insets]) => {
+    const a = play({ viewport: { width: w, height: h, dpr: 2, insets } }), ac = a.ctx, L = ac.layout, ins = L.ins, bb = L.bubble;
+    const k = boxOf(L.guard.knife), knife = { x0: k.x0, y0: k.y0 - Math.max(16, L.T * 0.25), x1: k.x1, y1: k.y1 };
+    const served = boxOf(L.guard.served), mk = L.guard.mark, mark = { x0: mk.x - mk.r, y0: mk.y - mk.r, x1: mk.x + mk.r, y1: mk.y + mk.r };
+    const button = { x0: ins.left, y0: ins.top, x1: ins.left + 60, y1: ins.top + 60 };
+    ac.paintNow();
+    const chefPts = L.chef ? stagePoints(ac, ac.view3d.chef.root) : [];
+    const inside = (p, q) => p.x > q.x0 && p.x < q.x1 && p.y > q.y0 && p.y < q.y1;
+    T(name + ': its order\'s bubble is inside the safe area, clear of the knife\'s ground and the praise above a cut, the mark, ' +
+      'the grown-ups\' button and the chef', bb.x0 >= ins.left && bb.x1 <= w - ins.right && bb.y0 >= ins.top && bb.y1 <= h - ins.bottom &&
+      !meets34(bb, knife) && !meets34(bb, mark) && !meets34(bb, button) && !chefPts.some(p => inside(p, bb)), JSON.stringify(bb));
+    if(!L.seat){
+      T(name + ': no seat for the cat on this stage: its bubble stands at the counter\'s end, its tail off the stage the way the plate goes',
+        /landscape/.test(name) && h < 500 && !ac.view3d.cat.root.visible && bb.tx > w && L.delivery.dx * L.flow > 0);
+      const log = () => { const x = stageOf(a).getContext('2d'); x.recording = true; x.log = []; ac.paintNow(); x.recording = false;
+        return x.log.filter(e => e.m === 'fill' && e.fillStyle === ac.colors.bubble).length; };
+      finishRollByKeys(a);
+      const during = [];
+      for(let t = 0; t < ac.TUNING.holdMs + ac.SCENE.visit.deliverMs; t += 50){ during.push(log()); advance(a, 50); }
+      advance(a, 60);
+      T(name + ': it steps aside while the served plate is on show and on its way, and shows the cat\'s thanks after',
+        during.every(n => n === 0) && ac.game.phase === 'thanks' && log() === 1);
+      return;
+    }
+    T(name + ': with a seat, the bubble is clear of the served plate too', !meets34(bb, served));
+    const catPts = stagePoints(ac, ac.view3d.cat.root);
+    const floor = -ac.SCENE.board.h, e0 = ac.project(L.view, -30, floor, L.back), e1 = ac.project(L.view, 30, floor, L.back);
+    const edge = x => e0.y + (e1.y - e0.y) * (x - e0.x) / (e1.x - e0.x), shown = catPts.filter(p => p.y < edge(p.x));
+    const cell = p => Math.floor(p.x / 6) + ',' + Math.floor(p.y / 6), chefCells = new Set(chefPts.map(cell));
+    T(name + ': the cat shows, inside the safe area, its face above the counter, clear of the chef, the knife\'s ground and the button',
+      ac.view3d.cat.root.visible && shown.every(p => p.x >= ins.left && p.x <= w - ins.right && p.y >= ins.top) &&
+      stagePoints(ac, ac.view3d.cat.head).some(p => p.y < edge(p.x)) &&
+      !shown.some(p => chefCells.has(cell(p))) && !shown.some(p => inside(p, knife) || inside(p, button) || inside(p, bb)), name);
+    T(name + ': the cat, the chef and where the plate goes are three different places', Math.abs(L.seat.face.x - (L.chef ? ac.project(L.view, L.chef.x, L.chef.y, L.chef.z).x : -1e9)) > 20);
+    /* the delivered plate, all the way there, covers neither face nor the bubble */
+    ac.TUNING.pull = 0;
+    finishRollByKeys(a);
+    advance(a, ac.TUNING.holdMs + 5);
+    let covered = 0, frames = 0;
+    for(let t = 0; t < ac.SCENE.visit.deliverMs + ac.SCENE.visit.thanksMs; t += 16){
+      ac.paintNow();
+      const heads = stagePoints(ac, ac.view3d.cat.head).concat(L.chef ? stagePoints(ac, ac.view3d.chef.head) : []);
+      liveBoxes(ac).forEach(q => { if(heads.some(p => inside(p, q)) || (ac.game.phase === 'deliver' && meets34(q, bb))) covered++; });
+      frames++;
+      advance(a, 16);
+    }
+    T(name + ': all through the delivery and the thanks, no piece covers the cat\'s face, the chef\'s or the order', frames > 40 && covered === 0,
+      covered + ' of ' + frames);
+    T(name + ': no errors', a.errors.length === 0, a.errors.slice(0, 2).join(' | '));
+  });
+  {
+    const a = play(), ac = a.ctx;
+    finishRollByKeys(a);
+    const st = ac.feedback.stars, q = ac.starsBox(st, true);
+    T('the last cut\'s praise keeps clear of the order and of the cat', !meets34(q, ac.layout.bubble) &&
+      ac.layout.seat.circles.every(o => !meets34(q, { x0: o.x - o.r, y0: o.y - o.r, x1: o.x + o.r, y1: o.y + o.r })));
+  }
+  T('the food keeps its size and place: the customer is seated after the food and the chef, never before',
+    /let set = setup\([\s\S]*const seat = catSpot\(/.test(js()) && !/catSpot/.test(js().slice(js().indexOf('function computeLayout'), js().indexOf('let set = setup('))));
+
+  sub('thirty visits later, nothing has piled up');
+  app = play(); c = app.ctx;
+  const base = listeners(app), gpu = app.gpu.renderers[0];
+  let maxFrames = 0, maxTimers = 0;
+  for(let v = 0; v < 30; v++){
+    finishRollByKeys(app);
+    for(let t = 0; t < 2600; t += 50){ advance(app, 50); maxFrames = Math.max(maxFrames, c.__clock.pendingFrames()); maxTimers = Math.max(maxTimers, c.__clock.liveTimers()); }
+  }
+  c.paintNow();
+  T('thirty orders served, one each', c.game.served === 30 && c.game.visit.n === 31);
+  T('no listener was added', listeners(app) === base, listeners(app) + ' vs ' + base);
+  T('at most one frame waiting, and the hint\'s and the chef\'s timers only: none belongs to a visit', maxFrames <= 1 && maxTimers <= 2,
+    maxFrames + ' / ' + maxTimers);
+  T('the GPU holds the scenery, the chef, the one cat and the pieces on screen, nothing older',
+    gpu.info.memory.geometries === sceneryShapes(c) + c.view3d.views.length * 3 && gpu.info.memory.textures === c.view3d.kit.textures.length,
+    JSON.stringify(gpu.info.memory));
+  T('the cat is the same cat: built once, reused for every visit', c.view3d.cat.root.parent === c.view3d.scene &&
+    c.view3d.scene.children.filter(o => o === c.view3d.cat.root).length === 1);
+  T('orders live in memory only: nothing was saved', app.storage._map.size === 1);
+  T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+}
+
 module.exports = {
   T, section, sub, results, reset, testPortability, testSceneLifecycle, testVendoredLibrary,
   testBoot, testConfig, testStorage, testCollision, testMigration,
@@ -3789,5 +4118,5 @@ module.exports = {
   testMobile, testDesignSystem, testPWA, testRelease, testStress,
   testAccessibility, testContamination, testSourcesOfTruth,
   testCutModel, testStrokes, testGeometry, testRhythm, testLayout, testMotion,
-  testLifecycle, testPermanentRules, testCamera, testServing, testChef, testFeedback, testFinish
+  testLifecycle, testPermanentRules, testCamera, testServing, testChef, testFeedback, testFinish, testCustomer
 };

@@ -32,6 +32,20 @@ None of this is done. It is listed so nothing here reads as finished.
   a note instead). If they matter, an older Three.js release would need a
   deliberate decision.
 
+## Known limits (0.7.0: the first customer)
+
+- One customer, one order: the Animal customer cast card is partial (no
+  other animals, personalities or outfits), and there are no shifts.
+- On a phone held sideways the wall behind the counter has no room for the
+  cat, so it waits off the counter's end: its order stands at the counter's
+  end pointing off the stage, steps aside while the served plate is on show
+  and on its way, and shows a heart when the plate reaches it.
+- The noren gives way to the cat on phones held upright, so it now shows on
+  tablets only.
+- The delivered plate may run partly off the stage's edge in front of the
+  cat on some screens; it never covers a face or the order.
+- From the last cut to the next roll now takes 2.1 s (0.6.0: 1.25 s).
+
 ## Known limits (0.6.0: noren and breathing)
 
 - The noren shows on tablets and phones held upright; on a phone held

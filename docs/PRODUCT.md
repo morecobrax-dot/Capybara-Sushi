@@ -51,6 +51,8 @@ paws, a tall puffy hat and an indigo apron.
    v0.6.0. Praise, slice juice and the
    sound and haptics switches, v0.5.0.)**
 2. Customers, orders, more rolls, plating, short shifts.
+   **(2A: the first customer — one sleepy cat, one picture order, delivery,
+   v0.7.0.)**
 3. Rewards, recipes, decorations, outfits, local save.
 4. A small Tokyo neighbourhood.
 5. Playtesting, audio, accessibility, offline and launch polish.
@@ -192,6 +194,37 @@ Neither the chef nor the food is approved until it has been seen on a device.
 The swipe, its forgiveness, the camera, the food's size and every tuning
 value and timing are unchanged. Deliberately not in this phase: customers,
 orders, an economy, the neighbourhood, sound and haptics, a naming screen.
+
+## Phase 2A — the first customer
+
+One regular, a sleepy cat, visits the counter again and again. Neither the
+cat nor its look is approved until it has been seen on a device, and the
+cast card stays partial: no other animals, personalities or outfits yet.
+
+- **The cat.** A seated ginger pear in the chef's clay, with a cream chest
+  and muzzle, small pointed ears, a pink nose and a small smile. Sleepy
+  means content: soft closed eyes curving down, never a frown or a bored
+  look. Pleased, its eyes turn up into happy arcs, its cheeks go pink and
+  it bobs up once. It breathes with the chef. It sits behind the counter
+  toward the edge the food flows to, clear of the chef, the knife's ground,
+  the praise, the plate and the grown-ups' button; the noren gives way to
+  it. On a phone held sideways the wall has no room, so it waits just off
+  the counter's end.
+- **The order.** A picture of one slice of salmon maki in a cream bubble
+  with a tail to the cat — no words, no recipe to choose. It is said for
+  assistive technology. It never runs out and nothing is timed.
+- **Serving.** The last cut serves the roll on the plate as before, with a
+  little ginger and wasabi, in the same 650 ms beat. Then the plate slides
+  along the counter to the cat (400 ms), the cat is pleased (450 ms), and
+  the cat and the plate leave together as the next roll arrives (300 ms +
+  300 ms, as before). From the last cut to the next roll: 2.1 s, against
+  1.25 s before. The next cat sits down (700 ms) while the next roll
+  arrives; cutting is never held up, and a roll finished before the cat has
+  sat down waits for it. Every finished roll is accepted, whatever its
+  ratings. With Reduce Motion the cat simply appears and the plate is simply
+  in front of it.
+- **Kept out.** No patience meter, countdown, penalty, queue, currency,
+  shift, results, unlocks or saved customer history.
 
 ## Decisions so far
 

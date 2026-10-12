@@ -59,7 +59,8 @@ const SUITES = [
   C.testChef,
   C.testFeedback,
   C.testFinish,
-  C.testCustomer
+  C.testCustomer,
+  C.testLearning
 ];
 
 async function main(){

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "appId": "capybara-sushi",
-  "version": "0.7.0",
-  "phase": "Phase 2 — The Restaurant",
+  "version": "0.8.0",
+  "phase": "Phase A — Playable learning foundation",
   "status": "building",
   "needsQa": true,
   "needsDecision": false,
   "currentTask": null,
-  "nextAction": "Play v0.7.0 on a real iPad, iPhone and Android phone: judge the sleepy cat, its picture order and the delivery, and the pending Phase 1 checks (docs/DEVICE-QA.md)",
+  "nextAction": "Try v0.8.0 on a real iPad and phone (counting rounds, teacher workspace), then have a kindergarten educator review the counting activity and its rule (docs/DEVICE-QA.md)",
   "blocker": null,
-  "updatedAt": "2026-09-29T00:49:44Z"
+  "updatedAt": "2026-10-12T15:48:50Z"
 }

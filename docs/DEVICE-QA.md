@@ -1,7 +1,8 @@
-# Device QA — the first customer (0.7.0)
+# Device QA
 
 **Status: not done on a device.** Nothing on this list has been tried on a
-real phone or tablet. Browser QA ran in headless Edge on Windows, on an Intel
+real phone or tablet, and nothing in 0.8.0 has been tried with a child or
+reviewed by an educator. Browser QA ran in headless Edge on Windows, on an Intel
 integrated GPU through ANGLE (Direct3D 11), with browser-dispatched touch,
 mouse and pen input. That is simulated input on a desktop GPU, not an
 iPhone, an iPad or Safari. Record the device, OS and browser version, and the
@@ -25,6 +26,54 @@ on the device for offline play.
   open `http://<the PC's local IP>:8395/`. A plain-http address is not a
   secure context, so the service worker, offline play and a proper
   home-screen install cannot be tested this way.
+
+## The counting rounds and the teacher workspace (new in 0.8.0)
+
+None of this is approved. Some of it is for an educator, and some only a
+child can answer: watch, do not lead.
+
+For an educator (before any classroom use):
+
+- [ ] The counting activity (`COUNT_ACTIVITY` 1.0.0): its objective, the
+      pictured quantities, the help ladder and what counts as evidence.
+- [ ] The proposed rule r1 (12 independent first responses, two dates, four
+      quantities including 5, 80%) and the statuses' wording.
+- [ ] The lesson template t1: the opening script, groups, exit check and
+      offline activity; and the family report's wording.
+
+With a child (supervised usability sessions, Phase A):
+
+- [ ] Outside the sushi bar, a child finds their avatar and goes in without
+      help; the glide inside is short and pleasant, and a tap skips it.
+- [ ] Chef Capy's demonstration shows what to do without words.
+- [ ] The order card's maki read as "this many" in all three arrangements
+      (row, dice, scattered), with no numeral.
+- [ ] Cuts are not mistaken for pieces: a child makes the number of pieces,
+      not the number of cuts.
+- [ ] Tapping a piece onto the plate and back, and the plus and minus
+      buttons, are easy for small fingers; nothing serves until the bell.
+- [ ] A different number feels like help, never like a mistake; counting
+      together, the rings and Chef Capy's hands each make sense.
+- [ ] Five orders feel like a short round, and "more orders" or "finish" is
+      a real choice.
+
+On devices:
+
+- [ ] Phone held sideways: the order card, the plate's count and the bell
+      are clear at once beside the stage, and the food is still easy to cut.
+- [ ] In landscape the cat has no seat: does the order card read as the
+      customer, and the plate sliding off toward it as serving it?
+- [ ] Phone held upright: the dock along the bottom never hides the food.
+- [ ] Tablet either way: the dock, the stage and the grown-ups' button.
+- [ ] With Reduce Motion on, the way in is a dissolve, pieces move to the
+      plate without a hop, and the demonstration still teaches.
+- [ ] Chef Capy's voice where the device has one installed (Sound on), and
+      silence, with the picture alone, where it has none.
+- [ ] Offline after one visit: play, and the workspace's records, survive a
+      reload; a private window says it is not saving.
+- [ ] The teacher workspace on a phone, a tablet and a desktop: Today,
+      Class, a child's profile, a lesson draft and a family report are
+      readable without zooming; Print / Save as PDF prints the report alone.
 
 ## Judging the feel and the look (hands-on)
 
@@ -181,6 +230,6 @@ values you prefer the new defaults.
 - [ ] Apple Pencil.
 - [ ] Home-screen install, standalone launch, and an offline launch after
       one online visit; storage and cache names `capybara-sushi.` and
-      `capybara-sushi-v0.7.0` (the identity panel in `?tune` shows them).
+      `capybara-sushi-v0.8.0` (the identity panel in `?tune` shows them).
 - [ ] If you have a device on iOS older than 16.4: it shows the note and
       the try-again button, not a blank screen.

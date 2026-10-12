@@ -1,21 +1,28 @@
 # Capybara Sushi
 
-A cozy children's game set in a tiny Tokyo neighbourhood, where a calm
-capybara chef runs a sushi counter. At its heart is satisfying sushi slicing:
-order, slice, the pieces separate, the chef reacts, plate, serve, next roll.
+A cozy sushi kitchen where kindergarten children practise early maths with
+Chef Capy, a calm capybara chef, and their teacher gets a clear picture of
+what each child can do and a lesson plan for what to teach next. It grew from
+a slicing game — order, slice, the pieces separate, the chef reacts, plate,
+serve — and since 0.8.0 its direction is the classroom learning product in
+[docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md).
 
-**Status: a development preview (v0.7.0), not a release for children.** One
-3D scene, seen three-quarters on so the rice and salmon show: a salmon roll
-on a cutting board, which squashes, wobbles and rocks as you cut it, a plate
-where the finished pieces are served with their faces showing, and Chef
-Capybara behind the counter, breathing slowly beside a small noren, who
-watches and is pleased with every cut. A sleepy cat regular sits at the
-counter and asks for salmon maki with a picture; each finished roll slides
-along the counter to it, it is pleased, and it comes back for the next.
-Every cut is praised Nice, Great or Perfect with stars, a soft sound, a
-sparkle and, where the browser offers vibration, a light tap; a grown-ups
-button behind a times-table question turns sound and haptics off. There are
-no shifts, rewards or other customers, and no saved progress, final branding or final icons yet. The chef, the cat and the food are first versions, not approved looks.
+**Status: a single-device development prototype (v0.8.0), not a release
+for children and not a classroom tool.** A child starts outside the sushi
+bar, taps one of six fictional avatars and goes in; Chef Capy shows the task
+once, then the sleepy cat orders one to five pieces with a picture. The child
+cuts the roll, puts exactly that many pieces on the plate (tap, plus and
+minus, or keys) and rings the bell; a different number brings gentle help
+and another try. Five orders make a round. Behind the grown-ups'
+times-table question, a teacher workspace (Today, Class, Students, Lessons,
+Reports) shows that evidence for the one counting skill, makes an editable
+lesson draft and prints teacher and family reports. Everything stays in this
+browser: fictional profiles only, no sign-in, no backend, no syncing between
+devices — the times-table question is a parent gate, not teacher
+authentication. The counting content, its rule and the lesson template await
+an educator's review, and nothing here has been tried with children. The
+chef, the cat and the food are first versions, not approved looks; there is
+no final branding or icon.
 **Real-device testing of the 3D scene and the chef is pending**
 ([docs/DEVICE-QA.md](docs/DEVICE-QA.md)). It needs WebGL 2 and, on iPhone
 and iPad, iOS or iPadOS 16.4 or newer. See [docs/PRODUCT.md](docs/PRODUCT.md)
@@ -25,6 +32,10 @@ for what is not done.
 **Development preview, for real-device playtesting:**
 
 - Play: <https://morecobrax-dot.github.io/Capybara-Sushi/>
+- Teacher workspace: tap the grown-ups' button (top corner), answer the
+  question, then **Teacher workspace**. **Willow class (DEMO sample data)**
+  in its class menu shows a made-up week of evidence.
+- The 0.7.0 endless slicing (developer): <https://morecobrax-dot.github.io/Capybara-Sushi/?free>
 - Tune (developer): <https://morecobrax-dot.github.io/Capybara-Sushi/?tune>
 
 GitHub Pages may take up to 10 minutes to show a new push on a device.
@@ -38,9 +49,13 @@ npx --yes http-server -p 8395 -c-1 .
 - Play: <http://localhost:8395/>
 - Play with the developer feel-tuning sheet: <http://localhost:8395/?tune>
 
-Swipe down across the roll to cut it; slow drags and quick flicks both work.
-With a mouse, drag with the left button. Space, Enter or the down arrow also
-cut. After a quiet moment a ghost finger shows the swipe.
+In the counting rounds: swipe down across the roll, or press the knife
+button, Space, K or the down arrow, to cut; tap a piece, or use the plus and
+minus buttons (+ and −, or the right and left arrows), to move one piece
+between the board and the plate; ring the bell, or press Enter, to serve. The
+chef button or H asks for help; the order card or R says the order again.
+In the endless slicing (`?free`), Space, Enter or the down arrow cut, and a
+ghost finger shows the swipe after a quiet moment.
 
 A service worker needs `http(s)`, so opening `index.html` from disk works but
 cannot test offline play. Port 8395 is this project's own. Other projects on
@@ -127,12 +142,14 @@ test/run.js             the runner
 
 ## Documentation
 
+- [docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md): the learning product
+  specification (a summary of v1.1) and what 0.8.0 implements.
 - [docs/PRODUCT.md](docs/PRODUCT.md): the product, its permanent rules, the
   roadmap and this phase.
 - [docs/DEVICE-QA.md](docs/DEVICE-QA.md): how to judge the slicing by hand,
   and what only a real device can check.
-- [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md): onboarding and release
-  work that is not done yet.
+- [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md): what is not done yet,
+  including the backend and authorization a real classroom needs.
 - [ARCHITECTURE.md](ARCHITECTURE.md): how the pieces fit.
 - [PRODUCT-DESIGN.md](PRODUCT-DESIGN.md): the UI rules the foundation
   encodes.

@@ -1,6 +1,30 @@
 # Capybara Sushi — the product
 
-## What it is
+## The direction since 0.8.0: Chef Capy, a classroom learning product
+
+On 12 October 2026 the product direction changed. Capybara Sushi becomes
+**Chef Capy**: children run a cozy sushi kitchen with Chef Capy, and their
+teacher gets a clear picture of learning and a practical plan for what to
+teach next. The source is "Chef Capy — Teacher dashboard and classroom
+learning product specification, Version 1.1", summarized faithfully in
+[LEARNING-SPEC.md](LEARNING-SPEC.md); where earlier brainstorming differs,
+that specification wins. Five learning stations are planned — Slice & Serve,
+Bento Builder, Pattern Parade, Shape Kitchen and Sound Kitchen — released in
+Phases A–D (the roadmap below).
+
+The slicing game built in 0.1.0–0.7.0 is the foundation it stands on: the
+counter, the food, Chef Capybara, the sleepy cat, the cut and the serve. Its
+story is kept below as history. Restaurant-only plans that the specification
+does not include (shifts, rewards, currencies, outfits, the neighbourhood)
+are superseded, not done.
+
+0.8.0 builds the first connected slice — Slice & Serve counting 1–5 →
+evidence → teacher summary → lesson draft → report — as a **single-device
+development prototype** with fictional profiles. It has no sign-in, no
+backend and no syncing between devices, and nothing in it is approved by an
+educator or tried with children yet.
+
+## What it was first (0.1.0–0.7.0)
 
 A cozy children's game set in a tiny Tokyo neighbourhood. The player helps a
 calm capybara chef run a sushi restaurant. The central experience is
@@ -15,19 +39,23 @@ accepted, and the chef stays warm and unbothered.
 ## Permanent rules
 
 - No ads, in-app purchases, chat, accounts, analytics or data collection.
+  Since 0.8.0 the learning prototype keeps learning evidence for fictional
+  profiles on the device it was played on, and nowhere else.
 - No fail states, no punishing timers, and no punishment for imperfect cuts.
 - Core play works without reading.
 - Grown-up settings belong behind a parent gate.
 - Respect reduced motion, and allow sound and haptics to be turned off.
 
-How the code keeps these is in [CLAUDE.md](../CLAUDE.md), rules 29–33, and
-contract 27.
+How the code keeps these is in [CLAUDE.md](../CLAUDE.md), rules 29–33 and
+64–72, and contracts 27 and 36.
 
 ## Audience and devices
 
-The working audience is children of roughly 4 to 9. The exact age range and
-target devices are still open. Working assumption: **tablets first, phones
-usable, both orientations**. The manifest allows any orientation.
+Since 0.8.0 the audience is a kindergarten class and its teacher, as the
+specification describes; before it, the working audience was children of
+roughly 4 to 9. The exact age range and target devices are still open.
+Working assumption: **tablets first, phones usable, both orientations**,
+with landscape the priority for play. The manifest allows any orientation.
 
 ## Visual direction
 
@@ -44,6 +72,31 @@ paws, a tall puffy hat and an indigo apron.
 
 ## Roadmap
 
+From 0.8.0, the specification's release sequence:
+
+- **Phase A — Playable learning foundation.** The sushi-bar entrance, one
+  Slice & Serve skill family, teacher preview, accessible interactions and a
+  trustworthy event stream; supervised usability sessions with children.
+  **(In progress: 0.8.0 builds counting 1–5 on one device. Educator review,
+  device QA and sessions with children are still to come.)**
+- **Phase B — Teacher classroom loop.** Roster, classroom devices, Today,
+  class insights, student profiles, observations and one reviewed lesson
+  template; identity isolation, event sync, honest denominators. **(0.8.0
+  has single-device prototypes of the screens; the classroom devices,
+  sign-in and sync need the backend in [REMAINING-WORK.md](REMAINING-WORK.md).)**
+- **Phase C — Planning and reports.** Deterministic drafts, editable groups,
+  constraints, publication, the live teaching view, teacher and family
+  reports, PDF/CSV. **(0.8.0 has a single-device prototype of the draft,
+  revisions and reports; no live teaching view.)**
+- **Phase D — Complete five-station V1.** Bento Builder, Pattern Parade,
+  Shape Kitchen and Sound Kitchen, each after content, access, rubric and
+  lesson review. **(Not started.)**
+- **Later.** School administration, verified standards mappings, more
+  languages, co-teachers, family accounts, LMS integration, longitudinal
+  analysis; more customers, decorating and recipes.
+
+The slicing game's own roadmap, before the change (kept as history):
+
 0. Foundations and a slicing prototype. **(0B: gray-box prototype, v0.1.0.)**
 1. One polished roll and counter, with satisfying slicing and chef reactions.
    **(1A: the first 3D slicing scene, v0.2.0. 1B: appearance, camera and
@@ -52,10 +105,49 @@ paws, a tall puffy hat and an indigo apron.
    sound and haptics switches, v0.5.0.)**
 2. Customers, orders, more rolls, plating, short shifts.
    **(2A: the first customer — one sleepy cat, one picture order, delivery,
-   v0.7.0.)**
-3. Rewards, recipes, decorations, outfits, local save.
-4. A small Tokyo neighbourhood.
-5. Playtesting, audio, accessibility, offline and launch polish.
+   v0.7.0. The rest is superseded by the learning direction.)**
+3. Rewards, recipes, decorations, outfits, local save. **(Superseded; more
+   customers, decorating and recipes are "Later" in the new sequence.)**
+4. A small Tokyo neighbourhood. **(Superseded.)**
+5. Playtesting, audio, accessibility, offline and launch polish. **(Folded
+   into Phases A–D: every phase includes its own playtesting and access
+   work.)**
+
+## 0.8.0 — the first connected learning slice (Phase A, in progress)
+
+A single-device development prototype; see [LEARNING-SPEC.md](LEARNING-SPEC.md)
+for the whole product.
+
+- **Outside the sushi bar.** The app opens on a picture of Chef Capy's sushi
+  bar with six fictional avatars. A tap goes in (a short glide, simply a
+  dissolve with reduced motion, and a tap skips it).
+- **Chef Capy shows the task once:** two cuts, two pieces onto the plate, the
+  bell, with a ghost hand. It can be skipped and is never evidence.
+- **Slice & Serve, counting 1–5.** The cat's order card shows one to five
+  maki in a row, a dice pattern or scattered — never a numeral — and a voice
+  installed on the device may say it. The child cuts the roll, moves pieces
+  one at a time between board and plate, and rings the bell when ready;
+  nothing serves itself. A cut is never a piece and is never rated. A
+  different number brings help — counting together, then rings on the
+  plate, then Chef Capy's own hands — and another try. Five orders, one of
+  each quantity, make a round, which ends with more orders or finish.
+- **Evidence.** The first quantity served for each order is the evidence,
+  with the help shown before it; later tries are supported; help asked for
+  first makes an order assisted-only; unfinished orders are never
+  incorrect. Events are append-only, per session, on this device.
+- **Teacher workspace,** behind the grown-ups' question: Today (objective,
+  participation, evidence coverage, next steps), Class (statuses with
+  denominators), Students (a child's first answers, supported retries,
+  dates and the teacher's own observations, kept apart), Lessons (an
+  editable draft from an explicit snapshot, regenerated without losing
+  edits, published as fixed revisions on this device) and Reports (teacher
+  and family copies, Print / Save as PDF, CSV). A teacher's preview plays
+  the rounds and records nothing; a DEMO sample class shows a made-up week.
+- **Kept out.** The other four stations, numerals, sign-in, classroom
+  devices, sync, a live teaching view, "With support" (until a rubric is
+  reviewed), and any claim that this is ready for a classroom.
+
+The phase sections that follow describe the slicing game as it was built.
 
 ## Phase 0B — the gray-box slicing prototype
 
@@ -253,3 +345,9 @@ cast card stays partial: no other animals, personalities or outfits yet.
   Pages as a development preview for real-device playtesting
   (<https://morecobrax-dot.github.io/Capybara-Sushi/>). It is not a release
   for children. Every later push still needs the user's approval.
+- 0.8.0: the product direction is the learning specification v1.1. The
+  counting prototype runs on one device with fictional profiles; evidence is
+  kept per session in this browser's storage (no migration: no existing key
+  changed). The 0.7.0 endless slicing remains as the developer route
+  `?free`. No backend was chosen or provisioned; what one must do is in
+  [REMAINING-WORK.md](REMAINING-WORK.md).

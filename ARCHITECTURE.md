@@ -2,7 +2,9 @@
 
 How the pieces fit. Capybara Sushi was generated from the app-starter
 template. The foundation half of this document describes what came from it,
-and [The slicing game](#the-slicing-game) describes what Capybara Sushi adds.
+[The slicing game](#the-slicing-game) describes what Capybara Sushi adds, and
+[The learning prototype](#the-learning-prototype) the counting rounds and the
+teacher workspace built on it in 0.8.0.
 
 ---
 
@@ -14,8 +16,8 @@ The whole application is one file with four blocks, in this order:
 |---|---|
 | `<head>` | Meta, viewport, manifest link. The block between `APP-META-BEGIN/END` is **derived** — written by `config:sync`. |
 | One `<style>` | Design tokens, then base, shell, controls, surfaces, overlay presentation, toast, the game stage, responsive. |
-| `<body>` markup | A hidden heading, the one play view (the 3D scene canvas, the stage canvas over it, and the scene's status), and every overlay declared statically. All other DOM is generated. |
-| One `<script>` | Config, release notes, storage, migration, overlay engine, toast, confirmation, icons, navigation, the Domain seam, the slicing game, settings, boot. |
+| `<body>` markup | A hidden heading, the one play view (the 3D scene canvas, the stage canvas over it, the scene's status, and the counting rounds' dock, demonstration hand, preview banner, round's end and the sushi bar's entrance), and every overlay declared statically, the teacher workspace included. All other DOM is generated. |
+| One `<script>` | Config, release notes, storage, migration, overlay engine, toast, confirmation, icons, navigation, the Domain seam, the slicing game, the learning prototype, settings, boot. |
 
 **Keep it to one substantial `<script>` block.** The test harness evaluates
 only the largest one. Code in a second block, or in a linked `.js` file, is
@@ -151,14 +153,33 @@ sequence. Every key is backed up first; a failure restores it and surfaces a
 warning. Bump `DATA_SCHEMA_VERSION` only when the *shape* of stored data
 changes.
 
-**Capybara Sushi saves nothing about play.** The roll, the tuning and every
-gesture live in memory. Besides the schema version, the only key is a
+**Capybara Sushi saves nothing about the slicing itself.** The roll, the
+tuning and every gesture live in memory. Besides the schema version, a
 grown-up's sound and haptics choice (`prefs.feedback`, the game's own
-`PREFS_KEY`), written only when one is changed; an unreadable value means
+`PREFS_KEY`) is written only when one is changed; an unreadable value means
 the defaults and is left as it is, and where storage is refused a change
-lasts until the app closes. Backup & data
-counts records from whatever `data.*` keys exist, so it does not depend on
-any one product's collection.
+lasts until the app closes. Backup & data counts records from whatever
+`data.*` keys exist, so it does not depend on any one product's collection.
+
+**Since 0.8.0 the learning prototype keeps evidence on this device**, under
+four new key families and nothing else:
+
+```
+<APP_ID>.data.learn.classes          [the prototype class]: roster, time zone, calendar
+<APP_ID>.data.learn.events.<session> one session's append-only events
+<APP_ID>.data.learn.observations     a teacher's observations, apart from game results
+<APP_ID>.data.learn.plans            lesson drafts and published revisions
+```
+
+Opening the app writes none of them: the class is written the first time
+something is recorded for it. Each session writes only its own key, so two
+sessions never touch one record and a reload cannot double anything; events
+are deduplicated by id when read. A stored class that cannot be read is left
+untouched and play goes on in memory; a session storage refuses keeps its
+events in memory for the page's life, and the workspace says which. **No
+migration was needed:** no existing key changed shape, the new keys are new,
+and `DATA_SCHEMA_VERSION` is unchanged. The sound and haptics choice is
+read exactly as before. The DEMO sample class is never stored.
 
 ## Feedback
 
@@ -241,8 +262,11 @@ What the harness gives the game, so it can be tested without a browser:
 
 Contracts are grouped by what they protect, in dependency order — identity and
 storage first, because everything above them is meaningless if those are wrong.
-The game's own contracts (20–35) run last. Aim for high-value contracts, not
-volume. The harness cannot see a real browser's hit-testing or a real GPU, so
+The game's own contracts (20–35) run last, on the endless slicing at the
+developer route `?free` (`play()` adds it), and contract 36, the learning
+slice, runs the counting rounds as a child meets them (`learnApp()`, which
+also points the learning clock at the virtual one). Aim for high-value
+contracts, not volume. The harness cannot see a real browser's hit-testing or a real GPU, so
 every touch surface is also exercised with real CDP input in headless Edge
 against the real WebGL renderer (CLAUDE.md rule 43).
 
@@ -273,8 +297,10 @@ unnoticed.
 
 Capybara Sushi claims them as: `hydrate` (the sound and haptics choice, `loadPrefs()`),
 `render` (re-measure and draw), `wire` (the stage's pointer, keyboard,
-visibility, resize and reduced-motion listeners, attached once, and the 3D
-scene's load) and `tabIcons` (none: play is one screen).
+visibility, resize and reduced-motion listeners, attached once, the 3D
+scene's load, and `learnWire()`: the dock's icons, the entrance and the
+teacher workspace's listeners, and the sushi bar's door) and `tabIcons`
+(none: play is one screen).
 
 Two more things follow the same rule rather than being special-cased:
 
@@ -314,6 +340,38 @@ The `GAME DOMAIN — Slicing` section, in the order a touch travels through it:
 The contracts for all of this are 20–35 in `test/contracts.js`. The feel
 itself is not something a contract can judge: [docs/DEVICE-QA.md](docs/DEVICE-QA.md).
 
+## The learning prototype
+
+The `LEARNING — Slice & Serve` section sits inside the game domain, after
+the slicing engine and before settings: a **single-device development
+prototype** of the slice described in [docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md).
+There is no sign-in, backend or sync, and the times-table gate in front of
+the workspace is a parent gate, not authentication. `game.mode` is
+`'count'` for children and `'free'` for the developer route `?free`,
+which is the 0.7.0 endless slicing the engine's contracts still run.
+
+| Part | What it owns |
+|---|---|
+| Content | `COUNT_ACTIVITY` (`slice-serve.count-1-5` 1.0.0, review pending): objective, demonstration, 15 variants, accepted answers, help ladder, access alternatives, offline counterpart. `COUNT_PICTURES` places each quantity's maki in a row, a dice pattern or scattered. Frozen. |
+| Rule | `COUNT_RULE` r1, awaiting validation, for `count.quantity.1_5` only; `EVIDENCE_VERSION` names the summary's own version. `LEARN_STATUS` and `STATUS_ORDER`: Not observed, Gathering evidence, Building, Independent in game, Needs a fresh check. |
+| Calendar | `learnDate()` dates a moment in the class's time zone; `teachingWindow()` is the last n instructional days (weekdays less closures). `learnClock` is the one seam for "now". |
+| Classes | `learnClass()` reads the prototype class (six fictional children, `PROTO_ROSTER`); `keepClass()` writes it when something is first recorded. `DEMO_CLASS` and `demoEvents()`: twenty fictional children and a fixed, seeded week, built in memory, frozen, marked `source: 'demo'`. |
+| Sessions and events | `startSession()` / `endSession()`: one child per session; ending marks an open order interrupted. `learnRecord()` stamps every event from the session (id, child, session, class, date, time zone, activity version, source) and `learnAppend()` writes the session's key; a preview records nothing. Event types: `session.start`, `demo`, `item.start`, `response`, `support`, `instruction.repeat`, `item.end`, `session.end`. |
+| Rounds | `roundPlan()` draws a round of 1–5 once each, seeded by the session; `beginOrder()` and `itemShown()` (when the cat sits down) start an order; `learnStartRound()`, `learnNextOrder()`, `showRoundEnd()`, `learnContinue()`, `learnFinish()`. A round's end waits with nothing moving, so `phaseBusy()` asks no frames for it. |
+| Plate | Each piece carries `plate`, `plateOrd` and its hop (`pt`, `sx`, `sz`, `st`). `platePiece()` refuses an uncut roll; `plateNext()` / `unplateLast()` move one piece; `learnTap()` moves the piece under a tap; `learnKnife()` cuts a piece still on the board (`countCutTarget()`). `stepPlates()` eases pieces to `plateSpots()`, and `platedPose()` gives `pieceRects()` their pose, so one geometry still answers where the food is. |
+| Serving and help | `learnServe()` records the response; a match delivers through the usual phases (`stepCountPhase()`), a different quantity calls `giveSupport()`: counting together, then rings on the plate, then Chef Capy's own hands (`modelStep()`). `learnHelp()` asks before answering; `learnRepeat()` says the order again. |
+| Demonstration and entrance | `DEMO_STEPS` on the real counter with a ghost hand, skippable (`skipDemo()`); `showEntrance()`, `chooseChild()`, `enterKitchen()`, `finishEnter()`; `startPreview()` for a teacher. |
+| Dock | `placeDock()` and `dockSize()`; `layoutInsets()` reserves the dock's side for `computeLayout()`, which keeps the plate behind the board (`plateBehind`) and seats the cat without room for a bubble (`orderCard`, `NO_BUBBLE`); `renderDock()` enables what can act, and `syncDock()` redraws it whenever that changes. Where the cat has no seat (every landscape screen, so far) the order card stands for it, and is pleased when the plate arrives. |
+| Voice and keys | `sayLine()` with a device-installed voice only; `onLearnKey()`: Space/K/↓ cut, + = → ↑ add, − _ ← remove, Enter serve, H/? help, R repeat. |
+| Summaries | `countOrders()` rebuilds each order from its events; `summarizeCount()` applies the rule; `classSnapshot()` freezes a class's summaries with the window, rule and versions, and is what plans and reports are made from. |
+| Planner | `planCountLesson()` (template `count-1-5.lesson` t1, review pending) with `PLAN_GROUPS`, `PLAN_MATERIALS`, `SECTION_KEYS`; `validatePlan()` and `planBlocked()`; `regeneratePlan()`, `moveInPlan()`, `unlockInPlan()`. |
+| Reports | `teacherReport()`; `familyReport()` copies only `FAMILY_FIELDS`; `evidenceCsv()`. Print marks the page `printing-report` so the print styles show the report sheet alone. |
+| Workspace | The `teachOverlay` page: Today, Class, Students (and a child's profile), Lessons (and a revision) and Reports, rendered into `teachBody` from `teach` state; `teachAct()` handles every button. Reached through the gate's settings (`openTeachFromPrefs()`). |
+
+The contract for all of this is 36. What it cannot judge — a child's
+understanding, the content's soundness, the dock on a real phone — is in
+[docs/DEVICE-QA.md](docs/DEVICE-QA.md).
+
 ## The vendored library
 
 `lib/three/` holds Three.js r186 (npm `three@0.186.1`): `three.module.js`,
@@ -340,6 +398,7 @@ QA.
 | You are adding | Put it |
 |---|---|
 | Anything a child plays | The game section, behind the `Domain` seams |
+| Learning content, rules or reports | The learning section; a new skill gets its own activity, rule and contract, never a copy of `COUNT_RULE` |
 | A feel value | A `TUNING_DEFAULTS` entry and a `TUNING_SPEC` line |
 | A colour the scene or the flat layer uses | A layer-4 token, listed in `COLOR_TOKENS` |
 | A file the app loads | An `APP_FILES` entry, then `npm run config:sync` |

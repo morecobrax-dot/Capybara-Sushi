@@ -730,7 +730,12 @@ const BRIDGE = [
   'pauses', 'frameId', 'lastFrameAt', 'reducedMotion', 'gx', 'stageEl', 'ctx2d', 'wired',
   'THREE_URL', 'THREE', 'sceneEl', 'view3d', 'chef',
   'RATING', 'TIERS', 'PRAISE', 'FEEDBACK', 'feedback', 'SOUND', 'sound', 'prefs', 'PREFS_KEY', 'PREF_DEFAULTS', 'gate',
-  'CUSTOMER'
+  'CUSTOMER',
+  /* the learning prototype */
+  'learn', 'teach', 'learnClock', 'COUNT_ACTIVITY', 'COUNT_RULE', 'COUNT_SKILL', 'COUNT_PICTURES', 'NUMBER_WORDS',
+  'LEARN_KEYS', 'LEARN_STATUS', 'STATUS_ORDER', 'PROTO_CLASS_ID', 'PROTO_ROSTER', 'DEMO_CLASS', 'AVATARS', 'TEACHING_WEEK',
+  'EVIDENCE_VERSION', 'LESSON_TEMPLATE', 'PLAN_MATERIALS', 'PLAN_GROUPS', 'GROUP_ORDER', 'SECTION_KEYS', 'FAMILY_FIELDS',
+  'FREE_ROUTE', 'LEARN_TIMING', 'DEMO_STEPS', 'TEACH_VIEWS'
 ];
 
 const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };

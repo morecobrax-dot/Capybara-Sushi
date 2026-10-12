@@ -234,24 +234,38 @@ prototype. Each carries its reason; keep the reason with the rule.
 29. **No ads, in-app purchases, chat, accounts, analytics or data collection.**
     Loading the app and its own service-worker files is the only network
     traffic. Contract 27 fails on any other request, tracker name or outbound
-    link.
+    link. The learning prototype's evidence (rules 64–72) is the one thing
+    0.8.0 keeps, and it never leaves the device: counting events, a teacher's
+    observations and lesson plans for fictional profiles, in this browser's
+    storage only, with no account, sign-in, sync or upload.
 30. **No fail states, punishing timers, or punishment for imperfect cuts.** A
     stroke either cuts or does nothing. A roll never expires. The game keeps
-    no score, lives or misses (contract 27). Every accepted cut is praised —
-    Nice, Great or Perfect — and nothing is counted, compared or kept.
+    no score, lives or misses (contract 27). In the endless slicing (`?free`)
+    every accepted cut is praised — Nice, Great or Perfect. In the counting
+    rounds no cut is rated: the first quantity a child serves is kept as
+    evidence for the teacher, never shown to the child as a score or
+    compared, and a different quantity brings help and another try, never an
+    ending (rule 66).
 31. **Core play works without reading.** The stage draws no text. The gesture
-    is taught by a hint that shows it; words exist only for assistive
-    technology.
+    is taught by a hint that shows it, and in the counting rounds by Chef
+    Capy's demonstration; the order is a picture. Words exist only for
+    assistive technology, besides the fictional names under the avatars
+    outside the sushi bar and a teacher's preview banner.
 32. **Grown-up settings belong behind a parent gate.** The grown-ups' button
     in play opens only a times-table question (`openGate()`); the Sound and
     Haptics switches open only from a right answer. A wrong answer asks
     another; nothing locks. The developer `?tune` sheet is not the gate
     (rule 42). Backup & data and What's new still open only from `?tune`.
+    The teacher workspace opens only from the grown-ups' settings, or back
+    from a teacher's preview. The times-table question is a parent gate, not
+    teacher authentication, and every workspace screen says so.
 33. **Respect reduced motion, and let sound and haptics be turned off.**
     Reduced motion is honoured live. Sound and haptics each have a switch
     behind the gate, and turning one off takes effect at once. The switches
-    are the only thing stored (`PREFS_KEY`), and only once a grown-up
-    changes one.
+    are the only preference stored (`PREFS_KEY`), and only once a grown-up
+    changes one. Chef Capy speaks only with a voice installed on the device
+    (`localService`), only with Sound on; without one it is silent and the
+    picture carries the order.
 
 ## The slicing interaction
 
@@ -389,6 +403,8 @@ prototype. Each carries its reason; keep the reason with the rule.
     free guide a cut in that piece may still reach (or the piece's middle when
     it has none), in guide spacings with a pixel floor (`RATING`, declared
     once). Every accepted cut gets Nice, Great or Perfect; speed plays no part.
+    This is the endless slicing (`?free`) only: in the counting rounds a cut
+    is never rated, and the chef's nod is the same for every cut.
     The stars say it by count and shape — never colour or words alone — and
     the chef stays pleased with all three, a little brighter for a Perfect.
 58. **Juice never touches play.** Stars, sparkle, sound, the haptic tap and a
@@ -419,7 +435,10 @@ prototype. Each carries its reason; keep the reason with the rule.
     roll waits, served, until the cat has ordered. Every finished roll is
     accepted: ratings never change what the customer thinks. There is no
     patience, countdown, penalty, currency or saved customer history, and a
-    fresh roll from `?tune` never serves. Contract 35.
+    fresh roll from `?tune` never serves. Contract 35. In the counting rounds
+    the child decides when the order is ready: only `learnServe()` with the
+    quantity asked for, or Chef Capy's modeling, delivers it, through the same
+    phases, and the round ends after five customers (`'round-end'`).
 62. **The customer is seated after the food and the chef.** `catSpot()`
     places the cat behind the counter toward the stage's edge — the right
     first, and everything flows toward it (`layout.flow`) — clear of the chef
@@ -433,7 +452,77 @@ prototype. Each carries its reason; keep the reason with the rule.
 63. **The order is a picture, drawn with the flat layer.** `drawOrder()`
     draws the maki from the food's own tokens in a bubble with a tail to the
     cat, with no words and no clock of its own; the order is said through
-    `#playStatus` and on the stage's label.
+    `#playStatus` and on the stage's label. In the counting rounds the order
+    card in the dock pictures the quantity instead — that many maki in a
+    row, a dice pattern or scattered, never a numeral — and the bubble is
+    not drawn.
+
+## Chef Capy's learning prototype (0.8.0)
+
+The product direction is [docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md).
+0.8.0 builds one connected slice of it — Slice & Serve counting 1–5 → evidence
+→ teacher summary → lesson draft → report — and contract 36 holds it.
+
+64. **A development prototype on one device, and it says so.** Fictional
+    profiles, one prototype class and a DEMO sample class built in memory. No
+    sign-in, backend, sync or claim of production readiness. Do not invent a
+    backend or provision a service: the multi-device work is listed in
+    [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md).
+65. **Evidence is append-only, and comes from the session.** `learnRecord()`
+    takes the child, session, class, date (in the class's time zone),
+    activity version and source from the session, never from the caller.
+    Each event has a stable id (`<session>.<seq>`) and lives under
+    `data.learn.events.<session>`; nothing rewrites it. A session belongs to
+    one child from its first event to its last: finishing, switching child
+    or opening the workspace ends it and marks an open order interrupted.
+    Opening the app writes nothing; the class is kept when something is first
+    recorded for it. A teacher's preview and the demonstration record no
+    evidence.
+66. **The first quantity served is the evidence.** Nothing serves itself:
+    the child presses the bell (or Enter) and can change the plate until
+    then. Help asked for before any answer makes the order assisted-only; a
+    different first quantity is an independent incorrect response, and the
+    tries after its help are supported. Repeating the order is ordinary
+    instruction. Unfinished and interrupted orders are never incorrect. The
+    same event twice, or an identical order replayed in one round, counts
+    once. Speed, slicing precision, rewards and animation never enter it.
+67. **Summaries are computed by a versioned rule, never stored.**
+    `summarizeCount()` applies `COUNT_RULE` r1, awaiting educator
+    validation, over the class calendar's last 14 instructional days: at
+    least 12 usable independent first responses, two sessions on different
+    dates, four quantities including 5, and 80% correct. It is never the
+    4-of-5 rule and never another skill's. No data is Not observed, too
+    little is Gathering evidence, and "With support" waits for a reviewed
+    rubric.
+68. **Three kinds of data never mix.** Game events, teacher observations
+    (`data.learn.observations`) and the DEMO class (memory only, marked
+    `source: 'demo'`) stay apart; an observation never changes a game count.
+69. **A lesson draft is deterministic and honest about the room.**
+    `planCountLesson()` builds from an explicit snapshot and the teacher's
+    constraints: the sequence adds up to the block, adult-led turns never
+    outnumber adults, device turns never outnumber devices, no devices means
+    a physical activity, every child present has one task, and missing
+    materials block publishing. Regenerating keeps edited sections and
+    locked placements. A published revision is a frozen copy with its own
+    snapshot; later evidence never changes it, and publishing sends nothing
+    to any device.
+70. **The family report is an allowlist.** `familyReport()` copies only
+    `FAMILY_FIELDS`: private notes, groups, statuses and other children
+    cannot reach it, and sparse evidence gets modest words.
+71. **The dock keeps its side of the screen clear.** The order card, tools
+    and bell stand on the right in landscape and along the bottom in
+    portrait (`placeDock()`); `layoutInsets()` reserves that side so the
+    food, the chef and the customer never sit under it, and the plate waits
+    behind the board (`plateBehind`). The grown-ups' button stays above it.
+    Its buttons follow `canAct()` whatever changes it (`syncDock()` each
+    step): an order can be shown before the roll has arrived, and a dock drawn
+    then stayed disabled. The cat's seat needs no room for a bubble here
+    (`NO_BUBBLE`); in landscape there is still no seat beside the dock, so
+    the order card stands for the cat: the plate slides off toward it and its
+    cat is pleased when the plate arrives. At a round's end the dock steps
+    away but its side stays kept, so nothing on the stage moves.
+72. **The endless slicing is the developer route `?free`.** Children meet
+    the counting rounds; the engine's own contracts (20–35) run `?free`.
 
 ## Development
 

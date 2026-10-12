@@ -2,6 +2,71 @@
 
 None of this is done. It is listed so nothing here reads as finished.
 
+## For a real classroom: the multi-device milestone (not built)
+
+0.8.0 is a single-device development prototype. Before any real class uses
+it, it needs a small authenticated backend, which has **not** been chosen,
+provisioned or paid for. What that backend must do, whatever it is:
+
+- **Teacher accounts and sign-in.** Real authentication (for example
+  passwordless email or a school identity provider), sessions that expire,
+  and sign-out on shared devices. The times-table question is a parent gate
+  and must never be treated as teacher access.
+- **Class-scoped authorization, checked on the server.** Every read and
+  write is allowed only for a teacher of that class; a child device can only
+  append events for its current class session; nothing trusts a class or
+  child id sent by the client.
+- **Classroom devices and child launch.** Enrolling a device to a class,
+  short-lived class sessions, and the teacher-assigned avatar list; a child
+  device never sees other classes or the teacher workspace.
+- **Idempotent event ingestion.** Events keep their client ids
+  (`<session>.<seq>`) as idempotency keys; the server records received time
+  next to the device's time, accepts a batch more than once without
+  doubling it, and keeps an offline queue's order. The current
+  `data.learn.events.<session>` keys are the natural outbox.
+- **Durable storage and versioning.** Append-only events, derived summaries
+  recomputed by rule version, immutable published plans and report
+  snapshots, and an audit trail.
+- **Data handling before a pilot.** Minimum fields (display names or
+  pseudonyms), retention and deletion, export, a privacy notice, and a
+  review of the school's own obligations. Nothing here makes a legal or
+  standards-compliance claim.
+- **What the prototype does instead.** One prototype class and a DEMO class
+  on one browser; the workspace says so on every screen.
+
+## Before a learning release
+
+- An educator reviews the counting activity, rule r1, the statuses' wording,
+  lesson template t1 and the family report.
+- Supervised usability sessions with children (Phase A).
+- "With support" needs a reviewed support rubric for `count.quantity.1_5`.
+- The other four stations (Phase D), each after its own content, access,
+  rubric and lesson review.
+
+## Known limits (0.8.0: the first connected learning slice)
+
+- The workspace's records live in one browser's storage, shared with every
+  app under `morecobrax-dot.github.io` (about 5 MB). Clearing site data
+  deletes them; nothing is backed up but the developer's Backup & data.
+- The prototype class's time zone is the device's at first use, and its
+  calendar is Monday to Friday with no closures; neither can be edited yet.
+- Only English. Chef Capy speaks only with an English voice installed on
+  the device; where there is none it is silent and the picture carries the
+  order. Which devices have one was not checked.
+- The teacher workspace has no live teaching view and does not distribute
+  plans: "publish" keeps a fixed copy on this device.
+- In counting rounds the plate waits behind the board on every screen, and
+  the order is on the dock's card; the cat's bubble is not drawn.
+- **In landscape, on tablets, desktops and phones alike, the cat has no seat in counting rounds**:
+  the dock takes the room it sat in, and the knife's ground fills the rest.
+  The order card stands for it (its cat face is pleased when the plate
+  arrives), and the plate slides off toward the dock. Held upright, the cat
+  sits at the counter as before. Seating it in landscape needs the counter
+  restaged for the dock, which is design work for a later milestone.
+- The leftover piece of a roll stays on the board until the next customer
+  comes; at a round's end it waits under the panel.
+- `?tune`, Backup & data and What's new are still developer routes.
+
 ## From the template's new-product steps
 
 - **Final icons.** `icon-192.png` and `icon-512.png` are the template's
@@ -21,9 +86,9 @@ None of this is done. It is listed so nothing here reads as finished.
 - Haptics reach only browsers with the Vibration API (Chrome and Edge on
   Android); Safari on iPhone and iPad has none, so there is no haptic there.
   Whether a device actually vibrates cannot be known from the page.
-- The foundation's "this browser is not saving" notice has nowhere to appear,
-  because nothing is saved. When local save arrives (Phase 3), show it in the
-  grown-ups area.
+- The foundation's "this browser is not saving" notice is not used; since
+  0.8.0 the teacher workspace says on every screen whether records are being
+  kept on this device.
 - All apps under `morecobrax-dot.github.io` share one origin. `APP_ID` keeps
   their storage and caches apart, but they share one browser storage quota
   (about 5 MB), and Cache Storage too. That matters once Phase 3 saves

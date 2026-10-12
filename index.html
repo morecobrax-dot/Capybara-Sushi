@@ -206,6 +206,50 @@
   --sparkle: #FFF6D8;
   --scene-ink: #5B3E29;
   --scene-ink-soft: rgba(91,62,41,0.22);
+  /* Chef Capy's learning prototype. The help ring that counts with a child,
+     the sushi bar seen from outside, the fictional avatars, the kitchen's
+     dock, and the teacher workspace's calm paper theme, whose status
+     colours always travel with a label. */
+  --help-ring: #F2B33D;
+  --store-sky: #F7E6CD;
+  --store-ground: #D9C4A2;
+  --store-wall: #F4E3C8;
+  --store-wood: #B9824E;
+  --store-roof: #6B4A3A;
+  --store-roof-edge: #4E3428;
+  --store-door: #8A5A3B;
+  --store-window: #FFE7B0;
+  --store-lantern: #E2574C;
+  --store-lantern-glow: rgba(255,214,140,0.55);
+  --store-leaf: #7FA36B;
+  --avatar-fox: #E9925B;
+  --avatar-frog: #8DBA6A;
+  --avatar-bunny: #E2D3E0;
+  --avatar-bear: #A47551;
+  --avatar-penguin: #4A5568;
+  --avatar-owl: #B89A6E;
+  --avatar-belly: #FBF1E2;
+  --avatar-ink: #2A1912;
+  --dock-surface: rgba(255,251,242,0.94);
+  --dock-edge: rgba(92,58,32,0.28);
+  --dock-ink: #5B3E29;
+  --teach-paper: #F7F2E8;
+  --teach-surface: #FFFDF8;
+  --teach-raised: #FFFFFF;
+  --teach-sunken: #EFE7D8;
+  --teach-border: #DED3BF;
+  --teach-text: #2C241C;
+  --teach-dim: #574B3E;
+  --teach-faint: #6E6152;
+  --teach-accent: #2F6B5A;
+  --teach-accent-deep: #24574A;
+  --teach-accent-soft: rgba(47,107,90,0.10);
+  --teach-warn-soft: rgba(166,106,31,0.12);
+  --st-not-observed: #655D52;
+  --st-gathering: #3D5C87;
+  --st-building: #84510F;
+  --st-independent: #24653F;
+  --st-fresh-check: #654A85;
 }
 
 /* =========================================================
@@ -802,7 +846,7 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
 /* The grown-ups' way in: small and quiet in the top corner, and all it
    opens is a question a young child cannot answer. */
 .grownup-btn{
-  position: absolute; z-index: 2;
+  position: absolute; z-index: 6;
   top: calc(var(--inset-top) + var(--space-sm));
   left: calc(var(--inset-left) + var(--space-sm));
   color: var(--scene-ink); background: var(--done-disc); border: 1px solid var(--scene-ink-soft);
@@ -826,6 +870,286 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
 }
 .tune-range{ display: block; width: 100%; min-height: var(--touch-min); margin: 0; accent-color: var(--accent); }
 .tune-summary{ font-family: var(--font-mono); }
+
+/* =========================================================
+   LEARNING — the counting rounds, the sushi bar's door, and the
+   teacher workspace (a development prototype on one device)
+   ========================================================= */
+/* The dock keeps the order, the tools and the bell together on the side of
+   the stage that the layout keeps clear (layoutInsets()). */
+.dock{ position: absolute; z-index: 3; display: flex; gap: var(--space-sm); }
+.dock[hidden]{ display: none; }
+.dock[data-side="right"]{
+  top: calc(var(--inset-top) + var(--space-sm)); bottom: calc(var(--inset-bottom) + var(--space-sm));
+  right: calc(var(--inset-right) + var(--space-sm)); width: var(--dock-size, 132px); flex-direction: column;
+  justify-content: center;
+}
+/* Beside the stage the tools stay square, and the bell sits under them. */
+.dock[data-side="right"] .dock-tools{ flex: 0 0 auto; grid-auto-rows: auto; }
+.dock[data-side="right"] .dock-btn{ aspect-ratio: 1 / 1; }
+.dock[data-side="right"] .dock-serve{ min-height: 88px; }
+.dock[data-side="bottom"]{
+  left: calc(var(--inset-left) + var(--space-sm)); right: calc(var(--inset-right) + var(--space-sm));
+  bottom: calc(var(--inset-bottom) + var(--space-sm)); height: var(--dock-size, 140px); flex-direction: row;
+}
+.order-card{
+  flex: 0 0 auto; padding: 0; margin: 0; cursor: pointer;
+  background: none; border: none; border-radius: var(--radius-lg);
+}
+.dock[data-side="right"] .order-card{ width: 100%; aspect-ratio: 6 / 5; }
+.dock[data-side="bottom"] .order-card{ height: 100%; aspect-ratio: 6 / 5; }
+.order-card:disabled{ cursor: default; }
+.order-svg{ display: block; width: 100%; height: 100%; }
+.card-paper{ fill: var(--order-bubble); stroke: var(--order-edge); stroke-width: 1.6; }
+.card-tail{ fill: var(--order-edge); }
+.maki-side{ fill: var(--nori-dark); }
+.maki-nori{ fill: var(--nori); }
+.maki-rice{ fill: var(--rice); }
+.maki-salmon{ fill: var(--salmon); }
+.maki-ring{ fill: none; stroke: none; }
+.order-pic.lit .maki-ring{ stroke: var(--help-ring); stroke-width: 3; }
+.cat-head, .cat-ear{ fill: var(--cat-fur); }
+.cat-muzzle{ fill: var(--cat-cream); }
+.cat-nose{ fill: var(--cat-nose); }
+.cat-eye{ fill: none; stroke: var(--chef-eye); stroke-width: 1.4; stroke-linecap: round; }
+.cat-blush{ fill: var(--chef-blush); opacity: 0.6; }
+.dock-tools{ flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: var(--space-sm); min-height: 0; min-width: 0; }
+.dock-btn, .dock-serve{
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  min-width: var(--touch-min); min-height: var(--touch-min); padding: 0;
+  color: var(--dock-ink); background: var(--dock-surface);
+  border: 2px solid var(--dock-edge); border-radius: var(--radius-lg);
+}
+.dock-serve{ flex: 0 0 auto; min-height: 72px; border: 3px solid var(--done-mark); color: var(--done-mark); border-radius: var(--radius-xl); }
+.dock[data-side="bottom"] .dock-serve{ min-width: 92px; }
+.dock-btn:disabled, .dock-serve:disabled{ opacity: 0.4; cursor: default; }
+.nudge{ animation: dock-nudge 0.32s var(--ease); }
+@keyframes dock-nudge{ 25%{ transform: translateX(-4px); } 75%{ transform: translateX(4px); } }
+.demo-skip{
+  position: absolute; z-index: 4; top: calc(var(--inset-top) + var(--space-sm));
+  left: calc(var(--inset-left) + var(--space-sm) + var(--touch-min) + var(--space-sm));
+  color: var(--scene-ink); background: var(--done-disc); border: 1px solid var(--scene-ink-soft);
+}
+.demo-skip[hidden]{ display: none; }
+.ghost-hand{
+  position: absolute; left: 0; top: 0; z-index: 4; width: 48px; height: 48px; margin: -6px 0 0 -16px;
+  pointer-events: none; transition: transform 0.45s var(--ease);
+}
+.ghost-hand[hidden]{ display: none; }
+.ghost-hand svg{ display: block; width: 100%; height: 100%; }
+.ghost-fill{ fill: var(--hint-ghost); stroke: var(--hud-shade); stroke-width: 1.4; }
+.preview-banner{
+  position: absolute; z-index: 4; top: calc(var(--inset-top) + var(--space-sm)); left: 50%; transform: translateX(-50%);
+  padding: var(--space-xs) var(--space-md); border-radius: var(--radius-pill);
+  background: var(--dock-surface); color: var(--dock-ink); border: 1px solid var(--dock-edge);
+  font-size: var(--fs-support); font-weight: 600; white-space: nowrap;
+}
+.preview-banner[hidden]{ display: none; }
+.round-end{
+  position: absolute; z-index: 5; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-lg);
+  padding: var(--space-xl); border-radius: var(--radius-xl);
+  background: var(--dock-surface); border: 2px solid var(--dock-edge); box-shadow: var(--shadow-md);
+}
+.round-end[hidden]{ display: none; }
+.round-end-art{ width: 132px; height: 88px; }
+.round-end-actions{ display: flex; gap: var(--space-lg); }
+.round-btn{
+  width: 104px; height: 104px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  border-radius: var(--radius-xl); background: var(--order-bubble); color: var(--done-mark); border: 3px solid var(--done-mark);
+}
+#roundFinish{ color: var(--dock-ink); border-color: var(--dock-edge); }
+
+/* Outside the sushi bar. The picture fills the screen; the avatars sit
+   below the door; going in glides toward the door, or simply dissolves. */
+.entrance{ position: absolute; inset: 0; z-index: 3; background: var(--store-sky); overflow: hidden; }
+.entrance[hidden]{ display: none; }
+.storefront{
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  transform-origin: 50% 66%; transition: transform 0.65s var(--ease), opacity 0.5s var(--ease) 0.15s;
+}
+.entrance.entering .storefront{ transform: scale(2.6); opacity: 0; }
+.entrance.entering .entrance-avatars{ opacity: 0; }
+/* With reduced motion the way in is a short dissolve, never a glide. */
+@media (prefers-reduced-motion: reduce){
+  .entrance.entering .storefront{ transform: none; }
+  .entrance .storefront, .entrance .entrance-avatars{ transition: opacity 0.2s linear !important; }
+}
+.entrance-avatars{
+  position: absolute; left: 0; right: 0; bottom: calc(var(--inset-bottom) + var(--space-lg));
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-md);
+  padding: 0 calc(var(--inset-right) + var(--space-lg)) 0 calc(var(--inset-left) + var(--space-lg));
+  transition: opacity 0.3s var(--ease);
+}
+.avatar-btn{
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
+  min-width: 84px; padding: var(--space-sm); cursor: pointer;
+  background: var(--dock-surface); border: 2px solid var(--dock-edge); border-radius: var(--radius-xl); color: var(--dock-ink);
+}
+.avatar-name{ font-size: var(--fs-support); font-weight: 700; }
+.av-fox .av-fill{ fill: var(--avatar-fox); }
+.av-frog .av-fill{ fill: var(--avatar-frog); }
+.av-bunny .av-fill{ fill: var(--avatar-bunny); }
+.av-bear .av-fill{ fill: var(--avatar-bear); }
+.av-penguin .av-fill{ fill: var(--avatar-penguin); }
+.av-owl .av-fill{ fill: var(--avatar-owl); }
+.av-belly{ fill: var(--avatar-belly); }
+.av-ink{ fill: var(--avatar-ink); }
+.av-line{ fill: none; stroke: var(--avatar-ink); stroke-width: 2.4; stroke-linecap: round; }
+.sf-sky{ fill: var(--store-sky); }
+.sf-ground{ fill: var(--store-ground); }
+.sf-wall{ fill: var(--store-wall); }
+.sf-wood{ fill: var(--store-wood); }
+.sf-roof{ fill: var(--store-roof); }
+.sf-roof-edge{ fill: var(--store-roof-edge); }
+.sf-door{ fill: var(--store-door); }
+.sf-window{ fill: var(--store-window); }
+.sf-noren{ fill: var(--chef-apron); }
+.sf-lantern{ fill: var(--store-lantern); }
+.sf-glow{ fill: var(--store-lantern-glow); }
+.sf-leaf{ fill: var(--store-leaf); }
+.sf-fur{ fill: var(--chef-fur); }
+.sf-fur-dark{ fill: var(--chef-fur-dark); }
+.sf-hat{ fill: var(--chef-hat); }
+.sf-ink{ fill: var(--chef-eye); }
+.sf-line{ fill: none; stroke: var(--chef-eye); stroke-width: 1.6; stroke-linecap: round; }
+.sf-nori{ fill: var(--nori); }
+.sf-rice{ fill: var(--rice); }
+.sf-salmon{ fill: var(--salmon); }
+
+/* The teacher workspace: the foundation's own components, on paper. */
+.teach{
+  --bg: var(--teach-paper); --surface: var(--teach-surface); --surface-raised: var(--teach-raised);
+  --surface-sunken: var(--teach-sunken); --border: var(--teach-border); --border-quiet: var(--teach-border);
+  --edge-hi: transparent; --text: var(--teach-text); --text-dim: var(--teach-dim); --text-faint: var(--teach-faint);
+  --accent: var(--teach-accent); --accent-deep: var(--teach-accent-deep); --accent-soft: var(--teach-accent-soft);
+  --accent-contrast: var(--teach-raised); --shadow-accent: none;
+  --gradient-accent: linear-gradient(135deg, var(--teach-accent), var(--teach-accent-deep));
+  color: var(--text);
+}
+.teach .sheet{ max-width: 1040px; background: var(--teach-paper); }
+.teach .sheet-scroll{ line-height: var(--lh-body); }
+.teach-banner{
+  padding: var(--space-md); margin-bottom: var(--space-md); border-radius: var(--radius-md);
+  background: var(--teach-warn-soft); border: 1px solid var(--teach-border); font-size: var(--fs-support); color: var(--text);
+}
+.demo-badge{
+  display: inline-block; margin-left: var(--space-xs); padding: 0 var(--space-sm); border-radius: var(--radius-pill);
+  background: var(--st-fresh-check); color: var(--teach-raised); font-weight: 700; font-size: var(--fs-meta);
+}
+.teach-classbar{ display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm) var(--space-md); margin-bottom: var(--space-md); }
+.teach-classbar select{ min-height: var(--touch-min); }
+.teach-meta{ flex: 1 1 18em; font-size: var(--fs-meta); color: var(--text-dim); }
+.teach-label{ display: block; font-size: var(--fs-meta); font-weight: 700; color: var(--text-dim); margin: var(--space-sm) 0 var(--space-xs); }
+.teach-classbar .teach-label{ margin: 0; }
+.teach-nav{ display: flex; gap: var(--space-xs); overflow-x: auto; border-bottom: 1px solid var(--border); margin-bottom: var(--space-lg); }
+.teach-tab{
+  flex: 0 0 auto; min-height: var(--touch-min); padding: 0 var(--space-md); cursor: pointer;
+  background: none; border: none; border-bottom: 3px solid transparent;
+  color: var(--text-dim); font-size: var(--fs-body); font-weight: 600;
+}
+.teach-tab.on{ color: var(--accent); border-bottom-color: var(--accent); }
+.teach-notice{ margin-bottom: var(--space-md); }
+.teach-h{ display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); font-size: var(--fs-section); margin: 0 0 var(--space-md); }
+.teach-h3{ font-size: var(--fs-title); margin: var(--space-xl) 0 var(--space-sm); }
+.teach-card{
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: var(--space-lg); margin-bottom: var(--space-md);
+}
+.teach-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-md); margin-bottom: var(--space-md); }
+.teach-grid .teach-card{ margin-bottom: 0; }
+.teach-kicker{ font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: var(--space-xs); }
+.teach-lead{ font-size: var(--fs-title); margin: 0 0 var(--space-sm); }
+.teach-metric{ font-size: var(--fs-metric); font-weight: 700; margin: 0; font-variant-numeric: tabular-nums; }
+.teach-small{ font-size: var(--fs-meta); color: var(--text-dim); margin: var(--space-xs) 0; }
+.teach-statuses{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); font-size: var(--fs-support); }
+.status-chip{
+  display: inline-block; padding: 1px var(--space-sm); border-radius: var(--radius-pill);
+  font-size: var(--fs-meta); font-weight: 700; background: var(--surface-sunken); border-left: 4px solid currentColor;
+}
+.st-not-observed{ color: var(--st-not-observed); }
+.st-gathering{ color: var(--st-gathering); }
+.st-building{ color: var(--st-building); }
+.st-independent{ color: var(--st-independent); }
+.st-fresh-check{ color: var(--st-fresh-check); }
+.teach-insights{ list-style: none; margin: 0 0 var(--space-md); padding: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.teach-insights li{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-md); }
+.teach-insights p{ margin: 0 0 var(--space-sm); }
+.table-wrap{ overflow-x: auto; margin-bottom: var(--space-md); }
+.teach-table{ width: 100%; border-collapse: collapse; font-size: var(--fs-support); background: var(--surface); }
+.teach-table th, .teach-table td{ text-align: left; vertical-align: top; padding: var(--space-sm); border-bottom: 1px solid var(--border); }
+.teach-table thead th{ font-size: var(--fs-meta); color: var(--text-dim); }
+.teach-drawer{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-md); font-size: var(--fs-support); }
+.teach-drawer summary{ cursor: pointer; font-weight: 700; min-height: var(--touch-min); display: flex; align-items: center; }
+.teach-list{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.teach-row{
+  width: 100%; display: flex; align-items: center; gap: var(--space-md); min-height: var(--touch-min); text-align: left; cursor: pointer;
+  padding: var(--space-sm) var(--space-md); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text);
+}
+.teach-row-main{ flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.teach-row-title{ font-size: var(--fs-title); font-weight: 600; }
+.teach-row-sub{ font-size: var(--fs-meta); color: var(--text-dim); }
+.teach-criteria{ list-style: none; margin: var(--space-sm) 0; padding: 0; font-size: var(--fs-support); }
+.teach-criteria li{ padding-left: 1.6em; position: relative; margin-bottom: var(--space-xs); }
+.teach-criteria li::before{ position: absolute; left: 0; font-weight: 700; }
+.teach-criteria li.met::before{ content: '\2713'; color: var(--st-independent); }
+.teach-criteria li.unmet::before{ content: '\25CB'; color: var(--st-not-observed); }
+.teach-obs{ margin: 0 0 var(--space-md); padding-left: 1.2em; font-size: var(--fs-support); }
+.teach-note{ color: var(--text-dim); font-size: var(--fs-meta); }
+.teach-form textarea, .teach-form select, .teach-card input[type="date"], .teach-card input[type="number"], .teach-card select{
+  width: 100%; max-width: 22em; min-height: var(--touch-min);
+  background: var(--teach-raised); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-xs) var(--space-sm);
+}
+.teach-form{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-md); }
+.teach-form .btn-primary{ margin-top: var(--space-md); }
+.teach-form-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 var(--space-md); align-items: end; }
+.teach-check{ display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--touch-min); margin-right: var(--space-md); font-size: var(--fs-support); }
+.teach-check input{ width: 20px; height: 20px; }
+.teach-checks{ display: flex; flex-wrap: wrap; }
+.plan{ margin-top: var(--space-lg); }
+.plan-issues{ list-style: none; margin: var(--space-sm) 0 var(--space-md); padding: 0; font-size: var(--fs-support); }
+.plan-issues li{ padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-xs); border-radius: var(--radius-md); background: var(--surface); border-left: 4px solid var(--st-gathering); }
+.plan-issues li.issue-block{ border-left-color: var(--danger); }
+.group-card p{ margin: 0 0 var(--space-xs); }
+.group-members{ list-style: none; margin: var(--space-sm) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); font-size: var(--fs-support); }
+.group-members select{ width: auto; max-width: 14em; min-height: 36px; margin-left: var(--space-sm); }
+.lock-mark{ color: var(--st-fresh-check); font-size: var(--fs-meta); }
+.plan-section{ margin-bottom: var(--space-md); }
+.plan-section textarea{ width: 100%; max-width: none; line-height: var(--lh-body);
+  background: var(--teach-raised); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-sm); }
+.plan-text{ margin: 0; white-space: pre-line; }
+.plan-actions{ display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: var(--space-md) 0; }
+.link-btn{ background: none; border: none; padding: var(--space-xs) 0; min-height: var(--touch-min); color: var(--accent); font-size: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.back-link{ margin-bottom: var(--space-sm); }
+.report-controls select{ max-width: 16em; }
+.teach-seg{ display: flex; flex-wrap: wrap; margin: var(--space-sm) 0; }
+.report-sheet{
+  background: var(--teach-raised); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: var(--space-xl); max-width: 46em; font-size: var(--fs-body);
+}
+.report-sheet h3{ font-size: var(--fs-section); margin: var(--space-xs) 0; }
+.report-sheet h4{ font-size: var(--fs-title); margin: var(--space-lg) 0 var(--space-xs); }
+.report-sheet p{ margin: 0 0 var(--space-sm); }
+
+/* Print / Save as PDF shows the report alone. */
+@media print{
+  html, body{ height: auto !important; overflow: visible !important; position: static !important; top: auto !important; background: var(--teach-raised) !important; }
+  body.printing-report #app, body.printing-report .toast-host, body.printing-report .top-scrim,
+  body.printing-report .overlay:not(#teachOverlay){ display: none !important; }
+  body.printing-report #teachOverlay, body.printing-report #teachOverlay .sheet, body.printing-report #teachOverlay .sheet-scroll{
+    position: static !important; display: block !important; overflow: visible !important; height: auto !important;
+    max-height: none !important; animation: none !important; box-shadow: none !important; background: var(--teach-raised) !important;
+  }
+  body.printing-report #teachOverlay .page-topbar, body.printing-report .teach-banner, body.printing-report .teach-classbar,
+  body.printing-report .teach-nav, body.printing-report .teach-notice, body.printing-report .teach-h,
+  body.printing-report .report-controls{ display: none !important; }
+  body.printing-report .report-sheet{ border: none; padding: 0; max-width: none; }
+}
+@media (max-width: 560px){
+  .teach-tab{ flex: 1 1 auto; padding: 0 var(--space-xs); }
+  .teach-card{ padding: var(--space-md); }
+  .report-sheet{ padding: var(--space-lg); }
+}
 
 /* =========================================================
    RESPONSIVE
@@ -868,8 +1192,64 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
     <button class="icon-btn tune-btn" id="tuneBtn" aria-label="Feel tuning (developer)"
             onclick="openTuning()" hidden></button>
     <!-- Grown-ups: sound and haptics, behind a question a young child cannot answer -->
-    <button class="icon-btn grownup-btn" id="grownUpBtn" aria-label="For grown-ups: sound and haptics"
+    <button class="icon-btn grownup-btn" id="grownUpBtn" aria-label="For grown-ups: sound, haptics and the teacher workspace"
             onclick="openGate()"></button>
+    <!-- COUNTING ROUNDS — the customer's order, the kitchen tools and the bell, beside the stage -->
+    <div class="dock" id="learnDock" data-side="right" hidden>
+      <button class="order-card" id="orderCard" type="button" aria-label="The order" onclick="learnRepeat()" disabled></button>
+      <div class="dock-tools" role="group" aria-label="Kitchen tools">
+        <button class="dock-btn" id="dockKnife" type="button" aria-label="Cut the roll" onclick="learnKnife()" disabled></button>
+        <button class="dock-btn" id="dockHelp" type="button" aria-label="Ask Chef Capy for help" onclick="learnHelp()" disabled></button>
+        <button class="dock-btn" id="dockAdd" type="button" aria-label="Put one piece on the plate" onclick="plateNext()" disabled></button>
+        <button class="dock-btn" id="dockRemove" type="button" aria-label="Take one piece back" onclick="unplateLast()" disabled></button>
+      </div>
+      <button class="dock-serve" id="dockServe" type="button" aria-label="Ring the bell to serve the order" onclick="learnServe()" disabled></button>
+    </div>
+    <button class="icon-btn demo-skip" id="demoSkip" type="button" aria-label="Skip Chef Capy's demonstration" onclick="skipDemo()" hidden></button>
+    <div class="ghost-hand" id="ghostHand" aria-hidden="true" hidden>
+      <svg viewBox="0 0 32 32" focusable="false"><path class="ghost-fill" d="M12.5 3.5a2.3 2.3 0 0 1 4.6 0v9.2l6.1 1.2c1.8.4 3 2.1 2.7 3.9l-1.1 6.4a5 5 0 0 1-4.9 4.1h-5.4a5 5 0 0 1-4-2l-4.4-5.9a2.1 2.1 0 0 1 3.1-2.8l3.3 2.6z"/></svg>
+    </div>
+    <div class="preview-banner" id="previewBanner" role="status" hidden></div>
+    <div class="round-end" id="roundEnd" role="group" aria-label="All five orders are served" hidden>
+      <svg class="round-end-art" viewBox="0 0 132 88" aria-hidden="true" focusable="false">
+        <g class="cat-face"><path class="cat-ear" d="M30 30 34 8 50 22Z"/><path class="cat-ear" d="M78 30 74 8 58 22Z"/>
+          <circle class="cat-head" cx="54" cy="40" r="26"/><ellipse class="cat-muzzle" cx="54" cy="50" rx="13" ry="8"/>
+          <circle class="cat-nose" cx="54" cy="46" r="3"/><path class="cat-eye" d="M40 35q4-5 8 0M60 35q4-5 8 0"/></g>
+        <ellipse class="sf-nori" cx="104" cy="62" rx="18" ry="12"/><ellipse class="sf-rice" cx="104" cy="62" rx="14" ry="9"/>
+        <rect class="sf-salmon" x="98" y="58" width="12" height="8" rx="3"/>
+      </svg>
+      <div class="round-end-actions">
+        <button class="round-btn" id="roundMore" type="button" aria-label="More orders" onclick="learnContinue()"></button>
+        <button class="round-btn" id="roundFinish" type="button" aria-label="Finish and go outside" onclick="learnFinish()"></button>
+      </div>
+    </div>
+    <!-- OUTSIDE THE SUSHI BAR — choose your avatar, and go in -->
+    <div class="entrance" id="entrance" role="region" aria-label="Outside Chef Capy's sushi bar" hidden>
+      <svg class="storefront" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+        <rect class="sf-sky" x="0" y="0" width="400" height="300"/>
+        <rect class="sf-ground" x="0" y="232" width="400" height="68"/>
+        <rect class="sf-wall" x="70" y="78" width="260" height="156"/>
+        <path class="sf-roof" d="M52 84 200 34 348 84Z"/><rect class="sf-roof-edge" x="48" y="80" width="304" height="10" rx="4"/>
+        <rect class="sf-wood" x="70" y="226" width="260" height="8"/>
+        <rect class="sf-wood" x="150" y="96" width="100" height="26" rx="6"/>
+        <ellipse class="sf-nori" cx="200" cy="109" rx="12" ry="9"/><ellipse class="sf-rice" cx="200" cy="109" rx="9" ry="6.5"/>
+        <rect class="sf-salmon" x="196" y="106" width="8" height="6" rx="2"/>
+        <rect class="sf-door" x="172" y="138" width="56" height="88" rx="6"/>
+        <rect class="sf-window" x="180" y="148" width="40" height="30" rx="4"/>
+        <path class="sf-noren" d="M164 128h22v26h-22zM189 128h22v26h-22zM214 128h22v26h-22z"/>
+        <rect class="sf-wood" x="160" y="125" width="80" height="5" rx="2.5"/>
+        <rect class="sf-window" x="92" y="140" width="56" height="44" rx="6"/>
+        <rect class="sf-window" x="252" y="140" width="56" height="44" rx="6"/>
+        <g><circle class="sf-fur" cx="120" cy="170" r="15"/><rect class="sf-hat" x="108" y="146" width="24" height="12" rx="6"/>
+          <ellipse class="sf-fur-dark" cx="120" cy="176" rx="9" ry="6"/><circle class="sf-ink" cx="114" cy="166" r="1.6"/><circle class="sf-ink" cx="126" cy="166" r="1.6"/>
+          <circle class="sf-fur" cx="140" cy="158" r="5"/></g>
+        <circle class="sf-glow" cx="98" cy="110" r="16"/><ellipse class="sf-lantern" cx="98" cy="110" rx="9" ry="12"/>
+        <circle class="sf-glow" cx="302" cy="110" r="16"/><ellipse class="sf-lantern" cx="302" cy="110" rx="9" ry="12"/>
+        <circle class="sf-leaf" cx="74" cy="226" r="14"/><circle class="sf-leaf" cx="92" cy="230" r="10"/>
+        <circle class="sf-leaf" cx="326" cy="226" r="14"/><circle class="sf-leaf" cx="308" cy="230" r="10"/>
+      </svg>
+      <div class="entrance-avatars" id="entranceAvatars" role="group" aria-label="Who is cooking today?"></div>
+    </div>
     <div class="sr-only" id="playStatus" role="status" aria-live="polite"></div>
     <div class="safe-probe" id="safeProbe" aria-hidden="true"></div>
   </main>
@@ -924,7 +1304,7 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
   <div class="sheet" aria-labelledby="gateTitle" aria-describedby="gateSub">
     <div class="sheet-scroll">
       <h2 id="gateTitle">For grown-ups</h2>
-      <p class="sheet-sub" id="gateSub">Answer the question to change sound and haptics.</p>
+      <p class="sheet-sub" id="gateSub">Answer the question to change sound and haptics, or to open the teacher workspace.</p>
       <div class="field">
         <label class="gate-question" for="gateAnswer" id="gateQuestion">What is 6 × 7?</label>
         <input type="text" id="gateAnswer" inputmode="numeric" pattern="[0-9]*" maxlength="3"
@@ -960,6 +1340,16 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
         </span>
         <button class="toggle" id="prefHaptics" role="switch" aria-checked="true"
                 aria-labelledby="prefHapticsLabel" aria-describedby="prefHapticsHint" onclick="togglePref('haptics')"></button>
+      </div>
+      <div class="section-label">Teaching</div>
+      <div class="list">
+        <button class="list-row" onclick="openTeachFromPrefs()">
+          <span class="list-row-main">
+            <span class="list-row-title">Teacher workspace</span>
+            <span class="list-row-desc">A development prototype on this device: counting evidence, lessons and reports. Not a secure classroom tool.</span>
+          </span>
+          <span class="list-row-arrow" aria-hidden="true"></span>
+        </button>
       </div>
       <div class="field-hint" id="prefsMotion"></div>
       <div class="field-hint" id="prefsStorage" role="status" aria-live="polite"></div>
@@ -1030,6 +1420,18 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
       <span class="topbar-spacer"></span>
     </div>
     <div class="sheet-scroll" id="updatesBody"></div>
+  </div>
+</div>
+
+<!-- TEACHER WORKSPACE — a development prototype on this device, behind the grown-ups' question (not authentication) -->
+<div class="overlay overlay-page teach" id="teachOverlay">
+  <div class="sheet">
+    <div class="page-topbar">
+      <button class="icon-btn" onclick="closeTeach()" aria-label="Back to the sushi bar"></button>
+      <div class="page-topbar-title">Teacher workspace</div>
+      <span class="topbar-spacer"></span>
+    </div>
+    <div class="sheet-scroll" id="teachBody"></div>
   </div>
 </div>
 
@@ -1114,6 +1516,30 @@ const APP_FILES = [
    New products replace this array wholesale; this one did at 0.1.0.
    ========================================================= */
 const APP_UPDATES = [
+  {
+    id: 'v0-8-0',
+    version: '0.8.0',
+    title: 'Counting with Chef Capy',
+    date: '2026-10-12',
+    summary: 'The first learning slice, as a development prototype on one device: outside the sushi bar a child taps a pretend profile, ' +
+             'watches Chef Capy once, then makes exactly the number of pieces the customer pictures, from one to five, and rings the bell. ' +
+             'Behind the grown-ups\' question, a teacher workspace shows that counting evidence, drafts a lesson and prepares reports. ' +
+             'No sign-in and no syncing between devices; not for real classrooms yet.',
+    newFeatures: [
+      'Outside the sushi bar, six pretend children to choose from; a tap goes in',
+      'Chef Capy shows the task once with a pointing hand, and it can be skipped',
+      'Counting orders from one to five: cut the roll, put exactly that many pieces on the plate, then ring the bell',
+      'Gentle help after a different number: counting together, then rings on the plate, then Chef Capy\'s own hands',
+      'A teacher workspace: Today, Class, Students, Lessons and Reports, with a sample class, lesson drafts and teacher and family reports'
+    ],
+    improvements: [
+      'Tapping a piece, the plus and minus buttons and the keys each move one piece; nothing is served until the bell',
+      'The order is a picture of maki, never a number to read, and a voice on the device can say it',
+      'Counting results stay on this device only; a teacher\'s preview records nothing',
+      'The endless slicing of 0.7.0 stays for developers at ?free'
+    ],
+    fixes: []
+  },
   {
     id: 'v0-7-0',
     version: '0.7.0',
@@ -2235,13 +2661,15 @@ function rateCut(r, index, u, pxPerU){
    arriving, waiting (its order shows), pleased (served), leaving. It lives
    in memory only. */
 function newPieceState(){
-  return { off: 0, vel: 0, flashL: 0, flashR: 0, tilt: 0, tiltV: 0, rock: 0, rockV: 0 };
+  return { off: 0, vel: 0, flashL: 0, flashR: 0, tilt: 0, tiltV: 0, rock: 0, rockV: 0,
+           plate: 0, plateOrd: 0, pt: 0, sx: 0, sz: 0, st: 0 };   // counting: on the plate, and its hop there
 }
 const AT_REST = Object.freeze(newPieceState());
 let roll = newRoll(TUNING.pieces);
 let pieces = [newPieceState()];
 const game = { phase: 'ready', phaseT: 0, rolls: 0, gathered: false,
-               visit: null, visits: 0, served: 0, delivering: 0 };
+               visit: null, visits: 0, served: 0, delivering: 0,
+               mode: 'free' };     // free: the endless slicing of 0.7.0 (?free); count: Slice & Serve rounds
 let gx = 0;                   // the whole roll's offset while it leaves or arrives
 
 /* The jiggle, worked out for the roll as one soft body: how squashed it is
@@ -2363,15 +2791,18 @@ function rollBand(v){
    can be as big as the width allows, and the plate waits in view behind the
    board (plateZ), filling height that would otherwise be empty counter; the
    pieces hop back onto it. On a wide screen it slides in. */
-function computeLayout(W, H, ins, n, gapWanted, dpr){
+function computeLayout(W, H, ins, n, gapWanted, dpr, opts){
   const margin = Math.max(16, Math.min(W, H) * 0.04);
   const area = { x: ins.left + margin, y: ins.top + margin,
                  w: W - ins.left - ins.right - margin * 2,
                  h: H - ins.top - ins.bottom - margin * 2 };
   if(!(area.w > 40 && area.h > 40)) return null;
-  const spec = cameraFor(area.w, area.h), tall = spec.wide < 0.5, plateZ = tall ? -SCENE.plateBack : 0;
-  const unit = viewFor(spec, 1, 0, 0), plateX = tall ? behindMiddle(unit, plateZ) : 0;
-  const frame = frameOf(unit, !tall, plateX, plateZ, n), cap = area.h * 0.34 / frame.thick;
+  /* In counting rounds the child fills the plate while the roll is still on
+     the board, so the plate waits in view behind it on every screen. */
+  const spec = cameraFor(area.w, area.h), tall = spec.wide < 0.5, behind = tall || !!(opts && opts.plateBehind);
+  const plateZ = behind ? -SCENE.plateBack : 0;
+  const unit = viewFor(spec, 1, 0, 0), plateX = behind ? behindMiddle(unit, plateZ) : 0;
+  const frame = frameOf(unit, !behind, plateX, plateZ, n), cap = area.h * 0.34 / frame.thick;
   const fit = b => Math.min(area.w * 0.96 / (b.x1 - b.x0), area.h * 0.94 / (b.y1 - b.y0), cap);
   const Ffood = fit(frame.food), Fall = fit(frame.all), whole = Fall >= Ffood * 0.95;
   const F = whole ? Fall : Ffood, box = whole ? frame.all : frame.food;
@@ -2391,7 +2822,7 @@ function computeLayout(W, H, ins, n, gapWanted, dpr){
       /* The counter's far edge runs just above all the food does: the knife's
          ground, the served pieces and their hop, and on a tall screen the
          finished mark too, so there the chef can stand in the middle. */
-      const edge = guard.knife.concat(guard.served, [guard.hop], tall ? [{ x: guard.mark.x, y: guard.mark.y - guard.mark.r }] : []);
+      const edge = guard.knife.concat(guard.served, [guard.hop], behind ? [{ x: guard.mark.x, y: guard.mark.y - guard.mark.r }] : []);
       back = Math.min.apply(null, edge.map(p => counterAt(view, p.x, p.y - C.gap)));
     }
     const places = across ? (tall ? [0.5] : C.across) : null;
@@ -2420,7 +2851,7 @@ function computeLayout(W, H, ins, n, gapWanted, dpr){
   /* The customer sits where the served food goes: toward the right if it
      fits there, and everything flows that way — the next roll arrives from
      the other side. */
-  const seat = catSpot(view, W, ins, set.chef, set.guard, set.back, band.bot - band.top);
+  const seat = catSpot(view, W, ins, set.chef, set.guard, set.back, band.bot - band.top, !!(opts && opts.orderCard));
   const flow = seat ? seat.side : 1;
   const out = { W: W, H: H, dpr: dpr, ins: ins, area: area, spec: spec, view: view,
     back: set.back, guard: set.guard, chef: set.chef, seat: seat, flow: flow,
@@ -2431,8 +2862,8 @@ function computeLayout(W, H, ins, n, gapWanted, dpr){
     /* How far things travel to leave or enter the stage, in world units:
        the group as it clears and as the next roll arrives, and on a wide
        screen the board and plate as they trade places. */
-    exit: tall ? Math.max(away(flow, board), away(flow, plate)) : away(flow, plate),
-    enter: tall ? Math.max(away(-flow, board), away(-flow, plate)) : away(-flow, board),
+    exit: behind ? Math.max(away(flow, board), away(flow, plate)) : away(flow, plate),
+    enter: behind ? Math.max(away(-flow, board), away(-flow, plate)) : away(-flow, board),
     span: Math.max(away(flow, board), away(-flow, plate)),
     /* How wide a row of served pieces may be: the plate's top, or on a tall
        screen what the stage shows at the plate's depth, if less. */
@@ -2788,7 +3219,7 @@ function chefCircles(v, chef, pad){
    pleased. The right first, where the served food flows; smaller if it
    must. Null where nothing fits (cornerBubble then shows its order). The
    noren is placed after it and gives way to it. */
-function catSpot(v, W, ins, chef, guard, back, T){
+function catSpot(v, W, ins, chef, guard, back, T, card){
   const Ct = SCENE.cat, floor = -SCENE.board.h;
   const e0 = project(v, -30, floor, back), e1 = project(v, 30, floor, back);
   const edgeY = x => e0.y + (e1.y - e0.y) * (x - e0.x) / (e1.x - e0.x);
@@ -2838,17 +3269,19 @@ function catSpot(v, W, ins, chef, guard, back, T){
         const bubble = tries.map(b => ({ x0: b.x, y0: b.y, x1: b.x + w, y1: b.y + h, w: w, h: h, tx: face.x, ty: face.y - face.r * 0.35 }))
           .find(b => b.x0 >= ins.left + 4 && b.x1 <= W - ins.right - 4 && b.y0 >= ins.top + 4 &&
                      !keep.some(o => meets(b, o)) && !hitsChef(b) && !all.some(c => meets(b, shown(c))));
-        if(!bubble) continue;
+        if(!bubble && !card) continue;
         /* how far it slides along the counter to come and go: off the stage */
         let slide = 0.5;
         while(slide < 80 && place(x + side * slide, s, side, 0).some(c => c.x + c.r > 0 && c.x - c.r < W)) slide += 0.5;
         return { x: x, y: floor - s * Ct.hide, z: back - 0.1 - s * Ct.front, s: s, side: side, yaw: -side * Ct.yaw,
-                 slide: slide + 0.5, circles: all, face: face, bubble: bubble, head: face.r * 2 };
+                 slide: slide + 0.5, circles: all, face: face, bubble: card ? NO_BUBBLE : bubble, head: face.r * 2 };
       }
     }
   }
   return null;
 }
+/* No bubble: an empty box off the stage, which nothing can meet. */
+const NO_BUBBLE = Object.freeze({ x0: -1e5, y0: -1e5, x1: -1e5, y1: -1e5, w: 0, h: 0, tx: null, ty: null });
 /* Where the cat's order shows when it has no seat on the stage — a phone
    on its side, where the food and the chef fill the wall: at the counter's
    right-hand end, its tail pointing off the stage where the cat sits and
@@ -2962,7 +3395,7 @@ function relayout(){
   stageTop = box ? (box.top || 0) : 0;
   const dpr = Math.min(2, Math.max(1, Number(window.devicePixelRatio) || 1));
   const before = layout;
-  layout = computeLayout(W, H, readInsets(), roll.n, TUNING.gap, dpr);
+  layout = computeLayout(W, H, layoutInsets(W, H), roll.n, TUNING.gap, dpr, { plateBehind: game.mode === 'count', orderCard: game.mode === 'count' });
   if(!layout) return !!before;
   const bw = Math.round(W * dpr), bh = Math.round(H * dpr);
   if(stageEl.width !== bw) stageEl.width = bw;
@@ -3001,11 +3434,13 @@ function pieceRects(){
   if(!layout) return [];
   const pcs = piecesOf(roll), lefts = slideLefts(), v = layout.view, n = pcs.length;
   const spots = game.gathered ? plateSpots(pcs.map(p => (p.u1 - p.u0) * SCENE.rollLen), layout.serveRoom) : null;
+  const counting = game.mode === 'count';
   return pcs.map((p, i) => {
     const s = pieces[i] || AT_REST;
     const len = (p.u1 - p.u0) * SCENE.rollLen;
-    let pose = poseOf((lefts[i] + gx - layout.cx) / v.ppw, len, tipShown(i, lefts), s.rock, liftOf(i, n));
-    if(spots) pose = servedPose(pose, spots[i], i, n);
+    let pose = poseOf((lefts[i] + gx - layout.cx) / v.ppw, len, tipShown(i, lefts), s.rock, counting ? 0 : liftOf(i, n));
+    if(counting) pose = platedPose(pose, s, len);
+    else if(spots) pose = servedPose(pose, spots[i], i, n);
     const a = rollX(v, pose.ax, pose.ay, pose.az), b = rollX(v, pose.bx, pose.by, pose.bz);
     return { index: i, u0: p.u0, u1: p.u1, x: a, y: layout.top, w: b - a, h: layout.T, pose: pose };
   });
@@ -3088,6 +3523,7 @@ function tipShown(i, lefts){
 function pieceAt(x){
   const rects = pieceRects();
   for(let i = 0; i < rects.length; i++){
+    if(game.mode === 'count' && pieces[i] && pieces[i].plate) continue;      // on the plate: not the knife's
     if(x > rects[i].x && x < rects[i].x + rects[i].w) return rects[i];
   }
   return null;
@@ -3249,6 +3685,15 @@ function commitCut(index, u, g, tier){
     pieces.forEach((p, i) => { p.vel += (i <= index ? -1 : 1) * TUNING.pop; });
     recoil(index, u, force);
   }
+  if(game.mode === 'count'){
+    chefCut(u, 'nice');
+    playCut('nice');
+    tapHaptic('nice');
+    announce('Cut. ' + piecesOf(roll).length + ' pieces.');
+    renderDock();
+    requestFrame();
+    return;
+  }
   chefCut(u, rated);
   cutFeedback(cutX, rated);
   const remaining = roll.n - 1 - roll.cuts.length;
@@ -3290,6 +3735,7 @@ function onStageDown(ev){
   }
   if(type === 'mouse' && ev.button !== 0) return;
   if(isPaused() || !layout || game.phase !== 'ready') return;
+  if(game.mode === 'count' && learn.stage !== 'play') return;
   const p = stagePoint(ev), q = toRoll(p);
   gesture = { id: ev.pointerId, type: type, seq: ++strokeSeq, rollId: roll.id,
               last: p, travel: 0, visit: null, spent: false };
@@ -3318,7 +3764,7 @@ function onStageUp(ev){
   /* The release point can still complete a crossing. It can never add a
      second cut, because a spent stroke cuts nothing more. */
   if(p.x !== g.last.x || p.y !== g.last.y) feed(g, p);
-  if(gesture === g && !g.spent && g.travel < SLICE.tapSlop) tapWobble(p);
+  if(gesture === g && !g.spent && g.travel < SLICE.tapSlop){ if(game.mode === 'count') learnTap(p); else tapWobble(p); }
   endGesture();
 }
 
@@ -3341,6 +3787,7 @@ function tapWobble(p){
 /* Space, Enter or the down arrow cut at the next guide. Never while a sheet
    or page is open, never from a control, and a held key is one press. */
 function onPlayKey(ev){
+  if(game.mode === 'count'){ onLearnKey(ev); return; }
   if(!ev || ev.defaultPrevented) return;
   const key = ev.key;
   if(key !== ' ' && key !== 'Spacebar' && key !== 'Enter' && key !== 'ArrowDown') return;
@@ -3357,6 +3804,7 @@ function onPlayKey(ev){
 
 function keyboardCut(){
   if(gesture || isPaused() || game.phase !== 'ready' || !layout) return false;
+  if(game.mode === 'count') return learnKnife();
   const target = cutTarget(roll);
   if(!target) return false;
   hideHint();
@@ -3554,7 +4002,8 @@ function phaseLength(){
    the next visit begins as the next roll arrives. */
 function stepPhase(ms){
   stepVisit(ms);
-  if(game.phase !== 'ready'){
+  if(game.mode === 'count') stepCountPhase(ms);
+  else if(game.phase !== 'ready'){
     const before = game.phaseT;
     game.phaseT += ms;
     if(game.phase === 'done' && !game.gathered && game.phaseT >= TUNING.holdMs * SLICE.gatherAt) gather();
@@ -3599,8 +4048,8 @@ function stepVisit(ms){
   if(motionReduced() || !layout || !layout.seat || v.t >= SCENE.visit.arriveMs){
     v.state = 'waiting';
     paint.flatWas = true;          // the bubble is drawn this frame
-    announce(CUSTOMER.says.order);
-    stageLabel(true);
+    if(game.mode === 'count') itemShown();
+    else { announce(CUSTOMER.says.order); stageLabel(true); }
   }
 }
 function orderWaiting(){ return !!game.visit && game.visit.state === 'waiting' && !game.visit.order.served; }
@@ -3612,13 +4061,19 @@ function serveOrder(id){
   v.state = 'pleased';
   game.served++;
   game.delivering = 0;
-  announce(CUSTOMER.says.served);
+  announce(game.mode === 'count' ? 'The cat is happy with its order.' : CUSTOMER.says.served);
   stageLabel(false);
   return true;
 }
 function stageLabel(ordering){
   const el = stageEl || (typeof document !== 'undefined' && document.getElementById ? document.getElementById('stage') : null);
-  if(el && typeof el.setAttribute === 'function') el.setAttribute('aria-label', (ordering ? CUSTOMER.says.order + ' ' : '') + CUSTOMER.label);
+  if(!el || typeof el.setAttribute !== 'function') return;
+  if(game.mode === 'count'){
+    el.setAttribute('aria-label', 'Chef Capy\'s kitchen. ' + (ordering ? orderAnnouncement() + ' ' : '') +
+      'Swipe across the roll or press the knife button to cut; tap a piece, or use plus and minus, to move it to the plate; ring the bell to serve.');
+    return;
+  }
+  el.setAttribute('aria-label', (ordering ? CUSTOMER.says.order + ' ' : '') + CUSTOMER.label);
 }
 /* The cat coming: it slides along the counter from its side. */
 function catArriving(){ return !!game.visit && game.visit.state === 'arriving'; }
@@ -3640,7 +4095,7 @@ function deliveryAt(){
   if(!layout) return { x: 0, z: 0 };
   const d = layout.delivery, ph = game.phase;
   const k = ph === 'deliver' ? (motionReduced() ? 1 : easeInOut(clamp01(game.phaseT / SCENE.visit.deliverMs)))
-          : ph === 'thanks' || ph === 'clear' ? 1 : 0;
+          : ph === 'thanks' || ph === 'clear' || ph === 'round-end' ? 1 : 0;
   return { x: d.dx * k, z: d.dz * k };
 }
 
@@ -4394,7 +4849,7 @@ function onFrame(t){
 /* Is anything on the flat layer changing: a stroke, its trail or a closing
    incision, the hint, a cut's stars or sparkle, or the finished-roll beat? */
 function flatMoving(){
-  return !!gesture || trail.length > 0 || healing.length > 0 || hint.showing || feedbackBusy() || game.phase !== 'ready' || catArriving();
+  return !!gesture || trail.length > 0 || healing.length > 0 || hint.showing || feedbackBusy() || phaseBusy() || catArriving() || learnAnimating();
 }
 /* Draw now, outside the frame scheduler: after a pause, a resize or a
    tuning change. One geometry serves both layers. */
@@ -4405,7 +4860,7 @@ function paintNow(){
 }
 function needsFrames(){
   if(isPaused() || !layout) return false;
-  if(game.phase !== 'ready' || catArriving() || healing.length || wobble.active || chefBusy() || feedbackBusy() || chefBreathing()) return true;
+  if(phaseBusy() || catArriving() || learnAnimating() || healing.length || wobble.active || chefBusy() || feedbackBusy() || chefBreathing()) return true;
   if(!motionReduced() && (trail.length || hint.showing)) return true;
   return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
                           p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
@@ -4422,7 +4877,7 @@ function hideHint(){
 }
 function armHint(){
   hideHint();
-  if(!wired || isPaused() || gesture || game.phase !== 'ready' || !layout) return;
+  if(!wired || isPaused() || gesture || game.phase !== 'ready' || !layout || game.mode === 'count') return;
   hint.timer = setTimeout(showHint, TUNING.hintS * 1000);
 }
 function showHint(){
@@ -4446,6 +4901,7 @@ function pausePlay(why){
   quietChef();
   clearFeedback();
   if(why === 'hidden') sleepAudio(); else hushAudio();
+  hushVoice();
   cancelFrame();
   paintNow();
 }
@@ -4515,13 +4971,15 @@ function draw(rects){
   c.globalAlpha = 1;
   c.clearRect(0, 0, L.W, L.H);
   if(view3d.status !== 'ready') return;          // no marks over food that is not on screen
-  if(game.phase === 'ready') drawGuides(c, list);
-  drawIncisions(c, list);
+  const board = game.mode === 'count' ? list.filter(r => !(pieces[r.index] && pieces[r.index].plate)) : list;
+  if(game.phase === 'ready') drawGuides(c, board);
+  drawIncisions(c, board);
   drawTrail(c);
   drawFeedback(c);
   if(game.phase === 'done' && game.gathered && serveProgress() >= 0.7) drawDoneMark(c, list);
   drawOrder(c);
   if(hint.showing && game.phase === 'ready' && !gesture) drawHint(c, list);
+  drawLearnMarks(c, list);
 }
 
 /* The customer's order: a picture of one slice of salmon maki in a cream
@@ -4532,7 +4990,7 @@ function draw(rects){
    its own clock. */
 function drawOrder(c){
   const v = game.visit, L = layout, b = L.bubble;
-  if(!v || !b) return;
+  if(!v || !b || game.mode === 'count') return;            // counting: the order is on the dock's card
   const waiting = v.state === 'waiting' && !v.order.served && (!!L.seat || !(game.phase === 'done' || game.phase === 'deliver'));
   const heart = !L.seat && v.order.served && game.phase === 'thanks';
   if(!waiting && !heart) return;
@@ -6132,7 +6590,7 @@ function poseChef(){
 /* Is anything in the scene itself moving? The hint, the trail and the
    incision are flat marks: they need frames, but not the scene. */
 function sceneMoving(){
-  if(game.phase !== 'ready' || (catArriving() && !motionReduced()) || wobble.active || view3d.bent || chefMoving()) return true;
+  if(phaseBusy() || (catArriving() && !motionReduced()) || platesMoving() || wobble.active || view3d.bent || chefMoving()) return true;
   return pieces.some(p => p.off !== 0 || p.vel !== 0 || p.tilt !== 0 || p.tiltV !== 0 ||
                           p.rock !== 0 || p.rockV !== 0 || p.flashL > 0 || p.flashR > 0);
 }
@@ -6322,6 +6780,7 @@ function wirePlay(){
   relayout();
   if(document.visibilityState === 'hidden') pausePlay('hidden');
   loadScene();                   // play waits for the scene to draw
+  learnWire();                   // the sushi bar's door, unless ?free asks for the endless slicing
   armHint();
   requestFrame();
 }
@@ -6340,6 +6799,2147 @@ Domain.tabIcons = {};
 Domain.hydrate = hydratePlay;
 Domain.render = renderPlay;
 Domain.wire = wirePlay;
+
+/* =========================================================
+   LEARNING — Slice & Serve: counting quantities 1–5
+   ---------------------------------------------------------
+   A single-device DEVELOPMENT PROTOTYPE of the first connected
+   learning slice in docs/LEARNING-SPEC.md: a counting order →
+   evidence kept on this device → a teacher summary → an editable
+   lesson draft → a student report. Profiles are fictional. There
+   is no teacher sign-in, no backend and no syncing between devices,
+   and the times-table gate in front of the teacher workspace is not
+   authentication. The content and the counting rule await review
+   by an educator.
+
+   Three kinds of data stay apart and are never mixed:
+   - game evidence: append-only events, one key per session;
+   - teacher observations: their own records;
+   - the sample (DEMO) class: made in memory, never stored.
+   Summaries are computed from the events every time (rule 17), by a
+   versioned rule, so the same events always give the same answer.
+   ========================================================= */
+function deepFreeze(o){
+  if(o && typeof o === 'object' && !Object.isFrozen(o)){
+    Object.getOwnPropertyNames(o).forEach(k => deepFreeze(o[k]));
+    Object.freeze(o);
+  }
+  return o;
+}
+
+/* ---------- the activity: authored content, awaiting educator review ---------- */
+const COUNT_SKILL = 'count.quantity.1_5';
+/* Where the order card draws each picture of a quantity, in a unit box: in
+   a row, as on a dice, or scattered. None of them shows a numeral. */
+const COUNT_PICTURES = deepFreeze({
+  row: [null, ...[1, 2, 3, 4, 5].map(n => Array.from({ length: n }, (_, i) => [0.12 + 0.76 * (i + 0.5) / n, 0.5]))],
+  dice: [null, [[0.5, 0.5]], [[0.28, 0.28], [0.72, 0.72]], [[0.24, 0.24], [0.5, 0.5], [0.76, 0.76]],
+         [[0.28, 0.28], [0.72, 0.28], [0.28, 0.72], [0.72, 0.72]],
+         [[0.26, 0.26], [0.74, 0.26], [0.5, 0.5], [0.26, 0.74], [0.74, 0.74]]],
+  scatter: [null, [[0.42, 0.55]], [[0.3, 0.38], [0.68, 0.64]], [[0.24, 0.62], [0.52, 0.3], [0.78, 0.66]],
+            [[0.2, 0.36], [0.48, 0.72], [0.62, 0.26], [0.84, 0.6]],
+            [[0.16, 0.56], [0.36, 0.24], [0.5, 0.74], [0.7, 0.34], [0.86, 0.72]]]
+});
+const COUNT_ACTIVITY = deepFreeze({
+  id: 'slice-serve.count-1-5',
+  skill: COUNT_SKILL,
+  version: '1.0.0',
+  review: { status: 'pending', by: null,
+            note: 'Not yet reviewed by a kindergarten educator. It may be played in this development preview; it is not an approved classroom catalog.' },
+  level: 'Count 1–5',
+  prerequisites: [],
+  objective: 'Make and serve a set of one to five sushi pieces that matches the quantity a customer asks for.',
+  prompt: 'The customer\'s order card pictures the quantity as that many maki — in a row, a dice pattern or scattered — ' +
+          'and, where the device has a voice of its own, Chef Capy says it ("Three pieces, please"). No numerals are shown.',
+  demonstration: { quantity: 2, arrangement: 'row',
+                   note: 'Chef Capy slices the roll twice, puts two of the three pieces on the plate and rings the bell. It is never evidence.' },
+  quantities: [1, 2, 3, 4, 5],
+  arrangements: ['row', 'dice', 'scatter'],
+  variants: [1, 2, 3, 4, 5].reduce((all, q) => all.concat(['row', 'dice', 'scatter'].map(a => ({ id: 'q' + q + '-' + a, quantity: q, arrangement: a }))), []),
+  round: { items: 5, rule: 'Each round asks for every quantity from 1 to 5 once, in an order and arrangement drawn deterministically from the session; nothing repeats within a round.' },
+  accepted: 'Correct when the number of pieces on the plate at Serve equals the quantity asked for. Piece sizes, how many cuts were made, speed and slicing precision never matter.',
+  distractors: 'None: the child builds the set. The errors recorded are more pieces than asked (over-count) and fewer (under-count).',
+  support: [
+    { id: 'repeat', answerRevealing: false, when: 'Any time: the order card, or R', what: 'The order is shown and said again. Ordinary instruction, not support.' },
+    { id: 'count-together', answerRevealing: true, when: 'After a first incorrect serve, or when the child asks for help', what: 'Chef Capy counts the order\'s pictures, then the pieces on the plate, one at a time.' },
+    { id: 'spots', answerRevealing: true, when: 'After a second incorrect serve', what: 'The plate shows a ring for each piece still wanted.' },
+    { id: 'model', answerRevealing: true, when: 'After a third incorrect serve', what: 'Chef Capy makes the order and serves it; the item ends with no further response.' }
+  ],
+  evidence: ['The first quantity submitted for each item, and the support shown before it',
+             'Every later, supported response', 'Help asked for before any response (the item is then assisted-only)',
+             'Repeats of the order (ordinary instruction)', 'Items left unfinished (never counted as incorrect)'],
+  access: ['Cut: swipe down across the roll, the knife button, or Space',
+           'Move one piece: tap it, the plus or minus buttons, or + and −',
+           'Serve: the bell, or Enter', 'Help: the chef button, or H; repeat the order: the order card, or R',
+           'Screen readers hear the order\'s quantity and each move'],
+  language: 'en-US. The order is a picture; speech uses only a voice installed on the device.',
+  offline: 'Paper sushi orders: ask for one to five pieces; the child puts that many paper pieces on a paper plate and counts them, touching each piece once.'
+});
+/* The order and help as Chef Capy says them. */
+const NUMBER_WORDS = Object.freeze(['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven']);
+function orderWords(q){ return q === 1 ? 'One piece, please.' : capitalize(NUMBER_WORDS[q] || String(q)) + ' pieces, please.'; }
+function capitalize(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+/* ---------- the rule: proposed, awaiting educator validation ---------- */
+/* From the product specification, for count.quantity.1_5 and nothing
+   else. Until a support rubric for this skill is reviewed, "With support"
+   is never assigned: support is shown as counts beside the status. */
+const COUNT_RULE = deepFreeze({
+  id: 'count.quantity.1_5/independent-in-game', version: 'r1',
+  validation: 'pending',
+  text: 'At least 12 usable independent first responses, across at least two sessions on different instructional dates, ' +
+        'covering at least four quantities including 5, with at least 80% correct.',
+  minIndependent: 12, minDates: 2, minQuantities: 4, mustInclude: 5, minAccuracy: 0.8,
+  windowDays: 14,
+  supportRubric: null
+});
+const EVIDENCE_VERSION = 'count-summary-1';
+const LEARN_STATUS = deepFreeze({
+  'not-observed': { label: 'Not observed', next: 'A short observation: watch the child make a set from a mixed pile.' },
+  'gathering': { label: 'Gathering evidence', next: 'More counting orders, on another instructional day.' },
+  'building': { label: 'Building', next: 'Model touching each piece once, then practice sets of 3 to 5.' },
+  'independent': { label: 'Independent in game', next: 'A transfer check with real objects, before the next skill.' },
+  'fresh-check': { label: 'Needs a fresh check', next: 'A brief counting check before moving on.' }
+});
+const STATUS_ORDER = Object.freeze(['not-observed', 'gathering', 'building', 'independent', 'fresh-check']);
+
+/* ---------- the instructional calendar ---------- */
+/* An event's instructional date is its date in the class's time zone, kept
+   with the event when it is recorded. The current window is the last 14
+   days the class teaches (weekdays minus closures), never 14 calendar days. */
+const learnClock = { now: () => Date.now() };       // one seam, so the contracts can move time
+function learnNow(){ return learnClock.now(); }
+const dateFormats = new Map();
+function learnDate(ms, tz){
+  try{
+    let f = dateFormats.get(tz);
+    if(!f){ f = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }); dateFormats.set(tz, f); }
+    const parts = f.formatToParts(new Date(ms)), get = t => (parts.find(p => p.type === t) || {}).value;
+    const y = get('year'), m = get('month'), d = get('day');
+    return y && m && d ? y + '-' + m + '-' + d : null;
+  }catch(e){ return null; }
+}
+function deviceTimeZone(){
+  try{ const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; return tz && validTimeZone(tz) ? tz : null; }
+  catch(e){ return null; }
+}
+function validTimeZone(tz){
+  if(typeof tz !== 'string' || !tz) return false;
+  try{ new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; }catch(e){ return false; }
+}
+function calDow(d){ return new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10))).getUTCDay(); }
+function calAdd(d, k){ return new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10) + k)).toISOString().slice(0, 10); }
+function isTeachingDay(d, cal){
+  return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && cal.weekdays.indexOf(calDow(d)) !== -1 && cal.closures.indexOf(d) === -1;
+}
+/* The n most recent instructional days up to and including the cutoff. */
+function teachingWindow(cutoff, n, cal){
+  if(typeof cutoff !== 'string') return { start: null, end: null, days: [] };
+  const days = [];
+  let d = cutoff;
+  for(let i = 0; days.length < n && i < 400; i++){ if(isTeachingDay(d, cal)) days.unshift(d); d = calAdd(d, -1); }
+  return { start: days[0] || cutoff, end: cutoff, days: days };
+}
+const MONTHS = Object.freeze(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']);
+const WEEKDAYS = Object.freeze(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
+function dateText(d){ return d ? (+d.slice(8, 10)) + ' ' + MONTHS[+d.slice(5, 7) - 1] + ' ' + d.slice(0, 4) : ''; }
+function shortDate(d){ return d ? (+d.slice(8, 10)) + ' ' + MONTHS[+d.slice(5, 7) - 1].slice(0, 3) : ''; }
+
+/* ---------- classes: one prototype class on this device, and the DEMO ---------- */
+const LEARN_KEYS = deepFreeze({
+  classes: 'data.learn.classes',            // [the prototype class]
+  observations: 'data.learn.observations',  // teacher observations, apart from game results
+  plans: 'data.learn.plans',                // lesson drafts and published revisions
+  events: 'data.learn.events.'              // + session id: that session's append-only events
+});
+const PROTO_CLASS_ID = 'proto-class';
+const AVATARS = deepFreeze({
+  fox: { label: 'fox' }, frog: { label: 'frog' }, bunny: { label: 'bunny' },
+  bear: { label: 'bear' }, penguin: { label: 'penguin' }, owl: { label: 'owl' }
+});
+/* Fictional names for a development prototype; never real children. */
+const PROTO_ROSTER = deepFreeze([
+  { id: 'kid-01', name: 'Mika', avatar: 'fox' }, { id: 'kid-02', name: 'Ollie', avatar: 'frog' },
+  { id: 'kid-03', name: 'Juno', avatar: 'bunny' }, { id: 'kid-04', name: 'Ren', avatar: 'bear' },
+  { id: 'kid-05', name: 'Tavi', avatar: 'penguin' }, { id: 'kid-06', name: 'Sol', avatar: 'owl' }
+]);
+const TEACHING_WEEK = deepFreeze({ weekdays: [1, 2, 3, 4, 5], closures: [] });
+function protoClassRecord(){
+  const iso = new Date(learnNow()).toISOString();
+  return { id: PROTO_CLASS_ID, kind: 'prototype', name: 'Prototype class', fictional: true,
+           timezone: deviceTimeZone() || 'UTC', language: 'en-US',
+           calendar: { weekdays: TEACHING_WEEK.weekdays.slice(), closures: [] },
+           roster: PROTO_ROSTER.map(r => Object.assign({}, r)), createdAt: iso, updatedAt: iso };
+}
+function validClass(c){
+  return !!c && typeof c === 'object' && typeof c.id === 'string' && validTimeZone(c.timezone) &&
+         c.calendar && Array.isArray(c.calendar.weekdays) && Array.isArray(c.calendar.closures) &&
+         Array.isArray(c.roster) && c.roster.every(r => r && typeof r.id === 'string' && typeof r.name === 'string');
+}
+/* The sample class: twenty fictional children and a week of made-up
+   evidence, built in memory and never stored, so it can never mix with a
+   real record. Its "today" is fixed, so it always shows the same week. */
+const DEMO_CLASS = deepFreeze({
+  id: 'demo-willow', kind: 'demo', name: 'Willow class', fictional: true, timezone: 'America/New_York', language: 'en-US',
+  calendar: { weekdays: [1, 2, 3, 4, 5], closures: [] }, cutoffMs: Date.UTC(2026, 9, 12, 16, 0, 0),
+  roster: ['Rowan', 'Ada', 'Bea', 'Cal', 'Dev', 'Eli', 'Fern', 'Gus', 'Hana', 'Ivo', 'Jade', 'Kai', 'Lior', 'Mo', 'Nell',
+           'Otis', 'Pia', 'Quin', 'Rue', 'Sky'].map((name, i) => ({ id: 'demo-' + String(i + 1).padStart(2, '0'), name: name,
+           avatar: Object.keys(AVATARS)[i % 6] }))
+});
+
+/* ---------- evidence: append-only events ---------- */
+function validEvent(e){
+  return !!e && typeof e === 'object' && typeof e.id === 'string' && typeof e.type === 'string' &&
+         typeof e.childId === 'string' && typeof e.sessionId === 'string' && typeof e.at === 'number' && typeof e.seq === 'number';
+}
+/* Every stored session's events. A session that cannot be read is counted
+   and left alone, never repaired. */
+function storedSessions(){
+  const out = [];
+  let unreadable = 0;
+  Store.listKeys().forEach(k => {
+    if(k.indexOf(LEARN_KEYS.events) !== 0) return;
+    const arr = Store.getJSON(k, null);
+    if(!Array.isArray(arr)){ unreadable++; return; }
+    out.push({ id: k.slice(LEARN_KEYS.events.length), events: arr.filter(validEvent) });
+  });
+  return { sessions: out, unreadable: unreadable };
+}
+/* The same event delivered twice is one event. */
+function dedupeEvents(list){
+  const seen = new Set(), out = [];
+  list.forEach(e => { if(validEvent(e) && !seen.has(e.id)){ seen.add(e.id); out.push(e); } });
+  return out;
+}
+function byTime(a, b){ return a.at - b.at || (a.sessionId < b.sessionId ? -1 : a.sessionId > b.sessionId ? 1 : a.seq - b.seq); }
+
+/* One counting order as its events tell it: what was asked, every
+   response in order, the support shown, and how it ended. */
+function countOrders(events){
+  const items = new Map();
+  events.slice().sort(byTime).forEach(e => {
+    if(typeof e.itemId !== 'string') return;
+    let it = items.get(e.itemId);
+    if(e.type === 'item.start'){
+      if(!it) items.set(e.itemId, { itemId: e.itemId, childId: e.childId, sessionId: e.sessionId, round: e.round,
+        quantity: e.quantity, arrangement: e.arrangement, date: e.date, at: e.at, responses: [], supports: [],
+        repeats: 0, end: null, clock: !!e.clock });
+      return;
+    }
+    if(!it || e.childId !== it.childId || e.sessionId !== it.sessionId) return;
+    if(e.type === 'response') it.responses.push(e);
+    else if(e.type === 'support') it.supports.push(e);
+    else if(e.type === 'instruction.repeat') it.repeats++;
+    else if(e.type === 'item.end') it.end = e.outcome;
+  });
+  items.forEach(it => it.responses.sort((a, b) => a.attempt - b.attempt));
+  return [...items.values()].sort((a, b) => a.at - b.at);
+}
+
+/* One child's counting evidence up to a cutoff date, by the rule. */
+function summarizeCount(childId, events, opts){
+  const cal = opts.cal, cutoff = opts.cutoff, rule = opts.rule || COUNT_RULE;
+  const win = teachingWindow(cutoff, rule.windowDays, cal);
+  const mine = dedupeEvents(events).filter(e => e.childId === childId && e.skill === COUNT_SKILL &&
+                                               typeof e.date === 'string' && e.date <= cutoff);
+  const items = countOrders(mine);
+  const tally = () => ({ attempted: 0, correct: 0, quantities: new Set(), dates: new Set(), sessions: new Set(), over: 0, under: 0 });
+  const cur = tally(), old = tally();
+  const out = { childId: childId, cutoff: cutoff, rule: rule.id, ruleVersion: rule.version, evidenceVersion: EVIDENCE_VERSION,
+                window: { start: win.start, end: win.end, days: win.days.length },
+                supported: { responses: 0, correct: 0 }, assistedOnly: 0, interrupted: 0, modeled: 0, repeats: 0,
+                outsideCalendar: 0, clock: 0, sessions: new Set(), dates: new Set(), recent: [], lastDate: null, olderOrders: 0, tried: 0 };
+  const seen = new Set();
+  items.forEach(it => {
+    if(!isTeachingDay(it.date, cal)){ out.outsideCalendar++; return; }
+    const inWin = it.date >= win.start && it.date <= win.end;
+    if(!inWin){ out.olderOrders++; }
+    if(inWin){ out.sessions.add(it.sessionId); out.dates.add(it.date); }
+    if(it.clock) out.clock++;
+    const first = it.responses[0] && it.responses[0].attempt === 1 ? it.responses[0] : null;
+    if(!first){ if(inWin && it.end !== 'modeled') out.interrupted++; return; }
+    /* Repeated identical items in one round count once toward coverage. */
+    const key = it.sessionId + '|' + it.round + '|' + it.quantity + '|' + it.arrangement;
+    const dup = seen.has(key);
+    seen.add(key);
+    const ind = first.support === 'none';
+    const box = inWin ? cur : old;
+    if(ind && !dup){
+      box.attempted++;
+      if(first.correct) box.correct++;
+      else if(first.answer > it.quantity) box.over++;
+      else box.under++;
+      box.quantities.add(it.quantity); box.dates.add(it.date); box.sessions.add(it.sessionId);
+    }
+    if(!inWin) return;
+    out.tried++;
+    if(!ind) out.assistedOnly++;
+    it.responses.forEach(r => { if(r.support !== 'none'){ out.supported.responses++; if(r.correct) out.supported.correct++; } });
+    out.repeats += it.repeats;
+    if(it.end === 'modeled') out.modeled++;
+    out.recent.push({ date: it.date, at: it.at, quantity: it.quantity, arrangement: it.arrangement,
+                      first: first.answer, firstCorrect: !!first.correct, independent: ind,
+                      supportBefore: first.support, retries: it.responses.slice(1).map(r => ({ answer: r.answer, correct: !!r.correct, support: r.support })),
+                      end: it.end });
+    if(!out.lastDate || it.date > out.lastDate) out.lastDate = it.date;
+  });
+  const covers = b => ({ count: b.attempted >= rule.minIndependent,
+                         dates: b.dates.size >= rule.minDates && b.sessions.size >= rule.minDates,
+                         quantities: b.quantities.size >= rule.minQuantities && b.quantities.has(rule.mustInclude) });
+  const met = c => c.count && c.dates && c.quantities;
+  const cc = covers(cur), oc = covers(old);
+  const usable = items.some(it => it.responses.length && isTeachingDay(it.date, cal));
+  let status = 'gathering';
+  if(!usable) status = 'not-observed';
+  else if(met(cc)) status = cur.correct / cur.attempted >= rule.minAccuracy ? 'independent' : 'building';
+  else if(met(oc)) status = 'fresh-check';
+  const plain = b => ({ attempted: b.attempted, correct: b.correct, over: b.over, under: b.under,
+                        quantities: [...b.quantities].sort(), dates: [...b.dates].sort(), sessions: b.sessions.size });
+  out.status = status;
+  out.independent = plain(cur);
+  out.coverage = cc;
+  out.prior = status === 'fresh-check' ? { status: old.correct / old.attempted >= rule.minAccuracy ? 'independent' : 'building',
+                                           lastDate: [...old.dates].sort().pop() || null, independent: plain(old) } : null;
+  out.sessions = out.sessions.size;
+  out.dates = [...out.dates].sort();
+  out.recent.sort((a, b) => b.at - a.at);
+  return out;
+}
+
+/* ---------- snapshots: what a plan or a report is built from ---------- */
+/* An explicit evidence snapshot: the class, a cutoff, the rule, and each
+   child's summary as plain data. A published plan keeps its own copy, so
+   later evidence can never change what it says. */
+function classSnapshot(cls, events, cutoffMs){
+  const cutoff = learnDate(cutoffMs, cls.timezone);
+  const win = teachingWindow(cutoff, COUNT_RULE.windowDays, cls.calendar);
+  const evs = dedupeEvents(events).filter(e => e.classId === cls.id);
+  const started = new Map();
+  evs.forEach(e => { if(e.type === 'session.start' && isTeachingDay(e.date, cls.calendar) && e.date >= win.start && e.date <= cutoff) started.set(e.childId, true); });
+  const children = cls.roster.map(ch => {
+    const s = summarizeCount(ch.id, evs, { cal: cls.calendar, cutoff: cutoff });
+    return { id: ch.id, name: ch.name, avatar: ch.avatar, played: started.has(ch.id) || s.sessions > 0,
+             status: s.status, independent: s.independent, coverage: s.coverage, supported: s.supported,
+             assistedOnly: s.assistedOnly, interrupted: s.interrupted, modeled: s.modeled, repeats: s.repeats, tried: s.tried,
+             sessions: s.sessions, dates: s.dates, lastDate: s.lastDate, prior: s.prior, outsideCalendar: s.outsideCalendar,
+             clock: s.clock, olderOrders: s.olderOrders, recent: s.recent.slice(0, 12) };
+  });
+  const counts = {};
+  STATUS_ORDER.forEach(k => { counts[k] = 0; });
+  children.forEach(c => { counts[c.status]++; });
+  return deepFreeze({
+    id: 'snap-' + cls.id + '-' + cutoffMs.toString(36) + '-' + evs.length,
+    classId: cls.id, className: cls.name, kind: cls.kind, timezone: cls.timezone,
+    takenAt: new Date(cutoffMs).toISOString(), cutoff: cutoff, window: { start: win.start, end: win.end, days: win.days.length },
+    rule: COUNT_RULE.id, ruleVersion: COUNT_RULE.version, ruleValidation: COUNT_RULE.validation, evidenceVersion: EVIDENCE_VERSION,
+    activity: COUNT_ACTIVITY.id, activityVersion: COUNT_ACTIVITY.version, eventCount: evs.length,
+    roster: children.length, played: children.filter(c => c.played).length,
+    withEvidence: children.filter(c => c.independent.attempted > 0).length,
+    counts: counts, children: children
+  });
+}
+
+/* ---------- the sample class's made-up week ---------- */
+let demoCache = null;
+function demoEvents(){
+  if(demoCache) return demoCache;
+  const out = [], cls = DEMO_CLASS, r = seeded(0x51A7E5);
+  /* 13:30 UTC is 9:30 in New York in October. */
+  const at = (date, k) => Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), 13, 30) + k * 90000;
+  const plans = [
+    ['independent', ['2026-10-08', '2026-10-09'], 6, [0.84, 1]],   // Rowan: 11 of 12, as in the specification's example
+    ['independent', ['2026-10-06', '2026-10-08'], 7, [0.86, 1]], ['independent', ['2026-10-07', '2026-10-09'], 7, [0.86, 1]],
+    ['independent', ['2026-10-05', '2026-10-08'], 6, [0.84, 1]],
+    ...Array.from({ length: 11 }, (_, i) => ['building', i % 2 ? ['2026-10-06', '2026-10-08'] : ['2026-10-07', '2026-10-09'], 6 + (i % 3 === 0 ? 1 : 0), [0.42, 0.72]]),
+    ['gathering', ['2026-10-09'], 5, [0.6, 0.9]], ['gathering', ['2026-10-07', '2026-10-09'], 4, [0.5, 0.8]],
+    ['gathering', ['2026-10-08'], 6, [0.6, 0.9]],
+    ['none', [], 0, [0, 0]], ['none', [], 0, [0, 0]]
+  ];
+  cls.roster.forEach((ch, idx) => {
+    const p = plans[idx];
+    p[1].forEach((date, si) => {
+      const sid = 'demo-s' + (idx + 1) + '-' + (si + 1);
+      let seq = 0, k = 0;
+      const ev = (type, fields) => {
+        const e = Object.assign({}, fields, { id: sid + '.' + (++seq), v: 1, type: type, at: at(date, k++), seq: seq,
+          classId: cls.id, childId: ch.id, sessionId: sid, tz: cls.timezone, date: date, activity: COUNT_ACTIVITY.id,
+          activityVersion: COUNT_ACTIVITY.version, skill: COUNT_SKILL, source: 'demo' });
+        out.push(e);
+      };
+      ev('session.start', { mode: 'play' });
+      const order = [1, 2, 3, 4, 5, 3, 4, 2].slice(0, p[2]);
+      order.forEach((q, i) => {
+        const itemId = sid + '.i' + i, arrangement = ['row', 'dice', 'scatter'][(i + si) % 3];
+        ev('item.start', { itemId: itemId, round: Math.floor(i / 5), quantity: q, arrangement: arrangement });
+        const want = p[3][0] + (p[3][1] - p[3][0]) * r();
+        const right = idx === 0 ? !(si === 0 && i === 3) : r() < want;
+        const first = right ? q : (r() < 0.6 ? q + 1 : Math.max(1, q - 1));
+        ev('response', { itemId: itemId, attempt: 1, answer: first, correct: first === q, support: 'none' });
+        if(first !== q){
+          ev('support', { itemId: itemId, level: 'count-together', reason: 'after-incorrect' });
+          const fixed = idx === 0 || r() < (p[0] === 'building' ? 0.85 : 0.95);
+          const second = fixed ? q : q + 1;
+          ev('response', { itemId: itemId, attempt: 2, answer: second, correct: second === q, support: 'count-together' });
+          if(second !== q){
+            ev('support', { itemId: itemId, level: 'spots', reason: 'after-incorrect' });
+            ev('response', { itemId: itemId, attempt: 3, answer: q, correct: true, support: 'spots' });
+          }
+        }
+        ev('item.end', { itemId: itemId, outcome: 'completed' });
+      });
+      ev('session.end', { reason: 'finished' });
+    });
+  });
+  demoCache = deepFreeze(out);
+  return demoCache;
+}
+
+/* ---------- the lesson template: deterministic, awaiting review ---------- */
+const LESSON_TEMPLATE = deepFreeze({ id: 'count-1-5.lesson', version: 't1', review: 'pending' });
+const PLAN_MATERIALS = deepFreeze([
+  { id: 'counters', label: 'Counters or small blocks (5 per child, plus a few extra)' },
+  { id: 'paperSushi', label: 'Paper sushi circles (5 per child)' },
+  { id: 'plates', label: 'Trays or paper plates (1 per child)' },
+  { id: 'checklist', label: 'An observation checklist (printed, or paper and pencil)' }
+]);
+const PLAN_GROUPS = deepFreeze({
+  careful: { name: 'Count carefully', adultLed: true, statuses: ['building'], device: false,
+             task: 'The teacher models touching each piece once and saying the last number; children make sets of 3, 4 and 5 and check them aloud.',
+             reason: 'Enough independent counting orders to decide, but fewer than 80% matched the order.' },
+  meet: { name: 'Meet the task', adultLed: true, statuses: ['not-observed'], device: false,
+          task: 'The teacher asks each child for 3, then 5, from a mixed pile and notes how they count. An observation, not a lesson in catching up.',
+          reason: 'No usable counting evidence yet.' },
+  practice: { name: 'Keep practicing', adultLed: false, statuses: ['gathering', 'fresh-check'], device: true,
+              task: 'Counting orders, one child per device; without a device, paper sushi orders on a tray.',
+              reason: 'Some evidence, not yet enough to decide, or older evidence that needs a fresh look.' },
+  extend: { name: 'Try a new arrangement', adultLed: false, statuses: ['independent'], device: false,
+            task: 'Make five in two different arrangements, then show two ways to split five.',
+            reason: 'Counting 1 to 5 is independent in the game; this checks it with real objects.' }
+});
+const GROUP_ORDER = Object.freeze(['careful', 'meet', 'practice', 'extend']);
+const SECTION_KEYS = Object.freeze(['objective', 'rationale', 'materials', 'opening', 'support', 'extension', 'offline', 'exit', 'followUp']);
+
+/* A lesson draft from an explicit snapshot and the classroom's real
+   constraints. It never promises more than fits: minutes add up to the
+   block, adult-led groups never outnumber adults, device turns never
+   outnumber devices, and what cannot fit is surfaced — never dropped. */
+function planCountLesson(snap, inputs, prior){
+  const inp = normalizePlanInputs(inputs, snap);
+  const absent = new Set(inp.absent);
+  const kids = snap.children.filter(c => !absent.has(c.id));
+  const issues = [];
+  const purpose = kids.length && kids.every(c => c.status === 'not-observed') ? 'observation' : 'practice';
+  const locks = prior && prior.locks ? prior.locks : {};
+  const placements = {};
+  kids.forEach(c => {
+    if(locks[c.id] && prior.placements && PLAN_GROUPS[prior.placements[c.id]]) placements[c.id] = prior.placements[c.id];
+    else placements[c.id] = GROUP_ORDER.find(g => PLAN_GROUPS[g].statuses.indexOf(c.status) !== -1) || 'practice';
+  });
+  /* Time: a model, whole-class practice when there is room, centers, and an exit check. */
+  const opening = 2, tray = inp.minutes >= 15 ? 3 : 0, exit = inp.minutes >= 15 ? 3 : 2;
+  const centers = inp.minutes - opening - tray - exit;
+  if(centers < 3) issues.push({ level: 'block', text: 'Too little time: a counting lesson needs at least 10 minutes.' });
+  /* Adult-led groups take turns with the adults; each turn is at least 3 minutes for up to 6 children. */
+  const groups = GROUP_ORDER.map(id => ({ id: id, name: PLAN_GROUPS[id].name, adultLed: PLAN_GROUPS[id].adultLed,
+    task: PLAN_GROUPS[id].task, reason: PLAN_GROUPS[id].reason, members: kids.filter(c => placements[c.id] === id).map(c => c.id),
+    turns: [], device: false, physical: true })).filter(g => g.members.length);
+  if(purpose === 'observation'){
+    const meet = groups.find(g => g.id === 'meet');
+    if(meet){ meet.reason = 'Nobody has counting evidence yet, so this lesson observes rather than corrects.'; }
+  }
+  const slotsPerAdult = Math.max(0, Math.floor(centers / 3)), slotMin = slotsPerAdult ? Math.floor(centers / slotsPerAdult) : 0;
+  const adultSlots = [];
+  for(let a = 0; a < inp.adults; a++) for(let s = 0; s < slotsPerAdult; s++) adultSlots.push({ adult: a + 1, slot: s, minutes: slotMin });
+  const waiting = [];
+  groups.filter(g => g.adultLed).forEach(g => {
+    g.members.sort((a, b) => (locks[b] ? 1 : 0) - (locks[a] ? 1 : 0));
+    for(let i = 0; i < g.members.length; i += 6){
+      const chunk = g.members.slice(i, i + 6), slot = adultSlots.shift();
+      if(slot) g.turns.push({ adult: slot.adult, slot: slot.slot, minutes: slot.minutes, members: chunk });
+      else waiting.push(...chunk);
+    }
+  });
+  /* Children an adult cannot reach in this block wait for the next one,
+     and practice meanwhile: every child still has a task. */
+  if(waiting.length){
+    const practice = groups.find(g => g.id === 'practice') || (groups.push({ id: 'practice', name: PLAN_GROUPS.practice.name, adultLed: false,
+      task: PLAN_GROUPS.practice.task, reason: PLAN_GROUPS.practice.reason, members: [], turns: [], device: false, physical: true }), groups[groups.length - 1]);
+    groups.forEach(g => { if(g.adultLed) g.members = g.members.filter(id => waiting.indexOf(id) === -1); });
+    practice.members.push(...waiting);
+    waiting.forEach(id => { placements[id] = 'practice'; });
+    issues.push({ level: 'info', text: waiting.length + (waiting.length === 1 ? ' child' : ' children') +
+                  ' who need an adult-led group could not be reached in this block (' + inp.adults +
+                  (inp.adults === 1 ? ' adult, ' : ' adults, ') + centers + ' minutes of centers). They practice now and lead the next block\'s adult-led group.' });
+  }
+  /* Devices: one child per device, in turns of at least 3 minutes; everyone else at the tray. */
+  const practice = groups.find(g => g.id === 'practice');
+  if(practice){
+    const turns = inp.devices > 0 ? Math.max(1, Math.min(2, Math.floor(centers / 3))) : 0;
+    const onDevice = practice.members.slice(0, inp.devices * turns);
+    practice.device = onDevice.length > 0;
+    practice.deviceTurns = [];
+    for(let t = 0; t < turns; t++){
+      const m = onDevice.slice(t * inp.devices, (t + 1) * inp.devices);
+      if(m.length) practice.deviceTurns.push({ turn: t + 1, minutes: Math.floor(centers / turns), members: m });
+    }
+    practice.trayMembers = practice.members.filter(id => onDevice.indexOf(id) === -1);
+    practice.physical = practice.trayMembers.length > 0 || turns > 1;
+  }
+  /* Materials: countable objects, with a reviewed substitute; a missing one is surfaced. */
+  const m = inp.materials, needsObjects = groups.some(g => g.physical) || tray > 0;
+  const materials = [];
+  let objects = null;
+  if(needsObjects){
+    if(m.counters) objects = 'counters';
+    else if(m.paperSushi){ objects = 'paperSushi'; issues.push({ level: 'info', text: 'No counters: paper sushi circles are used instead (same counting task).' }); }
+    else issues.push({ level: 'block', text: 'No countable objects: add counters or paper sushi circles before this plan can be published.' });
+    if(objects) materials.push(PLAN_MATERIALS.find(x => x.id === objects).label);
+    if(m.plates) materials.push(PLAN_MATERIALS.find(x => x.id === 'plates').label);
+    else { materials.push('A sheet of paper per child, as the plate (no trays or plates available)'); }
+  }
+  materials.push(m.checklist ? PLAN_MATERIALS.find(x => x.id === 'checklist').label : 'Paper and a pencil for the exit check');
+  if(practice && practice.device) materials.push(inp.devices + (inp.devices === 1 ? ' device' : ' devices') + ' with Chef Capy (this development preview)');
+  /* The exit check: about 45 seconds a child, adults in parallel; the rest are queued, by need. */
+  const capacity = inp.adults * Math.floor(exit * 60 / 45);
+  const need = id => { const c = kids.find(k => k.id === id); return ['building', 'not-observed', 'gathering', 'fresh-check', 'independent'].indexOf(c.status); };
+  const queueOrder = kids.map(c => c.id).sort((a, b) => need(a) - need(b) || kids.findIndex(k => k.id === a) - kids.findIndex(k => k.id === b));
+  const checked = queueOrder.slice(0, capacity), queued = queueOrder.slice(capacity);
+  /* The timed sequence: always the whole block, no more. */
+  const sequence = [];
+  let t = 0;
+  const step = (minutes, title, detail) => { if(minutes > 0){ sequence.push({ start: t, minutes: minutes, title: title, detail: detail }); t += minutes; } };
+  step(opening, 'Chef Capy model', 'Whole class. Read the opening script and count five objects aloud, touching each once.');
+  step(tray, 'Tray practice', 'Whole class. Each child builds a set of four on a tray; watch how they count.');
+  step(Math.max(0, centers), 'Centers', groups.map(g => g.name + ' (' + g.members.length + ')').join(' · '));
+  step(exit, 'Exit check', 'Individual: make five from a mixed pile and count it once. Record independent, with support, or needs another observation.');
+  const n = (k, s) => k + ' ' + s + (k === 1 ? '' : 's');
+  const sections = {
+    objective: 'Make a set of one to five objects that matches a request, and check it by counting each object once.',
+    rationale: rationaleText(snap, kids, purpose, absent.size),
+    materials: materials.join('\n'),
+    opening: 'Chef Capy needs five pieces for a customer. Watch me: I touch each piece once — one, two, three, four, five. ' +
+             'The last number I say tells us how many. Now you make five for Chef Capy.',
+    support: 'Move one object at a time into the tray while counting. Start with sets of 3 before 4 and 5. Count together, then let the child try alone.',
+    extension: 'Make five in a new arrangement (a line, a circle, a scatter) and say how you know it is still five. Show two ways to split five.',
+    offline: COUNT_ACTIVITY.offline,
+    exit: 'Ask each child, one at a time: "Make five for Chef Capy." Mixed pile, no counting aloud by the adult. Record: independent, with support, or needs another observation. ' +
+          checked.length + (checked.length === 1 ? ' child' : ' children') + ' can be checked in ' + exit + ' minutes' +
+          (queued.length ? '; ' + n(queued.length, 'check') + ' carried to the next block.' : '.'),
+    followUp: 'Independent on the exit check: offer a transfer task or the next quantity range. With support: another physical count-and-check. ' +
+              'Not checked: keep on the observation list. Game results and these observations stay separate.'
+  };
+  const plan = {
+    template: LESSON_TEMPLATE.id + '@' + LESSON_TEMPLATE.version, purpose: purpose, inputs: inp,
+    snapshot: snap, groups: groups, placements: placements, locks: Object.assign({}, locks),
+    sequence: sequence, minutesTotal: t, checked: checked, queue: queued,
+    absent: inp.absent.slice(), sections: {}, issues: issues
+  };
+  SECTION_KEYS.forEach(k => { plan.sections[k] = { text: sections[k], edited: false }; });
+  plan.issues = plan.issues.concat(validatePlan(plan));
+  return plan;
+}
+function normalizePlanInputs(inputs, snap){
+  const i = inputs || {};
+  const clampInt = (v, lo, hi, d) => { const x = Math.round(Number(v)); return isFinite(x) ? Math.max(lo, Math.min(hi, x)) : d; };
+  const mat = i.materials || {};
+  const roster = new Set(snap.children.map(c => c.id));
+  return { date: typeof i.date === 'string' ? i.date : snap.cutoff, minutes: clampInt(i.minutes, 10, 45, 20),
+           devices: clampInt(i.devices, 0, 30, 0), adults: clampInt(i.adults, 1, 4, 1),
+           materials: { counters: mat.counters !== false, paperSushi: !!mat.paperSushi, plates: mat.plates !== false, checklist: mat.checklist !== false },
+           absent: (Array.isArray(i.absent) ? i.absent : []).filter(id => roster.has(id)) };
+}
+function rationaleText(snap, kids, purpose, absentCount){
+  const c = {};
+  STATUS_ORDER.forEach(k => { c[k] = kids.filter(x => x.status === k).length; });
+  const parts = ['Evidence up to ' + dateText(snap.cutoff) + ' (window ' + dateText(snap.window.start) + ' – ' + dateText(snap.window.end) +
+                 ', ' + snap.window.days + ' instructional days; rule ' + snap.rule + ' ' + snap.ruleVersion + ', awaiting educator validation).'];
+  parts.push(kids.length + (kids.length === 1 ? ' child takes part' : ' children take part') + (absentCount ? ' (' + absentCount + ' marked absent)' : '') + '.');
+  if(purpose === 'observation') parts.push('Nobody has usable counting evidence yet, so this is an observation lesson: it gathers evidence and makes no claim about who needs help.');
+  else parts.push(STATUS_ORDER.filter(k => c[k]).map(k => c[k] + ' ' + LEARN_STATUS[k].label.toLowerCase()).join(', ') + '.');
+  return parts.join(' ');
+}
+/* The checks that keep a plan honest. A blocking issue stops publishing. */
+function validatePlan(plan){
+  const out = [], inp = plan.inputs;
+  const sum = plan.sequence.reduce((s, x) => s + x.minutes, 0);
+  if(sum !== inp.minutes) out.push({ level: 'block', text: 'The sequence adds up to ' + sum + ' minutes, not ' + inp.minutes + '.' });
+  const kids = plan.snapshot.children.filter(c => plan.absent.indexOf(c.id) === -1);
+  const assigned = new Map();
+  plan.groups.forEach(g => g.members.forEach(id => assigned.set(id, (assigned.get(id) || 0) + 1)));
+  const missing = kids.filter(c => assigned.get(c.id) !== 1);
+  if(missing.length) out.push({ level: 'block', text: missing.map(c => c.name).join(', ') + ' ' + (missing.length === 1 ? 'has' : 'have') + ' no single valid task.' });
+  const slots = new Map();
+  plan.groups.forEach(g => (g.turns || []).forEach(t => { const k = t.slot; slots.set(k, (slots.get(k) || 0) + 1); }));
+  slots.forEach(v => { if(v > inp.adults) out.push({ level: 'block', text: 'More adult-led groups at once than adults.' }); });
+  plan.groups.forEach(g => (g.deviceTurns || []).forEach(t => { if(t.members.length > inp.devices) out.push({ level: 'block', text: 'More children than devices in one turn.' }); }));
+  return out;
+}
+function planBlocked(plan){ return plan.issues.some(x => x.level === 'block'); }
+/* Regenerate keeps every section the teacher edited and every locked
+   placement; only the rest follows the new evidence and constraints. */
+function regeneratePlan(draft, snap, inputs){
+  const fresh = planCountLesson(snap, inputs, { locks: draft.locks, placements: draft.placements });
+  SECTION_KEYS.forEach(k => { if(draft.sections[k] && draft.sections[k].edited) fresh.sections[k] = { text: draft.sections[k].text, edited: true }; });
+  return fresh;
+}
+/* A teacher's move is a locked placement: the plan is rebuilt around it,
+   keeping every edited section, so groups, turns and checks stay whole.
+   Unlocking hands the child back to the evidence. */
+function moveInPlan(plan, childId, groupId){
+  if(!PLAN_GROUPS[groupId] || !(childId in plan.placements)) return null;
+  const next = { sections: plan.sections, locks: Object.assign({}, plan.locks, { [childId]: true }),
+                 placements: Object.assign({}, plan.placements, { [childId]: groupId }) };
+  return regeneratePlan(next, plan.snapshot, plan.inputs);
+}
+function unlockInPlan(plan, childId){
+  const locks = Object.assign({}, plan.locks);
+  delete locks[childId];
+  return regeneratePlan({ sections: plan.sections, locks: locks, placements: plan.placements }, plan.snapshot, plan.inputs);
+}
+
+/* ---------- reports: one snapshot, two audiences ---------- */
+/* The family summary is built only from these fields. Anything else — a
+   teacher's private note, a group, another child — cannot reach it,
+   whatever the screen shows. */
+const FAMILY_FIELDS = Object.freeze(['childName', 'period', 'practiced', 'showed', 'nextStep', 'homeActivity', 'prepared']);
+function teacherReport(snap, childId, observations, opts){
+  const c = snap.children.find(x => x.id === childId);
+  if(!c) return null;
+  const o = opts || {};
+  const obs = (observations || []).filter(x => x.childId === childId && x.classId === snap.classId);
+  const ind = c.independent;
+  const examples = c.recent.slice(0, 2).map(x => dateText(x.date) + ': asked for ' + x.quantity + ' (' + x.arrangement + ' picture); first served ' + x.first +
+    (x.independent ? '' : ' after help') + (x.retries.length ? ', then ' + x.retries.map(r => r.answer + (r.support !== 'none' ? ' with support (' + r.support + ')' : '')).join(', ') : '') + '.');
+  const limits = [];
+  if(c.status === 'not-observed') limits.push('No usable counting evidence in this window.');
+  if(c.status === 'gathering') limits.push('Coverage is not yet enough for the rule: ' + coverageText(c) + '.');
+  if(c.interrupted) limits.push(c.interrupted + ' unfinished item' + (c.interrupted === 1 ? ' is' : 's are') + ' excluded (never counted as incorrect).');
+  if(c.outsideCalendar) limits.push(c.outsideCalendar + ' item' + (c.outsideCalendar === 1 ? '' : 's') + ' fell on days outside the instructional calendar and are excluded.');
+  if(c.clock) limits.push('The device clock went backwards during ' + c.clock + ' item' + (c.clock === 1 ? '' : 's') + '.');
+  return {
+    audience: 'teacher', childId: c.id, childName: c.name, className: snap.className, demo: snap.kind === 'demo',
+    period: { start: snap.window.start, end: snap.window.end, cutoff: snap.cutoff, days: snap.window.days },
+    rule: snap.rule + ' ' + snap.ruleVersion + ' (awaiting educator validation)',
+    status: c.status, statusLabel: LEARN_STATUS[c.status].label,
+    independent: { correct: ind.correct, attempted: ind.attempted, over: ind.over, under: ind.under, quantities: ind.quantities, dates: ind.dates },
+    supported: c.supported, assistedOnly: c.assistedOnly, interrupted: c.interrupted, sessions: c.sessions, dates: c.dates, tried: c.tried,
+    examples: examples, observations: obs.map(x => ({ date: x.date, kind: x.kind, context: x.context, note: o.includeNotes ? x.note : '' })),
+    includesNotes: !!o.includeNotes, group: o.group || null,
+    next: LEARN_STATUS[c.status].next, offline: COUNT_ACTIVITY.offline, limits: limits,
+    snapshot: snap.id, prepared: dateText(snap.cutoff)
+  };
+}
+function coverageText(c){
+  const ind = c.independent;
+  return ind.attempted + ' of 12 independent first responses, ' + ind.dates.length + ' of 2 instructional dates, quantities ' +
+         (ind.quantities.length ? ind.quantities.join(', ') : 'none') + ' (need four, including 5)';
+}
+function familyReport(tr){
+  if(!tr) return null;
+  const name = tr.childName, ind = tr.independent, days = tr.dates.length;
+  const n = (k, s) => k + ' ' + s + (k === 1 ? '' : 's');
+  const showed = {
+    'not-observed': 'We have not yet seen ' + name + ' try the counting orders, so there is nothing to report about counting yet.',
+    'gathering': (tr.tried ? name + ' has tried ' + n(tr.tried, 'counting order') + ' on ' + n(days, 'day') + '. That is'
+                           : name + ' has started the counting orders. That is') +
+                 ' not yet enough for us to say how ' + name + ' counts, so we are still watching.',
+    'building': name + ' made sets of up to five pieces in ' + n(ind.attempted, 'counting order') + ' on ' + n(days, 'day') +
+                '. Some sets matched the order and some did not yet, so we are practicing touching each piece once while counting.',
+    'independent': 'In ' + n(ind.attempted, 'counting order') + ' on ' + n(days, 'different day') + ', ' + name +
+                   ' made the number of pieces asked for, up to five, without help in most of them.',
+    'fresh-check': 'Earlier, ' + name + ' made sets of up to five without help. That was a while ago, so we will check again soon.'
+  }[tr.status];
+  const next = {
+    'not-observed': 'Watching ' + name + ' make small sets of objects.',
+    'gathering': 'More counting orders, so we can see how ' + name + ' counts.',
+    'building': 'Counting each object once, and knowing the last number says how many.',
+    'independent': 'Counting the same sets with real objects, and then larger numbers.',
+    'fresh-check': 'A quick counting check with real objects.'
+  }[tr.status];
+  const home = {
+    'not-observed': 'Put a few spoons on the table and ask ' + name + ' to give you three. Count them together, touching each one once.',
+    'gathering': 'Ask ' + name + ' to give you two, then four, small things — buttons or pasta. Count them together, touching each one.',
+    'building': 'Ask for three, then four, then five spoons. Count together slowly, touching each spoon once, and ask: how many?',
+    'independent': 'Ask ' + name + ' to set out five things in a line, then in a circle. Is it still five? How do they know?',
+    'fresh-check': 'Ask for four, then five, small things and count them together, touching each one once.'
+  }[tr.status];
+  const full = {
+    childName: name,
+    period: dateText(tr.period.start) + ' – ' + dateText(tr.period.end),
+    practiced: 'Counting out one to five objects: making exactly as many sushi pieces as a customer\'s picture order asks for.',
+    showed: showed, nextStep: next, homeActivity: home,
+    prepared: 'Prepared from Chef Capy\'s counting activity (a development preview) on ' + tr.prepared + '.'
+  };
+  const out = { audience: 'family' };
+  FAMILY_FIELDS.forEach(k => { out[k] = full[k]; });
+  return Object.freeze(out);
+}
+/* One row per child for this skill and window, with the rule's version. */
+function evidenceCsv(snap, opts){
+  const anonymous = !!(opts && opts.anonymous);
+  const cols = ['student_id', 'display_name', 'skill', 'window_start', 'window_end', 'cutoff', 'status', 'rule', 'rule_version',
+                'independent_correct', 'independent_attempted', 'over_counts', 'under_counts', 'quantities_covered',
+                'supported_responses', 'supported_correct', 'assisted_only_orders', 'interrupted_orders', 'sessions', 'instructional_dates',
+                'last_evidence_date', 'outside_calendar_orders', 'source'];
+  /* A cell a spreadsheet would read as a formula is kept as text. */
+  const q = v => {
+    let s = v === null || v === undefined ? '' : String(v);
+    if(typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = snap.children.map(c => [c.id, anonymous ? '' : c.name, COUNT_SKILL, snap.window.start, snap.window.end, snap.cutoff, c.status,
+    snap.rule, snap.ruleVersion, c.independent.correct, c.independent.attempted, c.independent.over, c.independent.under,
+    c.independent.quantities.join(' '), c.supported.responses, c.supported.correct, c.assistedOnly, c.interrupted, c.sessions,
+    c.dates.length, c.lastDate || '', c.outsideCalendar, snap.kind === 'demo' ? 'demo sample data' : 'prototype (this device)']);
+  return [cols].concat(rows).map(r => r.map(q).join(',')).join('\n') + '\n';
+}
+
+/* ---------- the child's side: one session, one child ---------- */
+/* Outside the sushi bar a child taps their avatar and goes in. A session
+   belongs to that one child from its first event to its last; switching
+   child ends it, so no event can ever change hands. A teacher's preview
+   plays exactly the same rounds and records nothing. */
+const FREE_ROUTE = /[?&]free(=|&|$)/.test(String((typeof location !== 'undefined' && location.search) || ''));
+const LEARN_TIMING = Object.freeze({ enterMs: 650, enterReducedMs: 250, plateHopMs: 240, helpStepMs: 650, helpTailMs: 500,
+                                     spotsMs: 900, modelStepMs: 450, demoGap: 0 });
+const learn = {
+  cls: null,
+  store: 'unknown',          // unknown (nothing kept yet) | saved | memory | unreadable | refused
+  clsStored: false,          // the class record is on this device
+  live: new Map(),           // every session started on this page, by id
+  session: null, child: null, preview: false,
+  round: null, item: null,
+  stage: 'off',              // off | entrance | entering | demo | play | support | round-end
+  plateSeq: 0,
+  support: null,             // the help on show: { level, t, steps, shown }
+  spots: false,              // the plate's rings are showing
+  litPiece: -1,              // the piece being counted
+  ringSpots: [],             // where the rings stand on the plate
+  demo: null,                // Chef Capy's demonstration under way
+  enterTimer: 0,
+  dockOn: false,             // the dock is showing, and its side is kept clear
+  dockAct: null,             // whether the dock's buttons were last drawn able to act
+  easing: false,             // plated pieces still settling into their spots
+  unreadableSessions: 0
+};
+
+/* The prototype class. Opening the app writes nothing (rule 15): the
+   class is read if it is there, and kept on this device only when
+   something is first recorded for it. An unreadable stored class is
+   never overwritten: play goes on in memory, and the workspace says so. */
+function learnClass(){
+  if(learn.cls) return learn.cls;
+  const raw = Store.get(LEARN_KEYS.classes);
+  if(raw === null){ learn.cls = protoClassRecord(); learn.clsStored = false; return learn.cls; }
+  let list = null;
+  try{ list = JSON.parse(raw); }catch(e){ list = null; }
+  const found = Array.isArray(list) ? list.find(c => c && c.id === PROTO_CLASS_ID && validClass(c)) : null;
+  learn.cls = found || protoClassRecord();
+  learn.clsStored = !!found;
+  learn.store = found ? (Store.isPersistent() ? 'saved' : 'memory') : 'unreadable';
+  return learn.cls;
+}
+function keepClass(){
+  const cls = learnClass();
+  if(learn.clsStored || learn.store === 'unreadable') return cls;
+  const ok = Store.setJSON(LEARN_KEYS.classes, [cls]);
+  learn.clsStored = ok;
+  learn.store = ok ? (Store.isPersistent() ? 'saved' : 'memory') : 'refused';
+  return cls;
+}
+/* Every event for a class: the sample class's made-up week, or what this
+   device recorded — stored sessions and any session still only in memory
+   because storage refused it. */
+function classEvents(cls){
+  if(cls.kind === 'demo') return demoEvents();
+  const st = storedSessions(), all = [];
+  learn.unreadableSessions = st.unreadable;
+  st.sessions.forEach(s => all.push(...s.events));
+  learn.live.forEach(s => all.push(...s.events));
+  return dedupeEvents(all).filter(e => e.classId === cls.id);
+}
+
+function hashText(str){
+  let h = 2166136261;
+  for(let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function startSession(child, preview){
+  endSession('switched');
+  const cls = learnClass(), at = learnNow();
+  const s = { id: 's' + at.toString(36) + '-' + Math.floor(Math.random() * 1e8).toString(36), classId: cls.id,
+              childId: child.id, tz: cls.timezone, seq: 0, lastAt: null, events: [], ids: new Set(),
+              saved: true, refused: false, preview: !!preview, rounds: 0, demoDone: false };
+  learn.session = s;
+  learn.child = child;
+  learn.preview = !!preview;
+  if(!s.preview){ keepClass(); learn.live.set(s.id, s); learnRecord('session.start', { mode: 'play' }); }
+  return s;
+}
+function endSession(reason){
+  const s = learn.session;
+  if(!s) return;
+  if(learn.item && !learn.item.ended && !learn.item.demo){ learn.item.ended = true; learnRecord('item.end', { itemId: learn.item.id, outcome: 'interrupted' }); }
+  learnRecord('session.end', { reason: reason });
+  learn.session = null; learn.child = null; learn.preview = false;
+  learn.round = null; learn.item = null; learn.demo = null; learn.support = null; learn.spots = false;
+}
+/* One event, appended to the session's own key. Who, which session, when
+   and in which class are taken from the session itself, never from the
+   caller. A preview records nothing; the same event twice adds nothing. */
+function learnRecord(type, fields){
+  const s = learn.session;
+  if(!s || s.preview) return null;
+  const at = learnNow();
+  s.seq++;
+  const ev = Object.assign({}, fields || {}, {
+    id: s.id + '.' + s.seq, v: 1, type: type, at: at, seq: s.seq, classId: s.classId, childId: s.childId,
+    sessionId: s.id, tz: s.tz, date: learnDate(at, s.tz), activity: COUNT_ACTIVITY.id,
+    activityVersion: COUNT_ACTIVITY.version, skill: COUNT_SKILL, source: 'prototype' });
+  if(s.lastAt !== null && at < s.lastAt) ev.clock = 'went-back';
+  s.lastAt = at;
+  learnAppend(s, ev);
+  return ev;
+}
+function learnAppend(s, ev){
+  if(s.ids.has(ev.id)) return false;
+  s.ids.add(ev.id);
+  s.events.push(ev);
+  const ok = Store.setJSON(LEARN_KEYS.events + s.id, s.events);
+  s.saved = ok && Store.isPersistent();
+  if(!ok){ s.refused = true; learn.store = 'refused'; }
+  return true;
+}
+
+/* ---------- rounds and items ---------- */
+/* Each round asks for 1, 2, 3, 4 and 5 once, in an order and picture drawn
+   from the session — the same session always gets the same rounds. */
+function roundPlan(s){
+  const r = seeded(hashText(s.id + ':' + s.rounds));
+  const qs = [1, 2, 3, 4, 5];
+  for(let i = qs.length - 1; i > 0; i--){ const j = Math.floor(r() * (i + 1)); const t = qs[i]; qs[i] = qs[j]; qs[j] = t; }
+  return qs.map(q => ({ quantity: q, arrangement: COUNT_ACTIVITY.arrangements[Math.floor(r() * 3)] }));
+}
+function beginOrder(){
+  const rd = learn.round;
+  rd.pos++;
+  const spec = rd.items[rd.pos], s = learn.session;
+  learn.item = { id: (s ? s.id : 'none') + '.r' + rd.index + '.i' + rd.pos, round: rd.index, pos: rd.pos,
+                 quantity: spec.quantity, arrangement: spec.arrangement, attempt: 0, support: 'none',
+                 helpAsked: false, shown: false, ended: false, last: rd.pos === rd.items.length - 1, demo: false };
+  learn.spots = false;
+  learn.litPiece = -1;
+  renderDock();
+}
+/* The order is presented when the customer has sat down: that is when the
+   item starts, and the order is shown, said, and announced. */
+function itemShown(){
+  const it = learn.item;
+  if(!it || it.shown) return;
+  it.shown = true;
+  if(!it.demo) learnRecord('item.start', { itemId: it.id, round: it.round, quantity: it.quantity, arrangement: it.arrangement });
+  renderDock();
+  if(!it.demo) sayLine(orderWords(it.quantity));
+  announce(orderAnnouncement());
+  stageLabel(true);
+}
+function orderAnnouncement(){
+  const it = learn.item;
+  return it ? 'The cat would like ' + it.quantity + (it.quantity === 1 ? ' piece.' : ' pieces.') : '';
+}
+function learnRoundOver(){ return !!learn.item && learn.item.last && !learn.item.demo; }
+/* A fresh roll and a fresh visit, at rest on the counter. */
+function freshCounter(){
+  hideHint();
+  endGesture();
+  game.phase = 'ready';
+  game.phaseT = 0;
+  gx = 0;
+  startRoll();
+  newVisit();
+  calmChef();
+  clearFeedback();
+  learn.support = null; learn.spots = false; learn.litPiece = -1;
+}
+function learnStartRound(){
+  const s = learn.session;
+  s.rounds++;
+  learn.round = { index: s.rounds, items: roundPlan(s), pos: -1 };
+  freshCounter();
+  if(!s.demoDone){ s.demoDone = true; startDemo(); return; }
+  beginOrder();
+  learn.stage = 'play';
+  setDock(true);
+}
+/* Between items: the next one arrives with the next roll and visit. */
+function learnNextOrder(){
+  if(learn.demo && learn.demo.served){ endDemo(); }
+  if(!learn.round || learn.round.pos >= learn.round.items.length - 1) return;
+  beginOrder();
+}
+
+/* ---------- the plate ---------- */
+function platedOrder(){
+  return pieces.map((p, i) => i).filter(i => pieces[i] && pieces[i].plate).sort((a, b) => pieces[a].plateOrd - pieces[b].plateOrd);
+}
+function platedCount(){ return pieces.reduce((n, p) => n + (p && p.plate ? 1 : 0), 0); }
+function canAct(){
+  return game.mode === 'count' && learn.stage === 'play' && game.phase === 'ready' && !isPaused() &&
+         !!learn.item && learn.item.shown && !learn.item.ended && !!layout;
+}
+function platePiece(i, force){
+  if(!force && !canAct()) return false;
+  const s = pieces[i];
+  if(!s || s.plate) return false;
+  if(!roll.cuts.length){
+    /* A whole roll is not a piece: it needs slicing first. */
+    nudge('dockKnife');
+    announce('Slice the roll first.');
+    kickPiece(0, -SCENE.kickTap);
+    requestFrame();
+    return false;
+  }
+  s.plate = 1;
+  s.plateOrd = ++learn.plateSeq;
+  if(!(s.pt > 0)) s.pt = 0;
+  playPop(1);
+  announce('One piece on the plate.');
+  renderDock();
+  requestFrame();
+  return true;
+}
+function unplatePiece(i, force){
+  if(!force && !canAct()) return false;
+  const s = pieces[i];
+  if(!s || !s.plate) return false;
+  s.plate = 0;
+  playPop(0.8);
+  announce('One piece back on the board.');
+  renderDock();
+  requestFrame();
+  return true;
+}
+/* The plus and minus buttons and keys: exactly one piece each press. */
+function plateNext(){
+  if(!canAct()) return false;
+  const i = pieces.findIndex(p => p && !p.plate);
+  if(i === -1){ nudge('dockKnife'); announce('Every piece is on the plate.'); return false; }
+  return platePiece(i);
+}
+function unplateLast(){
+  if(!canAct()) return false;
+  const order = platedOrder();
+  if(!order.length){ nudge('dockAdd'); announce('The plate is empty.'); return false; }
+  return unplatePiece(order[order.length - 1]);
+}
+/* A tap on a piece moves it: from the plate back to the board, or from
+   the board onto the plate. Never a cut. */
+function learnTap(p){
+  if(!canAct() || !p) return false;
+  const v = layout.view;
+  let hit = -1, best = Infinity;
+  pieceRects().forEach(r => {
+    const s = pieces[r.index];
+    if(!s || !s.plate) return;
+    const b = poseBox(v, r.pose), pad = 10;
+    if(p.x < b.x0 - pad || p.x > b.x1 + pad || p.y < b.y0 - pad || p.y > b.y1 + pad) return;
+    const d = Math.hypot(p.x - (b.x0 + b.x1) / 2, p.y - (b.y0 + b.y1) / 2);
+    if(d < best){ best = d; hit = r.index; }
+  });
+  if(hit !== -1) return unplatePiece(hit);
+  const q = toRoll(p);
+  if(!q || q.y < layout.top - layout.T * 0.6 || q.y > layout.bot + layout.T * 0.6) return false;
+  const r = pieceAt(q.x);
+  return r ? platePiece(r.index) : false;
+}
+/* Where a knife (button or key) cuts: like cutTarget(), but only in a
+   piece still on the board. Null when nothing there can be cut. */
+function countCutTarget(){
+  if(rollComplete(roll)) return null;
+  const pcs = piecesOf(roll), free = freeGuides(roll), onBoard = i => !(pieces[i] && pieces[i].plate);
+  for(let j = 0; j < free.length; j++){
+    const i = pcs.findIndex(p => free[j] > p.u0 && free[j] < p.u1);
+    const range = i === -1 || !onBoard(i) ? null : legalRange(pcs[i], roll.n);
+    if(range && free[j] >= range.lo && free[j] <= range.hi) return { index: i, u: free[j] };
+  }
+  let best = -1;
+  pcs.forEach((p, i) => {
+    if(!onBoard(i) || !legalRange(p, roll.n)) return;
+    if(best === -1 || p.u1 - p.u0 > pcs[best].u1 - pcs[best].u0) best = i;
+  });
+  return best === -1 ? null : { index: best, u: (pcs[best].u0 + pcs[best].u1) / 2 };
+}
+function learnKnife(){
+  if(!canAct()) return false;
+  const t = countCutTarget();
+  if(!t){
+    nudge('dockRemove');
+    announce(rollComplete(roll) ? 'The roll is all cut.' : 'Put a piece back on the board to cut it.');
+    return false;
+  }
+  commitCut(t.index, t.u, null, 'nice');
+  return true;
+}
+/* Each piece's place on the plate and its hop there, on the one clock. A
+   piece placed lands on the plate's next spot; the row re-centres gently. */
+function stepPlates(ms){
+  if(!layout) return;
+  const order = platedOrder(), it = learn.item;
+  const lens = order.map(i => { const p = piecesOf(roll)[i]; return (p.u1 - p.u0) * SCENE.rollLen; });
+  const want = learn.spots && it ? Math.max(0, it.quantity - order.length) : 0;
+  const spots = plateSpots(lens.concat(Array.from({ length: want }, () => SCENE.rollLen / roll.n)), layout.serveRoom);
+  learn.ringSpots = spots.slice(order.length);
+  const a = motionReduced() ? 1 : 1 - Math.exp(-ms / 70);
+  learn.easing = false;
+  order.forEach((i, k) => {
+    const s = pieces[i], sp = spots[k];
+    if(!(s.pt > 0) || motionReduced()){ s.sx = sp.x; s.sz = sp.z; s.st = sp.turn; return; }
+    s.sx += (sp.x - s.sx) * a; s.sz += (sp.z - s.sz) * a; s.st += (sp.turn - s.st) * a;
+    if(Math.abs(sp.x - s.sx) > 1e-3 || Math.abs(sp.turn - s.st) > 1e-4) learn.easing = true;
+    else { s.sx = sp.x; s.sz = sp.z; s.st = sp.turn; }
+  });
+  const step = ms / LEARN_TIMING.plateHopMs;
+  pieces.forEach(s => {
+    const target = s.plate ? 1 : 0, cur = s.pt || 0;
+    s.pt = motionReduced() ? target : target > cur ? Math.min(1, cur + step) : Math.max(0, cur - step);
+  });
+}
+function platesMoving(){
+  return game.mode === 'count' && (!!learn.easing || pieces.some(p => (p.pt || 0) !== (p.plate ? 1 : 0)));
+}
+/* A plated piece's pose: from its place on the board, hopping to its spot
+   on the plate (which travels with the plate as it is delivered). */
+function platedPose(board, s, len){
+  const t = s.pt || 0;
+  if(!(t > 0)) return board;
+  const d = deliveryAt(), e = easeInOut(t), home = gx / layout.view.ppw + layout.plateX + (s.sx || 0) + d.x;
+  return placePose(board.x + (home - board.x) * e, liftAt(t), (layout.plateZ + (s.sz || 0)) * e + d.z * e,
+                   len, board.tip * (1 - e), board.rock * (1 - e), (s.st || 0) * e);
+}
+
+/* ---------- serving, and gentle help ---------- */
+/* The child decides when the order is ready. The first quantity served is
+   the answer that counts; a wrong one gets help and another try. */
+function learnServe(){
+  if(!canAct()) return false;
+  const it = learn.item, count = platedCount();
+  if(count < 1){ nudge('dockAdd'); announce('Put some pieces on the plate first.'); return false; }
+  it.attempt++;
+  const correct = count === it.quantity;
+  if(!it.demo) learnRecord('response', { itemId: it.id, attempt: it.attempt, answer: count, correct: correct, support: it.support });
+  if(correct){ finishOrder('completed'); return true; }
+  giveSupport(it.attempt === 1 ? 'count-together' : it.attempt === 2 ? 'spots' : 'model', 'after-incorrect');
+  return true;
+}
+function finishOrder(outcome){
+  const it = learn.item;
+  it.ended = true;
+  if(!it.demo) learnRecord('item.end', { itemId: it.id, outcome: outcome });
+  learn.spots = false;
+  playServeBell();
+  sayLine(outcome === 'modeled' ? 'Here you go!' : 'Thank you!');
+  game.phase = 'deliver';
+  game.phaseT = 0;
+  game.delivering = game.visit ? game.visit.order.id : 0;
+  endGesture();
+  renderDock();
+  requestFrame();
+}
+/* Help on request before any answer makes the item assisted-only; asking
+   again repeats the help already given. Repeating the order is not help. */
+function learnHelp(){
+  if(!canAct()) return false;
+  const it = learn.item;
+  if(it.attempt === 0) it.helpAsked = true;
+  giveSupport(it.support === 'none' ? 'count-together' : it.support, it.support === 'none' ? 'asked' : 'asked-again');
+  return true;
+}
+function learnRepeat(){
+  const it = learn.item;
+  if(game.mode !== 'count' || !it || !it.shown || it.ended || isPaused()) return false;
+  if(!it.demo) learnRecord('instruction.repeat', { itemId: it.id });
+  nudge('orderCard');
+  sayLine(orderWords(it.quantity));
+  announce(orderAnnouncement());
+  return true;
+}
+function giveSupport(level, reason){
+  const it = learn.item;
+  if(!it.demo) learnRecord('support', { itemId: it.id, level: level, reason: reason });
+  if(level !== 'model') it.support = level;
+  const steps = [];
+  if(level === 'count-together'){
+    for(let k = 1; k <= it.quantity; k++) steps.push({ kind: 'order', k: k });
+    platedOrder().forEach((i, k) => steps.push({ kind: 'plate', k: k + 1, index: i }));
+  } else if(level === 'spots') steps.push({ kind: 'spots' });
+  else for(let k = 0; k < 14; k++) steps.push({ kind: 'model' });
+  learn.support = { level: level, t: 0, steps: steps, shown: -1,
+                    stepMs: level === 'spots' ? LEARN_TIMING.spotsMs : level === 'model' ? LEARN_TIMING.modelStepMs : LEARN_TIMING.helpStepMs };
+  learn.stage = 'support';
+  game.phase = 'support';
+  game.phaseT = 0;
+  endGesture();
+  hideHint();
+  sayLine(level === 'count-together' ? 'Let\'s count together.' : level === 'spots' ? 'Put one piece on each ring.' : 'Let me help.');
+  announce(level === 'count-together' ? 'Chef Capy counts the order with you.' :
+           level === 'spots' ? 'Rings on the plate show where each piece goes.' : 'Chef Capy makes the order.');
+  renderDock();
+  requestFrame();
+}
+function stepSupport(ms){
+  const sp = learn.support;
+  if(!sp){ game.phase = 'ready'; learn.stage = 'play'; return; }
+  sp.t += ms;
+  /* Step k happens at k step-lengths in; Capy's own hands may finish early. */
+  while(sp.shown + 1 < sp.steps.length && (sp.shown + 1) * sp.stepMs <= sp.t){
+    sp.shown++;
+    const st = sp.steps[sp.shown];
+    if(st.kind === 'order'){ lightOrder(st.k); learn.litPiece = -1; sayLine(capitalize(NUMBER_WORDS[st.k])); }
+    else if(st.kind === 'plate'){ lightOrder(0); learn.litPiece = st.index; sayLine(capitalize(NUMBER_WORDS[st.k])); }
+    else if(st.kind === 'spots'){ learn.spots = true; }
+    else if(st.kind === 'model' && !modelStep()) sp.steps.length = sp.shown + 1;
+  }
+  if(sp.t >= sp.steps.length * sp.stepMs + LEARN_TIMING.helpTailMs) endSupport();
+}
+/* Chef Capy's own hands: one piece off or on, or one cut, toward the order. */
+function modelStep(){
+  const it = learn.item, n = platedCount();
+  if(n > it.quantity){ const o = platedOrder(); return unplatePiece(o[o.length - 1], true); }
+  if(n === it.quantity) return false;
+  const board = pieces.map((p, i) => i).filter(i => pieces[i] && !pieces[i].plate);
+  const t = countCutTarget();
+  if(roll.cuts.length && board.length && (board.length >= it.quantity - n || !t)) return platePiece(board[0], true);
+  if(t){ commitCut(t.index, t.u, null, 'nice'); return true; }
+  return false;
+}
+function endSupport(){
+  const sp = learn.support;
+  learn.support = null;
+  learn.litPiece = -1;
+  lightOrder(0);
+  if(sp && sp.level === 'model'){ learn.stage = 'play'; game.phase = 'ready'; finishOrder('modeled'); return; }
+  learn.stage = 'play';
+  game.phase = 'ready';
+  game.phaseT = 0;
+  announce('Make the order, then ring the bell.');
+  renderDock();
+  requestFrame();
+}
+/* The count of the game's own phases while counting: the support beat
+   holds play still, and a round ends after its last customer's thanks. */
+function stepCountPhase(ms){
+  if(game.phase === 'support') stepSupport(ms);
+  else if(game.phase !== 'ready' && game.phase !== 'round-end'){
+    game.phaseT += ms;
+    for(let guard = 0; guard < 6 && game.phaseT >= phaseLength(); guard++){
+      game.phaseT -= phaseLength();
+      if(game.phase === 'deliver'){ serveOrder(game.delivering); game.phase = 'thanks'; renderDock(); }
+      else if(game.phase === 'thanks'){
+        if(learnRoundOver()){ game.phase = 'round-end'; game.phaseT = 0; showRoundEnd(); break; }
+        game.phase = 'clear';
+        if(game.visit) game.visit.state = 'leaving';
+      }
+      else if(game.phase === 'clear'){ game.rolls++; startRoll(); newVisit(); learnNextOrder(); game.phase = 'enter'; }
+      else { game.phase = 'ready'; game.phaseT = 0; arrive(); break; }
+    }
+  }
+  if(learn.demo) stepDemo(ms);
+  stepPlates(ms);
+  syncDock();
+}
+/* The dock's buttons follow whether the child can act, whatever changed
+   it: the roll arriving, the order shown, help ending, a pause lifting. */
+function syncDock(){
+  if(canAct() !== learn.dockAct) renderDock();
+}
+/* A phase in motion. A round's end waits for the child with nothing
+   moving, so it asks for no frames of its own. */
+function phaseBusy(){ return game.phase !== 'ready' && game.phase !== 'round-end'; }
+function learnAnimating(){
+  return game.mode === 'count' && (!!learn.support || !!learn.demo || platesMoving());
+}
+
+/* ---------- the round's end: continue or finish ---------- */
+function showRoundEnd(){
+  learn.stage = 'round-end';
+  /* The dock steps away but its side stays kept, so nothing on the stage
+     moves behind the panel. */
+  const dock = document.getElementById('learnDock');
+  if(dock) dock.hidden = true;
+  const el = document.getElementById('roundEnd');
+  if(el){ el.hidden = false; const b = document.getElementById('roundMore'); if(b && typeof b.focus === 'function') b.focus(); }
+  sayLine('All the customers are happy!');
+  announce('All five orders are served. Choose more orders, or finish.');
+}
+function hideRoundEnd(){ const el = document.getElementById('roundEnd'); if(el) el.hidden = true; }
+function learnContinue(){
+  if(learn.stage !== 'round-end' || !learn.session) return false;
+  hideRoundEnd();
+  learn.session.rounds++;
+  learn.round = { index: learn.session.rounds, items: roundPlan(learn.session), pos: -1 };
+  learn.stage = 'play';
+  setDock(true);
+  game.phase = 'clear';
+  game.phaseT = 0;
+  if(game.visit) game.visit.state = 'leaving';
+  requestFrame();
+  return true;
+}
+function learnFinish(){
+  if(learn.stage !== 'round-end') return false;
+  hideRoundEnd();
+  const preview = learn.preview;
+  endSession('finished');
+  if(preview){ setPreviewBanner(false); openTeach(); return true; }
+  showEntrance();
+  return true;
+}
+
+/* ---------- Chef Capy shows the task once ---------- */
+/* On the real counter, with a ghost finger: two cuts, two pieces on the
+   plate, the bell. It is never evidence, it can be skipped, and with
+   reduced motion the finger simply appears where it acts. */
+const DEMO_STEPS = deepFreeze([
+  { at: 500, act: 'say', text: 'Watch Chef Capy. Two pieces, please.' },
+  { at: 1300, act: 'cut', u: 2 / 6 }, { at: 2600, act: 'cut', u: 4 / 6 },
+  { at: 3900, act: 'plate', piece: 0 }, { at: 4800, act: 'plate', piece: 1 },
+  { at: 5900, act: 'bell' }
+]);
+function startDemo(){
+  learn.stage = 'demo';
+  learn.demo = { t: 0, next: 0, served: false };
+  learn.item = { id: 'demo', round: 0, pos: -1, quantity: COUNT_ACTIVITY.demonstration.quantity,
+                 arrangement: COUNT_ACTIVITY.demonstration.arrangement, attempt: 0, support: 'none',
+                 helpAsked: false, shown: false, ended: false, last: false, demo: true };
+  learnRecord('demo', { phase: 'shown', activityVersion: COUNT_ACTIVITY.version });
+  setDock(true);
+  showSkip(true);
+}
+function stepDemo(ms){
+  const d = learn.demo;
+  if(!d || !learn.item || !learn.item.shown || learn.item.ended){ if(d && d.served && game.phase === 'ready') endDemo(); return; }
+  d.t += ms;
+  while(d.next < DEMO_STEPS.length && d.t >= DEMO_STEPS[d.next].at){
+    const st = DEMO_STEPS[d.next++];
+    if(st.act === 'say'){ sayLine(st.text); announce('Chef Capy shows how: two pieces, please.'); }
+    else if(st.act === 'cut'){
+      const pcs = piecesOf(roll), i = pcs.findIndex(p => st.u > p.u0 && st.u < p.u1);
+      ghostSwipe(st.u);
+      if(i !== -1) commitCut(i, st.u, null, 'nice');
+    }
+    else if(st.act === 'plate'){ ghostAt(pieceCenter(st.piece)); platePiece(st.piece, true); }
+    else if(st.act === 'bell'){ ghostAt(elementCenter('dockServe')); d.served = true; finishOrder('completed'); }
+  }
+}
+function endDemo(){
+  if(!learn.demo) return;
+  learn.demo = null;
+  learn.stage = 'play';
+  showSkip(false);
+  ghostHide();
+  sayLine('Your turn!');
+}
+function skipDemo(){
+  if(!learn.demo) return false;
+  learnRecord('demo', { phase: 'skipped' });
+  learn.demo = null;
+  showSkip(false);
+  ghostHide();
+  freshCounter();
+  beginOrder();
+  learn.stage = 'play';
+  setDock(true);
+  requestFrame();
+  return true;
+}
+
+/* ---------- the entrance ---------- */
+function showEntrance(){
+  learn.stage = 'entrance';
+  game.mode = 'count';
+  pausePlay('entrance');
+  setDock(false);
+  hideRoundEnd();
+  showSkip(false);
+  ghostHide();
+  setPreviewBanner(false);
+  stageFocusable(false);
+  renderEntrance();
+  const el = document.getElementById('entrance');
+  if(el){ el.hidden = false; el.classList.remove('entering'); }
+  stageLabel(false);
+}
+function renderEntrance(){
+  const host = document.getElementById('entranceAvatars');
+  if(!host) return;
+  host.innerHTML = learnClass().roster.map(ch =>
+    '<button class="avatar-btn" type="button" data-child="' + escapeHtml(ch.id) + '" aria-label="' + escapeHtml(ch.name) + ', the ' +
+    escapeHtml((AVATARS[ch.avatar] || AVATARS.fox).label) + '">' + avatarSvg(ch.avatar, 64) +
+    '<span class="avatar-name" aria-hidden="true">' + escapeHtml(ch.name) + '</span></button>').join('');
+}
+function onEntranceClick(ev){
+  const t = ev && ev.target && typeof ev.target.closest === 'function' ? ev.target.closest('[data-child]') : null;
+  if(t) chooseChild(t.getAttribute('data-child'));
+  else if(learn.stage === 'entering') finishEnter();     // a tap during the glide skips it
+}
+function chooseChild(id){
+  if(learn.stage !== 'entrance') return false;
+  const ch = learnClass().roster.find(r => r.id === id);
+  if(!ch) return false;
+  startSession(ch, false);
+  enterKitchen();
+  return true;
+}
+function enterKitchen(){
+  learn.stage = 'entering';
+  const el = document.getElementById('entrance');
+  if(el) el.classList.add('entering');
+  clearTimeout(learn.enterTimer);
+  learn.enterTimer = setTimeout(finishEnter, motionReduced() ? LEARN_TIMING.enterReducedMs : LEARN_TIMING.enterMs);
+}
+function finishEnter(){
+  if(learn.stage !== 'entering') return;
+  clearTimeout(learn.enterTimer);
+  learn.enterTimer = 0;
+  const el = document.getElementById('entrance');
+  const keyed = !!el && typeof el.contains === 'function' && !!document.activeElement && el.contains(document.activeElement);
+  if(el){ el.hidden = true; el.classList.remove('entering'); }
+  stageFocusable(true);
+  if(keyed && stageEl && typeof stageEl.focus === 'function') stageEl.focus({ preventScroll: true });
+  game.mode = 'count';
+  learnStartRound();
+  resumePlay('entrance');
+  relayout();
+  paintNow();
+  requestFrame();
+}
+/* Outside the sushi bar the kitchen behind the picture is not a stop for
+   the keyboard; going in gives it back (and the focus, if a key chose). */
+function stageFocusable(on){
+  const st = document.getElementById('stage');
+  if(st && typeof st.setAttribute === 'function') st.setAttribute('tabindex', on ? '0' : '-1');
+}
+/* A teacher plays the same rounds as a child; nothing is recorded. */
+function startPreview(){
+  closeTeachOverlay();
+  game.mode = 'count';
+  startSession({ id: 'preview', name: 'Teacher preview', avatar: 'owl' }, true);
+  setPreviewBanner(true);
+  learn.stage = 'entering';
+  finishEnter();
+}
+
+/* ---------- the dock: the order, the tools, the bell ---------- */
+function dockSize(W, H){
+  return W > H ? Math.round(Math.max(108, Math.min(156, W * 0.15))) : Math.round(Math.max(124, Math.min(172, H * 0.17)));
+}
+/* The dock stands on the long side's end: right in landscape, along the
+   bottom in portrait, sized from the screen. */
+function placeDock(W, H){
+  const el = document.getElementById('learnDock');
+  if(!el || typeof el.setAttribute !== 'function') return;
+  el.setAttribute('data-side', W > H ? 'right' : 'bottom');
+  if(el.style && typeof el.style.setProperty === 'function') el.style.setProperty('--dock-size', dockSize(W, H) + 'px');
+}
+/* Insets for the stage's layout: in counting rounds the dock's side is
+   kept clear, so the food, the chef and the customer never sit under it.
+   Every layout places the dock too, so turning the screen moves both. */
+function layoutInsets(W, H){
+  const ins = readInsets();
+  placeDock(W, H);
+  if(game.mode !== 'count' || !learn.dockOn) return ins;
+  const size = dockSize(W, H) + 16;
+  return W > H ? Object.assign({}, ins, { right: ins.right + size }) : Object.assign({}, ins, { bottom: ins.bottom + size });
+}
+function setDock(on){
+  learn.dockOn = !!on;
+  const el = document.getElementById('learnDock');
+  if(el) el.hidden = !on;
+  relayout();
+  renderDock();
+  if(isPaused()) paintNow(); else requestFrame();
+}
+function renderDock(){
+  const el = document.getElementById('learnDock');
+  if(!el || el.hidden) return;
+  const it = learn.item, act = canAct(), card = document.getElementById('orderCard');
+  const pleased = !!(it && it.ended && game.visit && game.visit.state === 'pleased');
+  learn.dockAct = act;
+  if(card){
+    card.innerHTML = it && it.shown ? orderCardSvg(it.quantity, it.arrangement, pleased) : orderCardSvg(0, 'row');
+    card.setAttribute('aria-label', pleased ? 'The cat is happy with its order.' :
+      it && it.shown ? orderAnnouncement() + ' Tap to hear it again.' : 'The customer is sitting down.');
+  }
+  const set = (id, on) => { const b = document.getElementById(id); if(b){ if(on) b.removeAttribute('disabled'); else b.setAttribute('disabled', ''); } };
+  const board = pieces.some(p => p && !p.plate), plated = platedCount();
+  set('dockKnife', act && !!countCutTarget());
+  set('dockAdd', act && board && roll.cuts.length > 0);
+  set('dockRemove', act && plated > 0);
+  set('dockHelp', act);
+  set('dockServe', act && plated > 0);
+  set('orderCard', !!(it && it.shown && !it.ended));
+}
+function lightOrder(k){
+  const card = document.getElementById('orderCard');
+  if(!card || typeof card.querySelectorAll !== 'function') return;
+  card.querySelectorAll('.order-pic').forEach((g, i) => { if(g.classList) g.classList.toggle('lit', k > 0 && i < k); });
+}
+/* A gentle wiggle on the control that would help, instead of an error. */
+function nudge(id){
+  const el = document.getElementById(id);
+  if(!el || !el.classList || motionReduced()) return;
+  el.classList.remove('nudge');
+  void el.offsetWidth;
+  el.classList.add('nudge');
+}
+function showSkip(on){ const b = document.getElementById('demoSkip'); if(b) b.hidden = !on; }
+function setPreviewBanner(on){
+  const b = document.getElementById('previewBanner');
+  if(!b) return;
+  b.textContent = on ? 'Teacher preview: nothing is recorded' : '';
+  b.hidden = !on;
+}
+function elementCenter(id){
+  const el = document.getElementById(id), view = document.getElementById('view-play');
+  if(!el || typeof el.getBoundingClientRect !== 'function') return null;
+  const r = el.getBoundingClientRect(), o = view && view.getBoundingClientRect ? view.getBoundingClientRect() : { left: 0, top: 0 };
+  return { x: r.left - (o.left || 0) + r.width / 2, y: r.top - (o.top || 0) + r.height / 2 };
+}
+function pieceCenter(i){
+  const r = pieceRects()[i];
+  if(!r) return null;
+  const b = poseBox(layout.view, r.pose);
+  return { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
+}
+function ghostAt(p){
+  const g = document.getElementById('ghostHand');
+  if(!g || !p) return;
+  g.hidden = false;
+  if(g.style) g.style.transform = 'translate(' + Math.round(p.x) + 'px,' + Math.round(p.y) + 'px)';
+}
+function ghostSwipe(u){
+  if(!layout) return;
+  const r = pieceRects().find(q => u > q.u0 && u < q.u1);
+  if(!r) return;
+  const x = xAt(r, u), a = toStage(x, layout.top - layout.T * 0.7), b = toStage(x, layout.bot + layout.T * 0.5);
+  ghostAt(a);
+  if(!motionReduced()) setTimeout(() => { if(learn.demo) ghostAt(b); }, 120);
+}
+function ghostHide(){ const g = document.getElementById('ghostHand'); if(g) g.hidden = true; }
+
+/* ---------- the voice: only one installed on the device ---------- */
+/* Speech is a convenience, never needed: the order is a picture. Only a
+   voice the device itself provides (localService) is used, so no words
+   leave the device; with Sound off, or none installed, Capy is silent. */
+function speechHost(){
+  const w = typeof window !== 'undefined' ? window : null;
+  return w && w.speechSynthesis && typeof w.SpeechSynthesisUtterance === 'function' ? w.speechSynthesis : null;
+}
+function deviceVoice(){
+  const sp = speechHost();
+  if(!sp) return null;
+  let list = [];
+  try{ list = sp.getVoices() || []; }catch(e){ list = []; }
+  return list.find(v => v && v.localService === true && /^en([-_]|$)/i.test(String(v.lang || ''))) || null;
+}
+function sayLine(text){
+  if(!prefs.sound || isPaused() || !pageActivated() || game.mode !== 'count') return false;
+  const sp = speechHost(), v = deviceVoice();
+  if(!sp || !v || !text) return false;
+  try{
+    sp.cancel();
+    const u = new window.SpeechSynthesisUtterance(text);
+    u.voice = v; u.lang = v.lang; u.rate = 0.92; u.pitch = 1.05;
+    sp.speak(u);
+    return true;
+  }catch(e){ return false; }
+}
+function hushVoice(){ const sp = speechHost(); if(sp){ try{ sp.cancel(); }catch(e){} } }
+/* Two small sounds of the kitchen's own, made on the device like the cut. */
+function playPop(pitch){
+  if(!prefs.sound || isPaused() || !audioRunning() || !sound.out) return false;
+  const ctx = sound.ctx, now = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(520 * pitch, now);
+  o.frequency.exponentialRampToValueAtTime(760 * pitch, now + 0.07);
+  envelope(g.gain, now, 0.12, 0.006, 0.12);
+  o.connect(g); g.connect(sound.out);
+  o.start(now); o.stop(now + 0.14);
+  sound.voices.push({ nodes: [o], end: now + 0.14 });
+  return true;
+}
+function playServeBell(){
+  if(!prefs.sound || isPaused() || !audioRunning() || !sound.out) return false;
+  const ctx = sound.ctx, now = ctx.currentTime, nodes = [];
+  [[1046.5, 0.09], [1568, 0.05]].forEach((n, k) => {
+    const o = ctx.createOscillator(), g = ctx.createGain(), t = now + k * 0.08;
+    o.type = 'sine';
+    o.frequency.setValueAtTime(n[0], t);
+    envelope(g.gain, t, n[1], 0.006, 0.55);
+    o.connect(g); g.connect(sound.out);
+    o.start(t); o.stop(t + 0.57);
+    nodes.push(o);
+  });
+  sound.voices.push({ nodes: nodes, end: now + 0.65 });
+  return true;
+}
+
+/* ---------- keys in the counting rounds ---------- */
+/* Space or K cut; + and − (or the arrows) move one piece; Enter serves;
+   H asks for help; R repeats the order. A held key is one press, and keys
+   act only when a tap would. */
+function onLearnKey(ev){
+  if(!ev || ev.defaultPrevented) return;
+  if(ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if(document.querySelector('.overlay.open')) return;
+  const t = ev.target, tag = t && t.tagName ? String(t.tagName).toUpperCase() : '';
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (t && t.isContentEditable)) return;
+  const k = ev.key;
+  const acts = { ' ': learnKnife, 'Spacebar': learnKnife, 'k': learnKnife, 'K': learnKnife, 'ArrowDown': learnKnife,
+                 '+': plateNext, '=': plateNext, 'ArrowRight': plateNext, 'ArrowUp': plateNext,
+                 '-': unplateLast, '_': unplateLast, 'ArrowLeft': unplateLast,
+                 'Enter': learnServe, 'h': learnHelp, 'H': learnHelp, '?': learnHelp, 'r': learnRepeat, 'R': learnRepeat };
+  const fn = acts[k];
+  if(!fn || learn.stage === 'entrance' || learn.stage === 'off') return;
+  if(typeof ev.preventDefault === 'function') ev.preventDefault();
+  if(ev.repeat) return;
+  fn();
+}
+
+/* ---------- pictures: the order card, the avatars ---------- */
+/* One maki slice standing on its end, seen from a little above — the same
+   look the bubble had — drawn in the food's own colours. */
+function makiSvg(cx, cy, r){
+  const ry = r * 0.62, side = r * 0.5, top = cy - side / 2;
+  return '<g class="order-pic"><path class="maki-side" d="M' + (cx - r) + ' ' + top + 'v' + side + 'a' + r + ' ' + ry + ' 0 0 0 ' + (2 * r) + ' 0v-' + side + 'z"/>' +
+         '<ellipse class="maki-nori" cx="' + cx + '" cy="' + top + '" rx="' + r + '" ry="' + ry + '"/>' +
+         '<ellipse class="maki-rice" cx="' + cx + '" cy="' + top + '" rx="' + (r * 0.82) + '" ry="' + (ry * 0.8) + '"/>' +
+         '<rect class="maki-salmon" x="' + (cx - r * 0.3) + '" y="' + (top - ry * 0.3) + '" width="' + (r * 0.6) + '" height="' + (ry * 0.6) +
+         '" rx="' + (r * 0.16) + '"/><ellipse class="maki-ring" cx="' + cx + '" cy="' + (top + side * 0.35) + '" rx="' + (r * 1.28) + '" ry="' + (ry * 1.5 + side * 0.4) + '"/></g>';
+}
+function orderCardSvg(q, arrangement, pleased){
+  const pts = q > 0 ? COUNT_PICTURES[arrangement][q] : [];
+  const r = arrangement === 'row' ? Math.min(11, 92 / (2.4 * Math.max(1, q))) : 10.5;
+  const pics = pts.map(p => makiSvg(14 + p[0] * 92, 34 + p[1] * 56, r)).join('');
+  return '<svg viewBox="0 0 120 100" aria-hidden="true" focusable="false" class="order-svg">' +
+         '<rect class="card-paper" x="2" y="2" width="116" height="96" rx="14"/>' + catFaceSvg(20, 18, 11, pleased) +
+         '<path class="card-tail" d="M33 20 l9 -5 v10 z"/>' + pics + '</svg>';
+}
+/* Sleepy, its eyes soft closed curves; pleased, they turn up into happy
+   arcs and its cheeks go pink, as the cat at the counter does. */
+function catFaceSvg(cx, cy, r, pleased){
+  const lid = pleased ? -r * 0.26 : r * 0.22;
+  return '<g class="cat-face"><path class="cat-ear" d="M' + (cx - r * 0.95) + ' ' + (cy - r * 0.2) + 'l' + (r * 0.15) + ' ' + (-r * 1.05) + 'l' + (r * 0.7) + ' ' + (r * 0.55) + 'z"/>' +
+         '<path class="cat-ear" d="M' + (cx + r * 0.95) + ' ' + (cy - r * 0.2) + 'l' + (-r * 0.15) + ' ' + (-r * 1.05) + 'l' + (-r * 0.7) + ' ' + (r * 0.55) + 'z"/>' +
+         '<circle class="cat-head" cx="' + cx + '" cy="' + cy + '" r="' + r + '"/>' +
+         '<ellipse class="cat-muzzle" cx="' + cx + '" cy="' + (cy + r * 0.35) + '" rx="' + (r * 0.5) + '" ry="' + (r * 0.3) + '"/>' +
+         '<circle class="cat-nose" cx="' + cx + '" cy="' + (cy + r * 0.22) + '" r="' + (r * 0.13) + '"/>' +
+         '<path class="cat-eye" d="M' + (cx - r * 0.55) + ' ' + (cy - r * 0.12) + 'q' + (r * 0.2) + ' ' + lid + ' ' + (r * 0.4) + ' 0M' +
+         (cx + r * 0.15) + ' ' + (cy - r * 0.12) + 'q' + (r * 0.2) + ' ' + lid + ' ' + (r * 0.4) + ' 0"/>' +
+         (pleased ? '<circle class="cat-blush" cx="' + (cx - r * 0.62) + '" cy="' + (cy + r * 0.3) + '" r="' + (r * 0.2) + '"/>' +
+                    '<circle class="cat-blush" cx="' + (cx + r * 0.62) + '" cy="' + (cy + r * 0.3) + '" r="' + (r * 0.2) + '"/>' : '') + '</g>';
+}
+/* Simple animal faces for the fictional profiles: a shape, two eyes, a smile. */
+function avatarSvg(kind, size){
+  const k = AVATARS[kind] ? kind : 'fox';
+  const ears = {
+    fox: '<path class="av-fill" d="M14 26 18 8 30 20Z"/><path class="av-fill" d="M50 26 46 8 34 20Z"/>',
+    frog: '<circle class="av-fill" cx="21" cy="17" r="8"/><circle class="av-fill" cx="43" cy="17" r="8"/>',
+    bunny: '<rect class="av-fill" x="18" y="2" width="9" height="24" rx="4.5"/><rect class="av-fill" x="37" y="2" width="9" height="24" rx="4.5"/>',
+    bear: '<circle class="av-fill" cx="17" cy="18" r="7"/><circle class="av-fill" cx="47" cy="18" r="7"/>',
+    penguin: '',
+    owl: '<path class="av-fill" d="M14 20 18 8 26 16Z"/><path class="av-fill" d="M50 20 46 8 38 16Z"/>'
+  }[k];
+  const belly = k === 'penguin' ? '<ellipse class="av-belly" cx="32" cy="38" rx="13" ry="14"/>' : '<ellipse class="av-belly" cx="32" cy="42" rx="11" ry="7"/>';
+  return '<svg class="avatar av-' + k + '" width="' + size + '" height="' + size + '" viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
+         ears + '<circle class="av-fill" cx="32" cy="35" r="21"/>' + belly +
+         '<circle class="av-ink" cx="25" cy="31" r="2.6"/><circle class="av-ink" cx="39" cy="31" r="2.6"/>' +
+         '<path class="av-line" d="M28 40q4 4 8 0"/></svg>';
+}
+function dockIcons(){
+  const put = (id, html) => { const b = document.getElementById(id); if(b) b.innerHTML = html; };
+  put('dockKnife', svg('<path d="M3 12.8 11.6 4.2a1.6 1.6 0 0 1 2.3 2.3L5.3 15.1"/><path d="M3 12.8l2.3 2.3"/>', 30));
+  put('dockAdd', svg('<path d="M8 3.6v8.8M3.6 8h8.8"/>', 30));
+  put('dockRemove', svg('<path d="M3.6 8h8.8"/>', 30));
+  put('dockHelp', svg('<circle cx="8" cy="8" r="6"/><path d="M6.3 6.4a1.8 1.8 0 1 1 2.4 1.7c-.5.2-.7.6-.7 1.1"/><circle cx="8" cy="11.4" r="0.7" fill="currentColor" stroke="none"/>', 30));
+  put('dockServe', svg('<path d="M3 11.6h10M4.2 11.6a3.8 3.8 0 0 1 7.6 0M8 4.2v3.6M6.6 4.2h2.8"/><path d="M2.4 13.6h11.2"/>', 40));
+  put('demoSkip', svg('<path d="M3.4 3.6 8.4 8l-5 4.4zM8.6 3.6 13.6 8l-5 4.4z"/>', 20));
+  put('roundMore', svg('<circle cx="8" cy="8" r="5.6"/><path d="M7 5.6 9.6 8 7 10.4"/>', 44));
+  put('roundFinish', svg('<path d="M4 14V2.6h8V14"/><path d="M2.6 14h10.8M9.6 8.4v.4"/>', 44));
+}
+
+/* ---------- the kitchen's flat marks while counting ---------- */
+/* The piece being counted gets a soft ring; the plate's rings show where
+   each wanted piece goes. Drawn with the flat layer, through the camera. */
+function drawLearnMarks(c, rects){
+  if(game.mode !== 'count' || !layout) return;
+  const C = colors, v = layout.view;
+  c.save();
+  if(learn.litPiece !== -1){
+    const r = rects[learn.litPiece];
+    if(r){ const b = poseBox(v, r.pose); c.strokeStyle = C.helpRing; c.lineWidth = Math.max(3, layout.T * 0.06);
+           c.beginPath(); c.ellipse((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.x1 - b.x0) * 0.62, (b.y1 - b.y0) * 0.62, 0, 0, Math.PI * 2); c.stroke(); }
+  }
+  if(learn.spots && learn.ringSpots.length){
+    const d = deliveryAt(), top = plateTop();
+    c.strokeStyle = C.helpRing;
+    c.lineWidth = Math.max(2.5, layout.T * 0.045);
+    if(typeof c.setLineDash === 'function') c.setLineDash([6, 5]);
+    learn.ringSpots.forEach(sp => {
+      const x = gx / v.ppw + layout.plateX + sp.x + d.x, z = layout.plateZ + sp.z + d.z;
+      const a = project(v, x, top + SCENE.halfHeight, z), e = project(v, x + SCENE.halfHeight, top + SCENE.halfHeight, z);
+      const rx = Math.max(12, Math.abs(e.x - a.x) * 1.15);
+      c.beginPath(); c.ellipse(a.x, a.y, rx, rx * 0.8, 0, 0, Math.PI * 2); c.stroke();
+    });
+    if(typeof c.setLineDash === 'function') c.setLineDash([]);
+  }
+  c.restore();
+}
+
+/* ---------- the teacher workspace ---------- */
+/* Today / Class / Students / Lessons / Reports, for the one counting skill.
+   It is reached through the grown-ups' times-table question, which is a
+   parent gate, not teacher authentication: anyone past it sees it, and
+   every screen says so. Nothing here leaves the device. */
+const TEACH_VIEWS = Object.freeze(['today', 'class', 'students', 'lessons', 'reports']);
+const TEACH_LABELS = Object.freeze({ today: 'Today', class: 'Class', students: 'Students', lessons: 'Lessons', reports: 'Reports' });
+const teach = {
+  classId: PROTO_CLASS_ID, view: 'today', childId: null, revisionId: null, stack: [],
+  report: { childId: null, audience: 'teacher', includeNotes: false },
+  inputs: null,            // the planner's constraints, as last chosen
+  draft: null,             // the working lesson draft (saved only when the teacher saves or publishes)
+  demoPlans: [],           // the sample class's plans live in memory only
+  notice: ''
+};
+function teachClass(){ return teach.classId === DEMO_CLASS.id ? DEMO_CLASS : learnClass(); }
+function teachIsDemo(){ return teach.classId === DEMO_CLASS.id; }
+/* The evidence as of now (or the sample class's fixed day). */
+function teachSnapshot(){
+  const cls = teachClass();
+  return classSnapshot(cls, classEvents(cls), cls.kind === 'demo' ? cls.cutoffMs : learnNow());
+}
+function loadObservations(){
+  const v = Store.getJSON(LEARN_KEYS.observations, []);
+  return Array.isArray(v) ? v.filter(o => o && typeof o.id === 'string' && typeof o.childId === 'string') : [];
+}
+function loadPlans(){
+  if(teachIsDemo()) return teach.demoPlans;
+  const v = Store.getJSON(LEARN_KEYS.plans, []);
+  return Array.isArray(v) ? v.filter(p => p && typeof p.id === 'string' && p.classId === teach.classId) : [];
+}
+function storePlanRecord(rec){
+  if(teachIsDemo()){ teach.demoPlans = teach.demoPlans.filter(p => p.id !== rec.id).concat([rec]); return true; }
+  keepClass();
+  const all = Store.getJSON(LEARN_KEYS.plans, []);
+  const list = (Array.isArray(all) ? all : []).filter(p => p && p.id !== rec.id).concat([rec]);
+  return Store.setJSON(LEARN_KEYS.plans, list) && Store.isPersistent();
+}
+
+function openTeach(){
+  if(learn.session) endSession(learn.preview ? 'finished' : 'teacher');   // a child's session ends here; nothing moves to anyone
+  setPreviewBanner(false);
+  pausePlay('teacher');
+  teach.stack = [];
+  renderTeach();
+  pushOverlayHistory();
+  openOverlay('teachOverlay');
+}
+/* From the grown-ups' settings: the workspace takes the settings' place,
+   and its history entry, as the settings took the gate's. */
+function openTeachFromPrefs(){
+  const ov = document.getElementById('prefsOverlay');
+  if(!ov || !ov.classList.contains('open')) return;
+  if(learn.session) endSession(learn.preview ? 'finished' : 'teacher');
+  closeOverlay('prefsOverlay');
+  pausePlay('teacher');
+  resumePlay('grownup');
+  teach.stack = [];
+  renderTeach();
+  openOverlay('teachOverlay');
+}
+function closeTeachOverlay(){
+  const ov = document.getElementById('teachOverlay');
+  if(!ov || !ov.classList.contains('open')) return false;
+  endPrint();
+  closeOverlay('teachOverlay');
+  releaseOverlayHistory();
+  resumePlay('teacher');
+  return true;
+}
+/* Leaving the workspace returns to the sushi bar's door. */
+function closeTeach(){
+  if(!closeTeachOverlay()) return;
+  if(game.mode === 'count') showEntrance();
+}
+function teachGo(view, opts){
+  const o = opts || {};
+  if(o.push) teach.stack.push({ view: teach.view, childId: teach.childId, revisionId: teach.revisionId });
+  else if(TEACH_VIEWS.indexOf(view) !== -1 && !o.keep) teach.stack = [];
+  teach.view = view;
+  if('childId' in o) teach.childId = o.childId;
+  if('revisionId' in o) teach.revisionId = o.revisionId;
+  renderTeach();
+  const body = document.getElementById('teachBody');
+  if(body && typeof body.scrollTo === 'function') body.scrollTo({ top: 0 });
+}
+function teachBack(){
+  const prev = teach.stack.pop();
+  if(!prev){ teachGo('today'); return; }
+  teach.view = prev.view; teach.childId = prev.childId; teach.revisionId = prev.revisionId;
+  renderTeach();
+}
+
+/* ---------- rendering ---------- */
+function h(s){ return escapeHtml(String(s === null || s === undefined ? '' : s)); }
+function chip(status){
+  return '<span class="status-chip st-' + h(status) + '">' + h(LEARN_STATUS[status] ? LEARN_STATUS[status].label : status) + '</span>';
+}
+function frac(a, b){ return b ? a + ' of ' + b : 'none yet'; }
+function renderTeach(){
+  const body = document.getElementById('teachBody');
+  if(!body) return;
+  const snap = teachSnapshot(), cls = teachClass();
+  const views = { today: teachToday, class: teachClassView, students: teachStudents, student: teachStudent, lessons: teachLessons,
+                  revision: teachRevision, reports: teachReports };
+  const main = (views[teach.view] || teachToday)(snap, cls);
+  body.innerHTML = teachHeader(snap, cls) + '<div class="teach-main" id="teachMain">' + main + '</div>';
+}
+function storageText(){
+  if(teachIsDemo()) return 'Sample data, built in memory and never stored.';
+  const s = learn.store;
+  if(s === 'saved') return 'Saved on this device only.';
+  if(s === 'memory') return 'Not saving: this browser is not keeping data, so records last only until the app closes.';
+  if(s === 'unreadable') return 'The stored class could not be read; it was left untouched and this session uses memory only.';
+  if(s === 'refused') return 'Some records could not be saved on this device (storage refused them); they last only until the app closes.';
+  return 'Nothing recorded on this device yet.';
+}
+function teachHeader(snap, cls){
+  const tabs = TEACH_VIEWS.map(v => {
+    const on = teach.view === v || (v === 'students' && teach.view === 'student') || (v === 'lessons' && teach.view === 'revision');
+    return '<button class="teach-tab' + (on ? ' on' : '') + '" type="button" data-act="go" data-arg="' + v + '"' +
+           (on ? ' aria-current="page"' : '') + '>' + TEACH_LABELS[v] + '</button>';
+  }).join('');
+  return '<div class="teach-banner" role="note"><strong>Development prototype on this device.</strong> Fictional profiles only. ' +
+         'No teacher sign-in, no syncing between devices, not for real student records. The counting content and its rule await educator review.' +
+         (cls.kind === 'demo' ? ' <span class="demo-badge">DEMO sample data, as of ' + h(dateText(snap.cutoff)) + '</span>' : '') + '</div>' +
+         '<div class="teach-classbar"><label class="teach-label" for="teachClassPick">Class</label>' +
+         '<select id="teachClassPick" data-change="class">' +
+         '<option value="' + PROTO_CLASS_ID + '"' + (teachIsDemo() ? '' : ' selected') + '>Prototype class (this device)</option>' +
+         '<option value="' + DEMO_CLASS.id + '"' + (teachIsDemo() ? ' selected' : '') + '>Willow class (DEMO sample data)</option></select>' +
+         '<span class="teach-meta">' + h(cls.roster.length) + ' fictional children · ' + h(cls.timezone) + ' · ' + h(cls.language) + ' · ' + h(storageText()) + '</span>' +
+         '<button class="btn-secondary" type="button" data-act="preview">Preview the activity (records nothing)</button></div>' +
+         '<nav class="teach-nav" aria-label="Teacher workspace">' + tabs + '</nav>' +
+         (teach.notice ? '<div class="notice teach-notice" role="status">' + h(teach.notice) + '</div>' : '');
+}
+function windowText(snap){
+  return dateText(snap.window.start) + ' – ' + dateText(snap.window.end) + ' (' + snap.window.days + ' instructional days)';
+}
+function statusRows(snap){
+  return STATUS_ORDER.map(k => '<li>' + chip(k) + ' <strong>' + snap.counts[k] + '</strong> of ' + snap.roster + '</li>').join('');
+}
+function teachToday(snap, cls){
+  const c = snap.counts, insights = [];
+  if(!teachIsDemo() && learn.store !== 'saved' && learn.store !== 'unknown')
+    insights.push({ text: storageText(), act: null });
+  if(snap.eventCount === 0) insights.push({ text: 'No counting orders yet in this class. Preview the activity, then let a child play from the sushi bar\'s door.', act: 'preview', label: 'Preview the activity' });
+  if(c['not-observed'] && snap.eventCount) insights.push({ text: c['not-observed'] + ' of ' + snap.roster + ' children have no usable counting evidence in this window. An observation, not remediation, comes first.', act: 'go', arg: 'lessons', label: 'Prepare an observation lesson' });
+  if(c.building) insights.push({ text: c.building + ' of ' + snap.roster + ' children have enough independent counting orders to decide, but fewer than 80% matched the order.', act: 'go', arg: 'class', label: 'See who, and why' });
+  if(c.independent) insights.push({ text: c.independent + ' of ' + snap.roster + ' children are independent in the game for counting 1 to 5. Check it with real objects before moving on.', act: 'go', arg: 'students', label: 'See the children' });
+  if(c.gathering && insights.length < 3) insights.push({ text: c.gathering + ' of ' + snap.roster + ' children need more counting orders, on another instructional day, before the rule can decide.', act: 'go', arg: 'class', label: 'See coverage' });
+  const draft = currentDraft(), revs = loadPlans().filter(p => p.kind === 'revision');
+  const lastRev = revs.sort((a, b) => b.rev - a.rev)[0];
+  const lesson = draft ? 'A lesson draft for ' + h(dateText(draft.plan.inputs.date)) + ' (' + h(draft.plan.inputs.minutes) + ' minutes, ' + h(draft.plan.purpose) + ').' :
+                 lastRev ? 'Published revision ' + h(lastRev.rev) + ' for ' + h(dateText(lastRev.plan.inputs.date)) + '.' : 'No lesson prepared yet.';
+  return '<h2 class="teach-h">Today, ' + h(dateText(learnDate(teachIsDemo() ? cls.cutoffMs : learnNow(), cls.timezone))) + '</h2>' +
+    '<section class="teach-card"><div class="teach-kicker">Current objective</div><p class="teach-lead">' + h(COUNT_ACTIVITY.objective) + '</p>' +
+    '<p class="teach-small">Skill ' + h(COUNT_SKILL) + ' · rule ' + h(COUNT_RULE.version) + ', awaiting educator validation · reporting window ' + h(windowText(snap)) + '.</p></section>' +
+    '<div class="teach-grid">' +
+    '<section class="teach-card"><div class="teach-kicker">Participation</div><p class="teach-metric">' + h(frac(snap.played, snap.roster)) + '</p><p class="teach-small">children played counting orders in this window</p></section>' +
+    '<section class="teach-card"><div class="teach-kicker">Evidence coverage</div><p class="teach-metric">' + h(frac(snap.withEvidence, snap.roster)) + '</p><p class="teach-small">children have independent first responses in this window</p></section>' +
+    '<section class="teach-card"><div class="teach-kicker">Counting 1–5</div><ul class="teach-statuses">' + statusRows(snap) + '</ul></section></div>' +
+    '<h3 class="teach-h3">Next</h3><ul class="teach-insights">' + insights.slice(0, 3).map(x => '<li><p>' + h(x.text) + '</p>' +
+      (x.act ? '<button class="btn-secondary" type="button" data-act="' + x.act + '"' + (x.arg ? ' data-arg="' + h(x.arg) + '"' : '') + '>' + h(x.label) + '</button>' : '') + '</li>').join('') +
+    (insights.length ? '' : '<li><p>Nothing needs attention yet.</p></li>') + '</ul>' +
+    '<section class="teach-card"><div class="teach-kicker">Lesson</div><p>' + lesson + '</p><button class="btn-primary" type="button" data-act="go" data-arg="lessons">' +
+    (draft || lastRev ? 'Review the lesson' : 'Prepare a lesson') + '</button></section>';
+}
+function teachClassView(snap){
+  const by = k => snap.children.filter(c => c.status === k);
+  const over = snap.children.reduce((s, c) => s + c.independent.over, 0), under = snap.children.reduce((s, c) => s + c.independent.under, 0);
+  const rows = STATUS_ORDER.map(k => '<tr><th scope="row">' + chip(k) + '</th><td>' + snap.counts[k] + ' of ' + snap.roster + '</td><td>' +
+    (by(k).length ? by(k).map(c => '<button class="link-btn" type="button" data-act="student" data-arg="' + h(c.id) + '">' + h(c.name) + '</button>').join(', ') : '—') +
+    '</td><td>' + h(LEARN_STATUS[k].next) + '</td></tr>').join('');
+  return '<h2 class="teach-h">Counting quantities 1–5</h2>' +
+    (snap.eventCount === 0 ? '<div class="notice"><strong>No evidence yet</strong>No counting orders have been played in this class. Every child is Not observed, which is not the same as zero.</div>' : '') +
+    '<p class="teach-small">Window ' + h(windowText(snap)) + ' · evidence up to ' + h(snap.takenAt.replace('T', ' ').slice(0, 16)) + ' UTC · ' +
+    h(snap.eventCount) + ' events · ' + h(snap.withEvidence) + ' of ' + h(snap.roster) + ' children observed independently.</p>' +
+    '<div class="table-wrap"><table class="teach-table"><caption class="sr-only">Children by counting status</caption><thead><tr><th scope="col">Status</th><th scope="col">Children</th>' +
+    '<th scope="col">Who</th><th scope="col">Suggested next step</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<details class="teach-drawer"><summary>How this is decided</summary><p>' + h(COUNT_RULE.text) + ' Rule ' + h(COUNT_RULE.id) + ' ' + h(COUNT_RULE.version) +
+    ', proposed in the product specification and awaiting educator validation. Only the first answer to each order counts as independent, and only when no help came before it. ' +
+    'Help and later tries are counted as supported. Unfinished orders, the demonstration and teacher previews are never evidence. "With support" is not assigned until a support rubric for this skill is reviewed.</p>' +
+    '<p>Independent first responses that did not match the order: ' + over + ' with more pieces than asked, ' + under + ' with fewer.</p>' +
+    '<p>Summary version ' + h(EVIDENCE_VERSION) + ' · activity ' + h(COUNT_ACTIVITY.id) + ' ' + h(COUNT_ACTIVITY.version) + ' (educator review ' + h(COUNT_ACTIVITY.review.status) + ').</p></details>';
+}
+function teachStudents(snap){
+  return '<h2 class="teach-h">Students</h2><ul class="teach-list">' + snap.children.map(c =>
+    '<li><button class="teach-row" type="button" data-act="student" data-arg="' + h(c.id) + '">' + avatarSvg(c.avatar, 40) +
+    '<span class="teach-row-main"><span class="teach-row-title">' + h(c.name) + '</span><span class="teach-row-sub">' +
+    'Independent first responses: ' + h(frac(c.independent.correct, c.independent.attempted)) + (c.independent.attempted ? ' correct' : '') +
+    ' · last evidence ' + h(c.lastDate ? dateText(c.lastDate) : 'none') + '</span></span>' + chip(c.status) + '</button></li>').join('') + '</ul>';
+}
+function criteriaList(c){
+  const ind = c.independent, R = COUNT_RULE;
+  const item = (ok, text) => '<li class="' + (ok ? 'met' : 'unmet') + '"><span class="sr-only">' + (ok ? 'Met: ' : 'Not yet: ') + '</span>' + h(text) + '</li>';
+  return '<ul class="teach-criteria">' +
+    item(ind.attempted >= R.minIndependent, ind.attempted + ' of ' + R.minIndependent + ' independent first responses') +
+    item(ind.dates.length >= R.minDates, ind.dates.length + ' of ' + R.minDates + ' instructional dates' + (ind.dates.length ? ' (' + ind.dates.map(shortDate).join(', ') + ')' : '')) +
+    item(ind.quantities.length >= R.minQuantities && ind.quantities.indexOf(R.mustInclude) !== -1,
+         'Quantities ' + (ind.quantities.length ? ind.quantities.join(', ') : 'none') + ' (needs four, including 5)') +
+    item(ind.attempted >= R.minIndependent && ind.correct / ind.attempted >= R.minAccuracy,
+         ind.attempted ? ind.correct + ' of ' + ind.attempted + ' correct (needs 80% once the rest is met)' : 'Accuracy: no independent responses yet') + '</ul>';
+}
+function teachStudent(snap){
+  const c = snap.children.find(x => x.id === teach.childId);
+  if(!c) return '<p>That child is not in this class.</p>';
+  const obs = loadObservations().filter(o => o.childId === c.id && o.classId === snap.classId);
+  const recent = c.recent.map(x => '<tr><td>' + h(shortDate(x.date)) + '</td><td>' + h(x.quantity) + ' (' + h(x.arrangement) + ')</td><td>' + h(x.first) +
+    (x.firstCorrect ? ' ✓' : '') + '</td><td>' + (x.independent ? 'Independently' : 'After help (' + h(x.supportBefore) + ')') + '</td><td>' +
+    (x.retries.length ? x.retries.map(r => h(r.answer) + (r.correct ? ' ✓' : '') + ' with ' + h(r.support)).join('; ') : '—') + '</td></tr>').join('');
+  const kinds = { independent: 'Did it independently', 'with-support': 'Did it with support', 'not-yet': 'Not yet', note: 'Note' };
+  return '<button class="link-btn back-link" type="button" data-act="back">Back</button>' +
+    '<h2 class="teach-h">' + avatarSvg(c.avatar, 44) + ' ' + h(c.name) + ' ' + chip(c.status) + '</h2>' +
+    (c.status === 'fresh-check' && c.prior ? '<p class="teach-small">Earlier evidence (to ' + h(dateText(c.prior.lastDate)) + ') was ' + h(LEARN_STATUS[c.prior.status].label) + '.</p>' : '') +
+    '<section class="teach-card"><div class="teach-kicker">Counting quantities 1–5 · window ' + h(windowText(snap)) + '</div>' + criteriaList(c) +
+    '<p class="teach-small">Next: ' + h(LEARN_STATUS[c.status].next) + '</p></section>' +
+    '<div class="teach-grid">' +
+    '<section class="teach-card"><div class="teach-kicker">Independent first responses</div><p class="teach-metric">' + h(frac(c.independent.correct, c.independent.attempted)) + '</p>' +
+    '<p class="teach-small">' + (c.independent.attempted ? 'correct · ' + c.independent.over + ' over, ' + c.independent.under + ' under' : 'no independent first answers yet') + '</p></section>' +
+    '<section class="teach-card"><div class="teach-kicker">Supported retries</div><p class="teach-metric">' + h(frac(c.supported.correct, c.supported.responses)) + '</p>' +
+    '<p class="teach-small">matched after help · ' + c.assistedOnly + ' assisted-only ' + (c.assistedOnly === 1 ? 'order' : 'orders') + '</p></section>' +
+    '<section class="teach-card"><div class="teach-kicker">Sessions and dates</div><p class="teach-metric">' + h(c.sessions) + '</p>' +
+    '<p class="teach-small">' + (c.dates.length ? c.dates.map(shortDate).join(', ') : 'none in this window') + (c.interrupted ? ' · ' + c.interrupted + ' unfinished (not counted)' : '') + '</p></section></div>' +
+    '<h3 class="teach-h3">Game evidence, newest first</h3>' +
+    (recent ? '<div class="table-wrap"><table class="teach-table"><thead><tr><th scope="col">Date</th><th scope="col">Asked</th><th scope="col">First served</th>' +
+              '<th scope="col">How it was answered</th><th scope="col">Later tries</th></tr></thead><tbody>' + recent + '</tbody></table></div>' : '<p class="teach-small">No counting orders in this window.</p>') +
+    '<h3 class="teach-h3">Teacher observations <span class="teach-small">(kept apart from game results)</span></h3>' +
+    (obs.length ? '<ul class="teach-obs">' + obs.map(o => '<li><strong>' + h(dateText(o.date)) + ' · ' + h(kinds[o.kind] || o.kind) + '</strong> · ' + h(o.context) +
+                  (o.note ? '<div class="teach-note">' + h(o.note) + '</div>' : '') + '</li>').join('') + '</ul>' : '<p class="teach-small">None recorded.</p>') +
+    (teachIsDemo() ? '<p class="teach-small">The sample class is read-only.</p>' :
+     '<div class="teach-form" role="group" aria-label="Record an observation"><div class="teach-kicker">Record an observation</div>' +
+     '<label class="teach-label" for="obsKind">What you saw</label><select id="obsKind"><option value="independent">Made the set independently</option>' +
+     '<option value="with-support">Made the set with support</option><option value="not-yet">Not yet</option><option value="note">A note only</option></select>' +
+     '<label class="teach-label" for="obsContext">Where</label><select id="obsContext"><option>Exit check</option><option>Small group</option><option>Center</option><option>Other</option></select>' +
+     '<label class="teach-label" for="obsNote">Private note (never in family reports)</label><textarea id="obsNote" rows="2" maxlength="400"></textarea>' +
+     '<button class="btn-primary" type="button" data-act="observe" data-arg="' + h(c.id) + '">Save observation</button></div>') +
+    '<p><button class="btn-secondary" type="button" data-act="report" data-arg="' + h(c.id) + '">Prepare a report</button></p>';
+}
+/* The draft being worked on: the one in hand, else the one saved. */
+function currentDraft(){ return workingDraft(); }
+function planInputsFor(snap){
+  if(teach.inputs && teach.inputs.classId === teach.classId) return teach.inputs;
+  const cls = teachClass(), today = learnDate(teachIsDemo() ? cls.cutoffMs : learnNow(), cls.timezone);
+  let next = calAdd(today, 1);
+  for(let i = 0; i < 7 && !isTeachingDay(next, cls.calendar); i++) next = calAdd(next, 1);
+  teach.inputs = { classId: teach.classId, date: next, minutes: 20, devices: 2, adults: 1,
+                   materials: { counters: true, paperSushi: false, plates: true, checklist: true }, absent: [] };
+  return teach.inputs;
+}
+function teachLessons(snap){
+  const inp = planInputsFor(snap), draftRec = currentDraft();
+  const revs = loadPlans().filter(p => p.kind === 'revision').sort((a, b) => b.rev - a.rev);
+  const mins = [10, 15, 20, 25, 30].map(m => '<option' + (inp.minutes === m ? ' selected' : '') + '>' + m + '</option>').join('');
+  const mat = (k, label) => '<label class="teach-check"><input type="checkbox" data-plan="mat-' + k + '"' + (inp.materials[k] ? ' checked' : '') + '> ' + h(label) + '</label>';
+  const kids = snap.children.map(c => '<label class="teach-check"><input type="checkbox" data-plan="absent" value="' + h(c.id) + '"' +
+    (inp.absent.indexOf(c.id) !== -1 ? ' checked' : '') + '> ' + h(c.name) + '</label>').join('');
+  const form = '<section class="teach-card"><div class="teach-kicker">Constraints</div><div class="teach-form-grid">' +
+    '<label class="teach-label" for="planDate">Date</label><input id="planDate" type="date" data-plan="date" value="' + h(inp.date) + '">' +
+    '<label class="teach-label" for="planMinutes">Minutes</label><select id="planMinutes" data-plan="minutes">' + mins + '</select>' +
+    '<label class="teach-label" for="planDevices">Devices</label><input id="planDevices" type="number" min="0" max="30" inputmode="numeric" data-plan="devices" value="' + h(inp.devices) + '">' +
+    '<label class="teach-label" for="planAdults">Adults</label><select id="planAdults" data-plan="adults">' + [1, 2, 3].map(a => '<option' + (inp.adults === a ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></div>' +
+    '<div class="teach-kicker">Materials at hand</div>' + mat('counters', 'Counters or blocks') + mat('paperSushi', 'Paper sushi circles') + mat('plates', 'Trays or plates') + mat('checklist', 'Printed checklist') +
+    '<div class="teach-kicker">Absent today (marked by you)</div><div class="teach-checks">' + kids + '</div>' +
+    '<button class="btn-primary" type="button" data-act="plan-new">' + (draftRec ? 'Prepare a new draft from today\'s evidence' : 'Prepare a draft from today\'s evidence') + '</button></section>';
+  const draftHtml = draftRec ? planHtml(draftRec.plan, false) : '<p class="teach-small">No draft yet. A draft is built from the evidence as it is when you press the button, and you can edit every part.</p>';
+  const revHtml = revs.length ? '<ul class="teach-list">' + revs.map(r => '<li><button class="teach-row" type="button" data-act="revision" data-arg="' + h(r.id) + '"><span class="teach-row-main">' +
+    '<span class="teach-row-title">Revision ' + h(r.rev) + ' · ' + h(dateText(r.plan.inputs.date)) + '</span><span class="teach-row-sub">Published ' + h(r.publishedAt.replace('T', ' ').slice(0, 16)) +
+    ' UTC from evidence up to ' + h(dateText(r.plan.snapshot.cutoff)) + '</span></span></button></li>').join('') + '</ul>' : '<p class="teach-small">No published revisions.</p>';
+  return '<h2 class="teach-h">Lessons</h2>' + form + draftHtml +
+    '<h3 class="teach-h3">Published revisions</h3><p class="teach-small">Publishing keeps a fixed copy on this device. It does not send anything to children\'s devices: this prototype has no classroom devices.</p>' + revHtml;
+}
+function nameOf(snap, id){ const c = snap.children.find(x => x.id === id); return c ? c.name : id; }
+/* One plan, as a draft (editable) or a published revision (read-only). */
+function planHtml(plan, readOnly){
+  const snap = plan.snapshot;
+  const issues = plan.issues.map(x => '<li class="issue-' + x.level + '">' + (x.level === 'block' ? '<strong>Needs fixing before publishing:</strong> ' : '') + h(x.text) + '</li>').join('');
+  const seq = plan.sequence.map(s => '<tr><td>' + s.start + '–' + (s.start + s.minutes) + ' min</td><td>' + h(s.title) + '</td><td>' + h(s.detail) + '</td></tr>').join('');
+  const opts = id => GROUP_ORDER.map(g => '<option value="' + g + '"' + (g === id ? ' selected' : '') + '>' + h(PLAN_GROUPS[g].name) + '</option>').join('');
+  const groups = plan.groups.map(g => '<section class="teach-card group-card"><div class="teach-kicker">' + h(g.name) + (g.adultLed ? ' · adult-led' : '') +
+    (g.device ? ' · device practice' : '') + '</div><p>' + h(g.task) + '</p><p class="teach-small">' + h(g.reason) + '</p>' +
+    (g.turns && g.turns.length ? '<p class="teach-small">' + g.turns.map(t => 'Adult ' + t.adult + ', turn ' + (t.slot + 1) + ' (' + t.minutes + ' min): ' + t.members.map(id => h(nameOf(snap, id))).join(', ')).join('<br>') + '</p>' : '') +
+    (g.deviceTurns && g.deviceTurns.length ? '<p class="teach-small">' + g.deviceTurns.map(t => 'Device turn ' + t.turn + ' (' + t.minutes + ' min): ' + t.members.map(id => h(nameOf(snap, id))).join(', ')).join('<br>') +
+      (g.trayMembers && g.trayMembers.length ? '<br>At the tray: ' + g.trayMembers.map(id => h(nameOf(snap, id))).join(', ') : '') + '</p>' : '') +
+    '<ul class="group-members">' + g.members.map(id => '<li>' + h(nameOf(snap, id)) + (plan.locks[id] ? ' <span class="lock-mark">(placed by you)</span>' : '') +
+      (readOnly ? '' : ' <label class="sr-only" for="mv-' + h(id) + '">Move ' + h(nameOf(snap, id)) + '</label><select id="mv-' + h(id) + '" data-move="' + h(id) + '">' + opts(g.id) + '</select>' +
+        (plan.locks[id] ? ' <button class="link-btn" type="button" data-act="unlock" data-arg="' + h(id) + '">Unlock</button>' : '')) + '</li>').join('') + '</ul></section>').join('');
+  const titles = { objective: 'Objective', rationale: 'Rationale', materials: 'Materials', opening: 'Opening script (exact words)', support: 'Support',
+                   extension: 'Extension', offline: 'Offline activity', exit: 'Individual exit check', followUp: 'Follow-up' };
+  const sections = SECTION_KEYS.map(k => '<div class="plan-section"><div class="teach-kicker">' + titles[k] + (plan.sections[k].edited ? ' · edited by you' : '') + '</div>' +
+    (readOnly ? '<p class="plan-text">' + h(plan.sections[k].text) + '</p>' :
+     '<label class="sr-only" for="sec-' + k + '">' + titles[k] + '</label><textarea id="sec-' + k + '" rows="' + (k === 'rationale' || k === 'materials' ? 4 : 3) + '" data-section="' + k + '">' + h(plan.sections[k].text) + '</textarea>') + '</div>').join('');
+  const queue = '<p class="teach-small">Exit checks in this block: ' + (plan.checked.length ? plan.checked.map(id => h(nameOf(snap, id))).join(', ') : 'none') + '.' +
+    (plan.queue.length ? ' Carried to the next block (unfinished observations): ' + plan.queue.map(id => h(nameOf(snap, id))).join(', ') + '.' : '') +
+    (plan.absent.length ? ' Absent (teacher-marked): ' + plan.absent.map(id => h(nameOf(snap, id))).join(', ') + '.' : '') + '</p>';
+  return '<section class="plan" aria-label="Lesson plan"><div class="teach-kicker">' + (readOnly ? 'Published revision' : 'Draft') + ' · ' + h(plan.purpose) + ' lesson · ' +
+    h(dateText(plan.inputs.date)) + ' · ' + h(plan.inputs.minutes) + ' minutes · ' + h(plan.inputs.devices) + ' devices · ' + h(plan.inputs.adults) + (plan.inputs.adults === 1 ? ' adult' : ' adults') + '</div>' +
+    '<p class="teach-small">Template ' + h(plan.template) + ' (awaiting educator review) · evidence snapshot ' + h(snap.id) + ', up to ' + h(dateText(snap.cutoff)) + '.</p>' +
+    (issues ? '<ul class="plan-issues">' + issues + '</ul>' : '') +
+    '<div class="table-wrap"><table class="teach-table"><caption class="sr-only">Timed sequence</caption><thead><tr><th scope="col">When</th><th scope="col">Step</th><th scope="col">What happens</th></tr></thead><tbody>' + seq +
+    '</tbody><tfoot><tr><td colspan="3">Total ' + plan.minutesTotal + ' of ' + plan.inputs.minutes + ' minutes</td></tr></tfoot></table></div>' +
+    '<h3 class="teach-h3">Temporary groups</h3>' + groups + queue + '<h3 class="teach-h3">The plan</h3>' + sections +
+    (readOnly ? '' : '<div class="plan-actions"><button class="btn-secondary" type="button" data-act="plan-regen">Regenerate (keeps your edits and placements)</button>' +
+     '<button class="btn-secondary" type="button" data-act="plan-save">Save draft</button>' +
+     '<button class="btn-primary" type="button" data-act="plan-publish"' + (planBlocked(plan) ? ' disabled' : '') + '>Publish a revision (this device only)</button></div>') + '</section>';
+}
+function teachRevision(){
+  const rec = loadPlans().find(p => p.id === teach.revisionId);
+  if(!rec) return '<button class="link-btn back-link" type="button" data-act="back">Back</button><p>That revision is not here.</p>';
+  return '<button class="link-btn back-link" type="button" data-act="back">Back</button><h2 class="teach-h">Revision ' + h(rec.rev) + '</h2>' +
+    '<p class="teach-small">Published ' + h(rec.publishedAt.replace('T', ' ').slice(0, 16)) + ' UTC. It never changes: later evidence makes a new draft, not a new version of this one. ' + h(rec.note) + '</p>' +
+    planHtml(rec.plan, true) + '<p><button class="btn-secondary" type="button" data-act="plan-copy" data-arg="' + h(rec.id) + '">Start a new draft from this revision</button></p>';
+}
+function teachReports(snap){
+  const r = teach.report;
+  if(!r.childId || !snap.children.some(c => c.id === r.childId)) r.childId = snap.children[0] ? snap.children[0].id : null;
+  const kids = snap.children.map(c => '<option value="' + h(c.id) + '"' + (c.id === r.childId ? ' selected' : '') + '>' + h(c.name) + '</option>').join('');
+  const draft = currentDraft(), group = draft && draft.plan.placements[r.childId] ? PLAN_GROUPS[draft.plan.placements[r.childId]].name : null;
+  const tr = teacherReport(snap, r.childId, loadObservations(), { includeNotes: r.includeNotes, group: group });
+  const sheet = r.audience === 'family' ? familySheet(familyReport(tr)) : teacherSheet(tr);
+  return '<h2 class="teach-h">Reports</h2><section class="teach-card report-controls">' +
+    '<label class="teach-label" for="repChild">Child</label><select id="repChild" data-change="rep-child">' + kids + '</select>' +
+    '<div class="teach-seg" role="radiogroup" aria-label="Who the report is for">' +
+    '<label class="teach-check"><input type="radio" name="repAud" value="teacher" data-change="rep-aud"' + (r.audience === 'teacher' ? ' checked' : '') + '> Teacher report</label>' +
+    '<label class="teach-check"><input type="radio" name="repAud" value="family" data-change="rep-aud"' + (r.audience === 'family' ? ' checked' : '') + '> Family summary</label></div>' +
+    (r.audience === 'teacher' ? '<label class="teach-check"><input type="checkbox" data-change="rep-notes"' + (r.includeNotes ? ' checked' : '') + '> Include my private notes (teacher copy only)</label>' : '') +
+    '<div class="plan-actions"><button class="btn-primary" type="button" data-act="print">Print / Save as PDF</button>' +
+    '<button class="btn-secondary" type="button" data-act="csv">Download class evidence (CSV)</button></div>' +
+    '<p class="teach-small">Print opens the browser\'s print dialog; choose Save as PDF there to keep a file. Both come from the same evidence snapshot (' + h(snap.id) + ').</p></section>' +
+    '<article class="report-sheet" id="reportSheet">' + sheet + '</article>';
+}
+function teacherSheet(tr){
+  if(!tr) return '<p>No child selected.</p>';
+  return '<header><div class="teach-kicker">Teacher report · ' + h(tr.className) + (tr.demo ? ' · DEMO sample data' : ' · development prototype') + '</div>' +
+    '<h3>' + h(tr.childName) + ' — counting quantities 1–5</h3><p class="teach-small">Window ' + h(dateText(tr.period.start)) + ' – ' + h(dateText(tr.period.end)) +
+    ' (' + tr.period.days + ' instructional days) · rule ' + h(tr.rule) + '</p></header>' +
+    '<p><strong>Status:</strong> ' + h(tr.statusLabel) + '</p>' +
+    '<p><strong>Independent first responses:</strong> ' + h(frac(tr.independent.correct, tr.independent.attempted)) + (tr.independent.attempted ? ' correct (' + tr.independent.over + ' over, ' + tr.independent.under + ' under)' : '') +
+    ' · quantities ' + h(tr.independent.quantities.join(', ') || 'none') + ' · dates ' + h(tr.independent.dates.map(shortDate).join(', ') || 'none') + '</p>' +
+    '<p><strong>Support:</strong> ' + h(frac(tr.supported.correct, tr.supported.responses)) + ' supported responses matched · ' + tr.assistedOnly + ' assisted-only · ' + tr.interrupted + ' unfinished (not counted)</p>' +
+    (tr.examples.length ? '<p><strong>Examples:</strong></p><ul>' + tr.examples.map(x => '<li>' + h(x) + '</li>').join('') + '</ul>' : '') +
+    '<p><strong>Teacher observations</strong> (separate from the game):</p>' + (tr.observations.length ? '<ul>' + tr.observations.map(o => '<li>' + h(dateText(o.date)) + ' · ' + h(o.kind) + ' · ' + h(o.context) + (o.note ? ' — ' + h(o.note) : '') + '</li>').join('') + '</ul>' : '<p>None recorded.</p>') +
+    (tr.group ? '<p><strong>Current lesson group:</strong> ' + h(tr.group) + '</p>' : '') +
+    '<p><strong>Next step:</strong> ' + h(tr.next) + '</p><p><strong>Offline transfer:</strong> ' + h(tr.offline) + '</p>' +
+    (tr.limits.length ? '<p><strong>Limits:</strong></p><ul>' + tr.limits.map(x => '<li>' + h(x) + '</li>').join('') + '</ul>' : '') +
+    '<p class="teach-small">Snapshot ' + h(tr.snapshot) + ' · prepared ' + h(tr.prepared) + '.</p>';
+}
+/* Rendered from the allowlisted family object alone. */
+function familySheet(fr){
+  if(!fr) return '<p>No child selected.</p>';
+  return '<header><div class="teach-kicker">For ' + h(fr.childName) + '\'s family</div><h3>What we practiced in Chef Capy\'s kitchen</h3>' +
+    '<p class="teach-small">' + h(fr.period) + '</p></header>' +
+    '<h4>What we practiced</h4><p>' + h(fr.practiced) + '</p><h4>What ' + h(fr.childName) + ' showed</h4><p>' + h(fr.showed) + '</p>' +
+    '<h4>What we are working on next</h4><p>' + h(fr.nextStep) + '</p><h4>Try this at home</h4><p>' + h(fr.homeActivity) + '</p>' +
+    '<p class="teach-small">' + h(fr.prepared) + '</p>';
+}
+
+/* ---------- actions ---------- */
+function onTeachClick(ev){
+  const t = ev && ev.target && typeof ev.target.closest === 'function' ? ev.target.closest('[data-act]') : null;
+  if(!t || t.hasAttribute('disabled')) return;
+  teachAct(t.getAttribute('data-act'), t.getAttribute('data-arg'));
+}
+function teachAct(act, arg){
+  teach.notice = '';
+  if(act === 'go') return teachGo(arg);
+  if(act === 'back') return teachBack();
+  if(act === 'preview') return startPreview();
+  if(act === 'student') return teachGo('student', { push: true, childId: arg });
+  if(act === 'report'){ teach.report.childId = arg; return teachGo('reports'); }
+  if(act === 'revision') return teachGo('revision', { push: true, revisionId: arg });
+  if(act === 'observe') return saveObservation(arg);
+  if(act === 'plan-new') return planNew();
+  if(act === 'plan-regen') return planRegen();
+  if(act === 'plan-save') return planSave();
+  if(act === 'plan-publish') return planPublish();
+  if(act === 'plan-copy') return planCopy(arg);
+  if(act === 'unlock') return planUnlock(arg);
+  if(act === 'print') return teachPrint();
+  if(act === 'csv') return teachCsv();
+}
+function onTeachChange(ev){
+  const t = ev && ev.target;
+  if(!t || typeof t.getAttribute !== 'function') return;
+  const k = t.getAttribute('data-change'), p = t.getAttribute('data-plan'), mv = t.getAttribute('data-move');
+  if(k === 'class'){ teach.classId = t.value === DEMO_CLASS.id ? DEMO_CLASS.id : PROTO_CLASS_ID; teach.draft = null; teach.inputs = null; teachGo(teach.view === 'student' || teach.view === 'revision' ? 'today' : teach.view); return; }
+  if(k === 'rep-child'){ teach.report.childId = t.value; renderTeach(); return; }
+  if(k === 'rep-aud'){ teach.report.audience = t.value === 'family' ? 'family' : 'teacher'; renderTeach(); return; }
+  if(k === 'rep-notes'){ teach.report.includeNotes = !!t.checked; renderTeach(); return; }
+  if(p){ readPlanInput(t, p); return; }
+  if(mv){ planMove(mv, t.value); return; }
+}
+/* Typing in a section marks it edited, without redrawing under the cursor. */
+function onTeachInput(ev){
+  const t = ev && ev.target;
+  if(!t || typeof t.getAttribute !== 'function') return;
+  const k = t.getAttribute('data-section'), d = teach.draft;
+  if(!k || !d || !d.plan.sections[k]) return;
+  d.plan.sections[k] = { text: String(t.value), edited: true };
+  d.dirty = true;
+}
+function readPlanInput(t, p){
+  const inp = planInputsFor(teachSnapshot());
+  if(p === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(t.value)) inp.date = t.value;
+  else if(p === 'minutes') inp.minutes = Number(t.value) || 20;
+  else if(p === 'devices') inp.devices = Math.max(0, Math.min(30, Math.round(Number(t.value)) || 0));
+  else if(p === 'adults') inp.adults = Number(t.value) || 1;
+  else if(p.indexOf('mat-') === 0) inp.materials[p.slice(4)] = !!t.checked;
+  else if(p === 'absent'){ inp.absent = inp.absent.filter(id => id !== t.value); if(t.checked) inp.absent.push(t.value); }
+}
+function workingDraft(){
+  if(teach.draft && teach.draft.classId === teach.classId) return teach.draft;
+  const rec = loadPlans().find(p => p.kind === 'draft');
+  teach.draft = rec ? JSON.parse(JSON.stringify(rec)) : null;
+  return teach.draft;
+}
+function planNew(){
+  const snap = teachSnapshot(), inp = planInputsFor(snap);
+  teach.draft = { id: 'draft-' + teach.classId, kind: 'draft', classId: teach.classId, updatedAt: new Date(learnNow()).toISOString(),
+                  plan: planCountLesson(snap, inp, null), dirty: true };
+  teach.notice = 'A new draft from the evidence up to ' + dateText(snap.cutoff) + '. Nothing is saved until you save or publish it.';
+  renderTeach();
+}
+/* Regenerate from today's evidence and the current constraints, keeping
+   every section you edited and every child you placed. */
+function planRegen(){
+  const d = workingDraft();
+  if(!d) return planNew();
+  const snap = teachSnapshot();
+  d.plan = regeneratePlan(d.plan, snap, planInputsFor(snap));
+  d.dirty = true;
+  teach.notice = 'Regenerated from the evidence up to ' + dateText(snap.cutoff) + '. Your edited sections and placements are kept.';
+  renderTeach();
+}
+function planMove(childId, groupId){
+  const d = workingDraft();
+  if(!d) return;
+  const next = moveInPlan(d.plan, childId, groupId);
+  if(next){ d.plan = next; d.dirty = true; renderTeach(); }
+}
+function planUnlock(childId){
+  const d = workingDraft();
+  if(!d) return;
+  d.plan = unlockInPlan(d.plan, childId);
+  d.dirty = true;
+  renderTeach();
+}
+function planSave(){
+  const d = workingDraft();
+  if(!d) return;
+  d.updatedAt = new Date(learnNow()).toISOString();
+  const rec = { id: d.id, kind: 'draft', classId: d.classId, updatedAt: d.updatedAt, plan: d.plan };
+  const ok = storePlanRecord(rec);
+  d.dirty = false;
+  teach.notice = teachIsDemo() ? 'Saved for this visit only: the sample class keeps nothing.' : ok ? 'Draft saved on this device.' : 'The draft could not be saved on this device; it lasts until the app closes.';
+  renderTeach();
+}
+/* Publishing freezes a copy, with its own evidence snapshot. It is a new
+   version every time and never changes afterwards. */
+function planPublish(){
+  const d = workingDraft();
+  if(!d || planBlocked(d.plan)) return false;
+  const revs = loadPlans().filter(p => p.kind === 'revision');
+  const n = revs.reduce((m, r) => Math.max(m, r.rev), 0) + 1, iso = new Date(learnNow()).toISOString();
+  const rec = { id: 'rev-' + d.classId + '-' + n, kind: 'revision', classId: d.classId, rev: n, publishedAt: iso, updatedAt: iso,
+                note: 'Published on this device only; it was not sent to any classroom device.', plan: JSON.parse(JSON.stringify(d.plan)) };
+  const ok = storePlanRecord(rec);
+  planSave();
+  teach.notice = 'Revision ' + n + ' published' + (ok ? ' and kept on this device.' : ', but it could not be saved on this device.') + ' It does not reach any child\'s device.';
+  renderTeach();
+  return true;
+}
+function planCopy(revId){
+  const rec = loadPlans().find(p => p.id === revId);
+  if(!rec) return;
+  teach.draft = { id: 'draft-' + teach.classId, kind: 'draft', classId: teach.classId, updatedAt: new Date(learnNow()).toISOString(),
+                  plan: JSON.parse(JSON.stringify(rec.plan)), dirty: true };
+  teach.notice = 'A new draft copied from revision ' + rec.rev + '. Its evidence snapshot is still ' + dateText(rec.plan.snapshot.cutoff) + '; regenerate to use today\'s.';
+  teachGo('lessons');
+}
+function saveObservation(childId){
+  if(teachIsDemo()) return;
+  const cls = keepClass(), get = id => { const el = document.getElementById(id); return el ? String(el.value || '') : ''; };
+  const kind = ['independent', 'with-support', 'not-yet', 'note'].indexOf(get('obsKind')) !== -1 ? get('obsKind') : 'note';
+  const at = learnNow();
+  const rec = { id: 'obs-' + at.toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36), classId: cls.id, childId: childId,
+                skill: COUNT_SKILL, kind: kind, context: get('obsContext').slice(0, 40) || 'Other', note: get('obsNote').slice(0, 400),
+                at: at, date: learnDate(at, cls.timezone), source: 'teacher (this device)', updatedAt: new Date(at).toISOString() };
+  const list = loadObservations().concat([rec]);
+  const ok = Store.setJSON(LEARN_KEYS.observations, list) && Store.isPersistent();
+  teach.notice = ok ? 'Observation saved on this device. It never changes the game\'s counts.' : 'The observation could not be saved on this device.';
+  renderTeach();
+}
+/* The report sheet alone goes to the printer: the page is marked before
+   the dialog opens and unmarked when printing is over (afterprint), or
+   when the workspace closes, whichever comes first. */
+function teachPrint(){
+  if(typeof window.print !== 'function') return false;
+  document.body.classList.add('printing-report');
+  try{ window.print(); }catch(e){ endPrint(); return false; }
+  return true;
+}
+function endPrint(){ if(document.body && document.body.classList) document.body.classList.remove('printing-report'); }
+/* A print started from the browser's own menu on the Reports screen
+   prints the report too. */
+function beforePrint(){
+  const ov = document.getElementById('teachOverlay');
+  if(ov && ov.classList.contains('open') && teach.view === 'reports') document.body.classList.add('printing-report');
+}
+function teachCsv(){
+  const snap = teachSnapshot();
+  const ok = downloadText(APP_CONFIG.id + '-counting-evidence-' + snap.classId + '-' + snap.cutoff + '.csv', evidenceCsv(snap), 'text/csv');
+  teach.notice = ok ? 'The CSV file was handed to your browser to download.' : 'This browser could not create the file.';
+  renderTeach();
+  return ok;
+}
+function downloadText(name, text, type){
+  try{
+    const blob = new Blob([text], { type: type });
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ---------- wiring, once ---------- */
+function learnWire(){
+  dockIcons();
+  const ent = document.getElementById('entrance');
+  if(ent) ent.addEventListener('click', onEntranceClick);
+  const body = document.getElementById('teachBody');
+  if(body){
+    body.addEventListener('click', onTeachClick);
+    body.addEventListener('change', onTeachChange);
+    body.addEventListener('input', onTeachInput);
+  }
+  if(typeof window !== 'undefined' && typeof window.addEventListener === 'function'){
+    window.addEventListener('beforeprint', beforePrint);
+    window.addEventListener('afterprint', endPrint);
+  }
+  if(FREE_ROUTE){ game.mode = 'free'; return; }
+  showEntrance();
+}
 
 /* =========================================================
    SETTINGS — data ownership

@@ -1177,7 +1177,12 @@ const TABLET = { width: 1024, height: 768, dpr: 2 };
 /* The page opened, and the first customer seated: it sits down as play
    opens, and a finished roll waits for it. */
 function play(opts){
-  const app = H.loadApp(Object.assign({ viewport: TABLET }, opts || {}));
+  /* The slicing engine's contracts run the endless slicing of 0.7.0, kept
+     as the developer route ?free; learnApp() opens the counting rounds. */
+  const o = Object.assign({ viewport: TABLET }, opts || {});
+  const q = String(o.search || '');
+  o.search = /[?&]free/.test(q) ? q : (q ? q + '&free' : '?free');
+  const app = H.loadApp(o);
   if(app.ctx.game && app.ctx.game.visit && app.ctx.SCENE.visit) app.ctx.__advance(app.ctx.SCENE.visit.arriveMs + 50);
   return app;
 }
@@ -1440,7 +1445,7 @@ function testStrokes(){
   stroke(app, xm, { from: 0.3, to: 1.8 });
   T('starting on the roll near its top still cuts', c.roll.cuts.length === 1);
   T('no penalty state exists to record any of it',
-    Object.keys(c.game).sort().join(',') === 'delivering,gathered,phase,phaseT,rolls,served,visit,visits' &&
+    Object.keys(c.game).sort().join(',') === 'delivering,gathered,mode,phase,phaseT,rolls,served,visit,visits' &&
     Object.keys(c.game.visit).sort().join(',') === 'n,order,state,t' && Object.keys(c.game.visit.order).sort().join(',') === 'dish,id,served',
     Object.keys(c.game).join(','));
 
@@ -2430,8 +2435,14 @@ function testPermanentRules(){
   T('nothing asks for a name, email or anything typed but the parent gate\'s number',
     (markup.match(/<input/g) || []).length === 2 && /<input type="file" id="importInput"/.test(markup) &&
     /<input type="text" id="gateAnswer" inputmode="numeric"/.test(markup));
-  T('the only inputs the script builds are the developer sliders',
-    (js().match(/<input[^']*/g) || []).every(s => /type="range"/.test(s)));
+  const teachJs = js().slice(js().indexOf('---------- the teacher workspace ----------'), js().indexOf('SETTINGS — data ownership'));
+  const childJs = js().replace(teachJs, '');
+  T('the only inputs the script builds for play are the developer sliders',
+    teachJs.length > 1000 && (childJs.match(/<(input|textarea|select)\b[^']*/g) || []).every(s => /^<input[^>]*type="range"/.test(s)));
+  T('the teacher workspace, the only other place with fields, opens only from the grown-ups\' settings or a teacher\'s preview',
+    /function openTeachFromPrefs\(\)\{\s*const ov = document\.getElementById\('prefsOverlay'\);\s*if\(!ov \|\| !ov\.classList\.contains\('open'\)\) return;/.test(js()) &&
+    (html.match(/openTeachFromPrefs\(\)/g) || []).length === 2 &&
+    (js().match(/\bopenTeach\(\)/g) || []).length === 2 &&/if\(preview\)\{ setPreviewBanner\(false\); openTeach\(\); return true; \}/.test(js()));
 
   sub('no fail state, no score, nothing to read');
   const game = codeOnly(js().slice(js().indexOf('GAME DOMAIN — Slicing'), js().indexOf('SETTINGS — data ownership')));
@@ -2445,11 +2456,24 @@ function testPermanentRules(){
 
   sub('grown-up screens are out of a child\'s reach');
   const outside = html.slice(html.indexOf('<body>'), html.indexOf('<!-- FEEL TUNING'));
+  const KITCHEN = { orderCard: 'learnRepeat()', dockKnife: 'learnKnife()', dockHelp: 'learnHelp()', dockAdd: 'plateNext()',
+                    dockRemove: 'unplateLast()', dockServe: 'learnServe()', demoSkip: 'skipDemo()', roundMore: 'learnContinue()',
+                    roundFinish: 'learnFinish()' };
+  const playButtons = outside.match(/<button[^>]*>/g) || [];
   T('in play, the only controls are the developer button, hidden without ?tune, the scene\'s ' +
     'try-again button, hidden unless the 3D scene cannot be shown, and the grown-ups\' button, which opens only the gate',
-    (outside.match(/<button/g) || []).length === 3 && /id="tuneBtn"[\s\S]{0,160}hidden><\/button>/.test(outside) &&
+    /id="tuneBtn"[\s\S]{0,160}hidden><\/button>/.test(outside) &&
     /id="sceneRetry"[\s\S]{0,160}hidden><\/button>/.test(outside) &&
     /id="grownUpBtn"[^>]*\s+onclick="openGate\(\)"><\/button>/.test(outside));
+  T('besides them, only the kitchen\'s own controls: the order, the tools, the bell, skipping the demonstration ' +
+    'and more orders or finishing, each named for assistive technology and none opening a grown-up screen',
+    playButtons.length === 3 + Object.keys(KITCHEN).length &&
+    Object.keys(KITCHEN).every(id => playButtons.some(b => b.indexOf('id="' + id + '"') !== -1 &&
+      /aria-label="[^"]+"/.test(b) && b.indexOf('onclick="' + KITCHEN[id] + '"') !== -1)) &&
+    !/openGate|openOverlay|openTeach|openPrefs|openDataSettings/.test(playButtons.filter(b => !/id="grownUpBtn"/.test(b)).join('')),
+    playButtons.length + ' buttons');
+  T('the avatars outside the sushi bar are built by the script and only choose who cooks',
+    /function onEntranceClick\(/.test(js()) && /chooseChild\(/.test(js().slice(js().indexOf('function onEntranceClick('), js().indexOf('function onEntranceClick(') + 600)));
   T('the sound and haptics switches open only from a right answer at the gate',
     (html.match(/openOverlay\('prefsOverlay'\)/g) || []).length === 1 &&
     /Number\(given\) === gate\.answer\)\{[\s\S]{0,300}openOverlay\('prefsOverlay'\)/.test(html));
@@ -4111,6 +4135,653 @@ function testCustomer(){
   T('no errors', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
 }
 
+/* =========================================================
+   CONTRACT 36 — COUNTING 1 TO 5, FROM A CHILD'S ORDER TO A REPORT
+   The first connected learning slice, on one device. The first
+   quantity a child serves is the evidence; help, later tries, the
+   demonstration, a teacher's preview, unfinished orders and repeated
+   events never inflate it. The summary follows a versioned rule over
+   instructional days, not calendar days. A lesson draft adds up and
+   fits the room, keeps a teacher's edits, and a published revision
+   never changes. The family copy of a report can only say what its
+   allowlist lets it.
+   ========================================================= */
+/* A Monday, mid-afternoon in UTC: a weekday in every time zone. */
+const SCHOOL_DAY = Date.UTC(2026, 9, 12, 15, 0, 0);
+const WEEK = { weekdays: [1, 2, 3, 4, 5], closures: [] };
+/* The counting rounds, as a child meets them (no ?free), on a clock the
+   contract sets: the learning clock follows the virtual one. */
+function learnApp(opts){
+  const o = Object.assign({ viewport: TABLET }, opts || {});
+  const app = H.loadApp(o);
+  const c = app.ctx, t0 = o.at || SCHOOL_DAY;
+  c.learnClock.now = () => t0 + c.performance.now();
+  return app;
+}
+function learnKeys(app){ return [...app.storage._map.keys()].filter(k => k.indexOf('data.learn.') !== -1); }
+/* Until the next customer has sat down and its order is shown. */
+function waitOrder(app){
+  const c = app.ctx;
+  for(let i = 0; i < 400 && !c.canAct(); i++) advance(app, 50);
+  return c.canAct();
+}
+/* In through the door: an avatar, the glide, and Chef Capy's demonstration,
+   watched or skipped. */
+function goIn(app, childId, watch){
+  const c = app.ctx;
+  if(!c.chooseChild(childId)) return false;
+  advance(app, c.LEARN_TIMING.enterMs + 40);
+  if(watch){ for(let i = 0; i < 400 && c.learn.demo; i++) advance(app, 50); }
+  else c.skipDemo();
+  return waitOrder(app);
+}
+/* Slice enough pieces, then make the plate hold exactly n, one press at a time. */
+function makeSet(app, n){
+  const c = app.ctx;
+  for(let k = 0; k < 8 && c.piecesOf(c.roll).length < Math.min(n + 1, c.roll.n) && c.countCutTarget(); k++) c.learnKnife();
+  for(let g = 0; g < 12 && c.platedCount() < n; g++) c.plateNext();
+  for(let g = 0; g < 12 && c.platedCount() > n; g++) c.unplateLast();
+  advance(app, 30);
+  return c.platedCount();
+}
+/* Serve, and let any help run its course. */
+function serveNow(app){
+  const c = app.ctx, ok = c.learnServe();
+  for(let i = 0; i < 400 && (c.learn.support || c.game.phase === 'support'); i++) advance(app, 50);
+  return ok;
+}
+function serveRight(app){ const c = app.ctx; waitOrder(app); makeSet(app, c.learn.item.quantity); return serveNow(app); }
+function wrongFor(q){ return q === 5 ? 4 : q + 1; }
+function eventsOf(app){ const s = app.ctx.learn.session; return s ? s.events : []; }
+function kidSnap(app, id){
+  const c = app.ctx, cls = c.learnClass();
+  return c.classSnapshot(cls, c.classEvents(cls), c.learnNow()).children.find(k => k.id === id);
+}
+/* Made-up evidence for the pure rule, recorded the way the app records it:
+   one session on one date. Each order is { q, a: [quantities served, in
+   order], help, arr, end }. */
+function made(childId, sid, date, list, o){
+  const out = [], opt = o || {};
+  let seq = 0;
+  const base = Date.parse(date + 'T15:00:00Z');
+  const ev = (type, f) => {
+    seq++;
+    out.push(Object.assign({}, f, { id: sid + '.' + seq, v: 1, type: type, at: base + seq * 1000, seq: seq,
+      classId: opt.classId || 'c-test', childId: childId, sessionId: sid, tz: 'UTC', date: date,
+      activity: 'slice-serve.count-1-5', activityVersion: '1.0.0', skill: 'count.quantity.1_5', source: 'contract' }));
+  };
+  ev('session.start', { mode: 'play' });
+  list.forEach((x, i) => {
+    const round = Math.floor(i / 5) + 1, itemId = sid + '.r' + round + '.i' + (i % 5);
+    ev('item.start', { itemId: itemId, round: round, quantity: x.q, arrangement: x.arr || 'row' });
+    let support = 'none';
+    if(x.help){ ev('support', { itemId: itemId, level: 'count-together', reason: 'asked' }); support = 'count-together'; }
+    const answers = x.a || [];
+    answers.forEach((answer, k) => {
+      ev('response', { itemId: itemId, attempt: k + 1, answer: answer, correct: answer === x.q, support: support });
+      if(answer !== x.q && k < 2){
+        support = k === 0 && support === 'none' ? 'count-together' : 'spots';
+        ev('support', { itemId: itemId, level: support, reason: 'after-incorrect' });
+      }
+    });
+    if(x.end) ev('item.end', { itemId: itemId, outcome: x.end });
+    else if(answers.length && answers[answers.length - 1] === x.q) ev('item.end', { itemId: itemId, outcome: 'completed' });
+  });
+  ev('session.end', { reason: 'finished' });
+  return out;
+}
+/* n orders asking for qs in turn (1 to 5 by default), never the same order
+   twice in a round; the first `wrong` of them first served one too many. */
+function orders(n, qs, wrong){
+  const Q = qs || [1, 2, 3, 4, 5], list = [];
+  for(let i = 0; i < n; i++){
+    const q = Q[i % Q.length], arr = ['row', 'dice', 'scatter'][Math.floor(i / Q.length) % 3];
+    list.push({ q: q, arr: arr, a: i < (wrong || 0) ? [q + 1, q] : [q] });
+  }
+  return list;
+}
+function roster(n, prefix){
+  return Array.from({ length: n }, (_, i) => ({ id: (prefix || 'k') + String(i + 1).padStart(2, '0'), name: 'Child ' + (i + 1), avatar: 'fox' }));
+}
+
+function testLearning(){
+  section('CONTRACT 36 — counting 1 to 5: trustworthy evidence, a teacher\'s summary, a lesson draft and a report');
+  const probe = learnApp(), pc = probe.ctx;
+  const S = (evs, cutoff, cal) => pc.summarizeCount('k1', evs, { cal: cal || WEEK, cutoff: cutoff || '2026-10-12' });
+
+  sub('the content: one skill, one activity, authored and versioned, awaiting an educator\'s review');
+  const A = pc.COUNT_ACTIVITY;
+  T('the activity names its objective, demonstration, variants, accepted answers, help, access alternatives, offline counterpart and version',
+    A.skill === pc.COUNT_SKILL && pc.COUNT_SKILL === 'count.quantity.1_5' && /^\d+\.\d+\.\d+$/.test(A.version) &&
+    A.objective.length > 20 && A.demonstration.quantity === 2 && A.variants.length === 15 &&
+    A.variants.every(v => v.quantity >= 1 && v.quantity <= 5) && A.accepted.length > 20 && A.support.length === 4 &&
+    A.access.length >= 4 && A.offline.length > 20 && Object.isFrozen(A) && Object.isFrozen(A.variants[0]));
+  T('its educator review is honestly pending', A.review.status === 'pending' && A.review.by === null && pc.LESSON_TEMPLATE.review === 'pending');
+  T('repeating the order is ordinary instruction; every other kind of help reveals the answer and is said to',
+    A.support[0].id === 'repeat' && A.support[0].answerRevealing === false && A.support.slice(1).every(s => s.answerRevealing === true));
+  T('quantities 1 to 5 only, each pictured without a numeral', A.quantities.join() === '1,2,3,4,5' &&
+    ['row', 'dice', 'scatter'].every(a => [1, 2, 3, 4, 5].every(q => pc.COUNT_PICTURES[a][q].length === q)) &&
+    [1, 2, 3, 4, 5].every(q => !/<text/.test(pc.orderCardSvg(q, 'dice'))));
+
+  sub('the rule: twelve independent first answers on two instructional dates, four quantities with 5, 80% right');
+  const R = pc.COUNT_RULE;
+  T('it is the specification\'s proposal, versioned, awaiting validation, and for this skill only',
+    R.minIndependent === 12 && R.minDates === 2 && R.minQuantities === 4 && R.mustInclude === 5 && R.minAccuracy === 0.8 &&
+    R.windowDays === 14 && R.validation === 'pending' && R.version === 'r1' && R.id.indexOf(pc.COUNT_SKILL + '/') === 0 && Object.isFrozen(R));
+  const one = S(made('k1', 's1', '2026-10-12', orders(15)));
+  T('one strong session, fifteen right on one date, is not enough: it needs two instructional dates',
+    one.status === 'gathering' && one.independent.attempted === 15 && one.independent.correct === 15 && one.coverage.dates === false);
+  const sameDay = S(made('k1', 's1', '2026-10-12', orders(6)).concat(made('k1', 's2', '2026-10-12', orders(6))));
+  T('two sessions on the same date are still one date', sameDay.status === 'gathering' && sameDay.independent.sessions === 2 &&
+    sameDay.independent.dates.length === 1);
+  const twoDays = made('k1', 's1', '2026-10-09', orders(6, null, 1)).concat(made('k1', 's2', '2026-10-12', orders(6)));
+  const ok = S(twoDays);
+  T('twelve first answers on two dates, all five quantities, 11 of them right: independent in game',
+    ok.status === 'independent' && ok.independent.attempted === 12 && ok.independent.correct === 11 &&
+    ok.independent.dates.join() === '2026-10-09,2026-10-12' && ok.independent.quantities.join() === '1,2,3,4,5');
+  const at80 = S(made('k1', 's1', '2026-10-09', orders(8, null, 3)).concat(made('k1', 's2', '2026-10-12', orders(7))));
+  T('exactly 80% meets the bar', at80.status === 'independent' && at80.independent.correct === 12 && at80.independent.attempted === 15);
+  const below = S(made('k1', 's1', '2026-10-09', orders(8, null, 4)).concat(made('k1', 's2', '2026-10-12', orders(7))));
+  T('below it, with everything else met, the child is building, never failing', below.status === 'building' && below.independent.correct === 11);
+  const no5 = S(made('k1', 's1', '2026-10-09', orders(8, [1, 2, 3, 4])).concat(made('k1', 's2', '2026-10-12', orders(8, [1, 2, 3, 4]))));
+  T('four quantities without 5 are not enough', no5.status === 'gathering' && no5.coverage.quantities === false && no5.independent.attempted === 16);
+  const three = S(made('k1', 's1', '2026-10-09', orders(8, [2, 3, 5])).concat(made('k1', 's2', '2026-10-12', orders(8, [2, 3, 5]))));
+  T('nor three quantities including 5', three.status === 'gathering' && three.coverage.quantities === false && three.independent.attempted === 16);
+  T('the same events give the same summary, in any order, with the rule and summary versions on it',
+    JSON.stringify(S(twoDays)) === JSON.stringify(S(twoDays.slice().reverse())) && ok.rule === R.id && ok.ruleVersion === 'r1' &&
+    ok.evidenceVersion === pc.EVIDENCE_VERSION);
+
+  sub('instructional days in the class\'s own time zone, never calendar days');
+  const win = pc.teachingWindow('2026-10-12', 14, WEEK);
+  T('the window is the last 14 instructional days: 23 September to 12 October, nineteen calendar days',
+    win.days.length === 14 && win.start === '2026-09-23' && win.end === '2026-10-12' && win.days.every(d => pc.isTeachingDay(d, WEEK)));
+  const old18 = S(made('k1', 's1', '2026-09-24', orders(6)).concat(made('k1', 's2', '2026-09-25', orders(6))));
+  T('evidence eighteen calendar days old is still inside it', old18.status === 'independent' && old18.window.start === '2026-09-23');
+  const stale = S(made('k1', 's1', '2026-09-21', orders(6)).concat(made('k1', 's2', '2026-09-22', orders(6))));
+  T('evidence that met the rule only before the window asks for a fresh check, and says what it was',
+    stale.status === 'fresh-check' && stale.prior.status === 'independent' && stale.independent.attempted === 0 && stale.olderOrders === 12);
+  const CLOSED = { weekdays: [1, 2, 3, 4, 5], closures: ['2026-10-09'] };
+  const closedWin = pc.teachingWindow('2026-10-12', 14, CLOSED);
+  T('a closure is not an instructional day: the window reaches one weekday further back',
+    closedWin.days.indexOf('2026-10-09') === -1 && closedWin.start === '2026-09-22' && closedWin.days.length === 14);
+  const off = S(made('k1', 's1', '2026-10-09', orders(6)).concat(made('k1', 's2', '2026-10-10', orders(6)), made('k1', 's3', '2026-10-12', orders(6))),
+    '2026-10-12', CLOSED);
+  T('orders on a closure or a weekend are set aside, and counted as set aside', off.outsideCalendar === 12 &&
+    off.independent.attempted === 6 && off.status === 'gathering');
+  const late = Date.UTC(2026, 9, 13, 2, 30);
+  T('an order\'s date is its date where the class is: 02:30 UTC on 13 October is still the 12th in Los Angeles',
+    pc.learnDate(late, 'America/Los_Angeles') === '2026-10-12' && pc.learnDate(late, 'Asia/Tokyo') === '2026-10-13' &&
+    pc.learnDate(late, 'UTC') === '2026-10-13' && pc.learnDate(late, 'Not/AZone') === null);
+
+  sub('the first answer is the evidence; help, later tries and unfinished orders are counted apart');
+  const retry = S(made('k1', 's1', '2026-10-12', [{ q: 3, a: [4, 3] }]));
+  T('wrong first, help, then right: one independent incorrect first answer (one too many) and one supported success',
+    retry.independent.attempted === 1 && retry.independent.correct === 0 && retry.independent.over === 1 &&
+    retry.supported.responses === 1 && retry.supported.correct === 1);
+  const asked = S(made('k1', 's1', '2026-10-12', [{ q: 3, a: [3], help: true }]));
+  T('help asked for before any answer makes the order assisted-only, out of independent accuracy',
+    asked.independent.attempted === 0 && asked.assistedOnly === 1 && asked.supported.correct === 1);
+  const cut = S(made('k1', 's1', '2026-10-12', [{ q: 3, a: [] }, { q: 4, a: [], end: 'interrupted' }]));
+  T('unfinished and interrupted orders are never incorrect', cut.interrupted === 2 && cut.independent.attempted === 0 &&
+    cut.status === 'not-observed');
+  T('the same events delivered twice count once', JSON.stringify(S(twoDays.concat(twoDays))) === JSON.stringify(ok));
+  const replay = made('k1', 's9', '2026-10-12', [{ q: 2, a: [2] }]);
+  const again = replay.map(e => Object.assign({}, e, { id: e.id + 'b', seq: e.seq + 100, at: e.at + 100000 },
+    e.itemId ? { itemId: e.itemId + 'b' } : {}));
+  T('and an identical order replayed in the same round adds nothing to independent coverage',
+    S(replay.concat(again)).independent.attempted === 1);
+  const mine = made('k1', 's1', '2026-10-12', [{ q: 3, a: [3] }]);
+  const forged = Object.assign({}, mine.find(e => e.type === 'response'), { id: 'forged.1', childId: 'k2', answer: 5, correct: false });
+  const k2 = pc.summarizeCount('k2', mine.concat([forged]), { cal: WEEK, cutoff: '2026-10-12' });
+  const k1 = S(mine.concat([forged]));
+  T('an answer can never move to another child: one claiming another child\'s order is ignored for both',
+    k2.independent.attempted === 0 && k2.status === 'not-observed' && k1.independent.attempted === 1 && k1.independent.correct === 1);
+  const helped = S(made('k1', 's1', '2026-10-09', orders(8).map(x => Object.assign(x, { help: true })))
+    .concat(made('k1', 's2', '2026-10-12', orders(8).map(x => Object.assign(x, { help: true })))));
+  T('"With support" is never assigned before a support rubric is reviewed: help-only evidence is still gathering',
+    R.supportRubric === null && pc.STATUS_ORDER.indexOf('with-support') === -1 && !pc.LEARN_STATUS['with-support'] &&
+    helped.status === 'gathering' && helped.supported.correct === 16 && helped.assistedOnly === 16);
+  const cls2 = { id: 'c-test', kind: 'prototype', name: 'Test class', timezone: 'UTC', calendar: WEEK, roster: roster(2) };
+  const empty = pc.classSnapshot(cls2, [], SCHOOL_DAY);
+  T('no data at all is "Not observed" for everyone, with honest denominators', empty.counts['not-observed'] === 2 &&
+    empty.withEvidence === 0 && empty.played === 0 && empty.roster === 2 && empty.eventCount === 0 && Object.isFrozen(empty.children[0]));
+
+  sub('outside the sushi bar: a fictional avatar, a short way in, and nothing written');
+  let app = learnApp(), c = app.ctx;
+  const doc = app.dom.document;
+  T('the app opens outside the sushi bar, play paused, the kitchen\'s dock away', c.game.mode === 'count' && c.learn.stage === 'entrance' &&
+    doc.getElementById('entrance').hidden === false && doc.getElementById('learnDock').hidden === true && c.isPaused());
+  const avatars = doc.getElementById('entranceAvatars').innerHTML;
+  T('one picture button per fictional child, each named for assistive technology',
+    (avatars.match(/<button class="avatar-btn"/g) || []).length === c.PROTO_ROSTER.length &&
+    c.PROTO_ROSTER.every(r => avatars.indexOf('aria-label="' + r.name + ', the ') !== -1) && /<svg class="avatar/.test(avatars));
+  T('opening the app writes nothing', learnKeys(app).length === 0);
+  T('outside, the kitchen hidden behind the picture is no stop for the keyboard', doc.getElementById('stage').getAttribute('tabindex') === '-1');
+  c.chooseChild('kid-01');
+  T('an avatar starts that child\'s session, and the glide inside; the class is kept from now on',
+    c.learn.stage === 'entering' && c.learn.session.childId === 'kid-01' && learnKeys(app).length === 2 && c.learn.store === 'saved');
+  advance(app, c.LEARN_TIMING.enterMs + 40);
+  T('inside, Chef Capy shows the task once, and it can be skipped', c.learn.stage === 'demo' && doc.getElementById('demoSkip').hidden === false);
+  for(let i = 0; i < 400 && c.learn.demo; i++) advance(app, 50);
+  waitOrder(app);
+  const evDemo = eventsOf(app);
+  T('the demonstration is never evidence: no order, answer or ending is recorded for it',
+    evDemo.filter(e => e.type === 'demo').length === 1 && !evDemo.some(e => e.itemId === 'demo' || e.type === 'response'));
+  T('then the first real order is shown and recorded as started, the dock ready', c.canAct() && !c.learn.item.demo &&
+    evDemo.filter(e => e.type === 'item.start').length === 1 && doc.getElementById('learnDock').hidden === false &&
+    doc.getElementById('demoSkip').hidden === true);
+  T('inside, the kitchen takes the keyboard again', doc.getElementById('stage').getAttribute('tabindex') === '0');
+  const card = doc.getElementById('orderCard');
+  T('the order is a picture of that many maki with no numeral, and is said for assistive technology',
+    (card.innerHTML.match(/class="order-pic"/g) || []).length === c.learn.item.quantity && !/<text/.test(card.innerHTML) &&
+    card.getAttribute('aria-label').indexOf('The cat would like ' + c.learn.item.quantity) === 0);
+
+  sub('cut by swipe, knife or key; move one piece by tap, button or key; nothing serves itself');
+  const q1 = c.learn.item.quantity;
+  T('a whole roll is not a piece: nothing goes on the plate before a cut', c.plateNext() === false && c.platedCount() === 0 &&
+    said(app) === 'Slice the roll first.');
+  stroke(app, screenX(app, 1 / 6));
+  T('a swipe across the roll cuts it', c.roll.cuts.length === 1 && c.piecesOf(c.roll).length === 2);
+  key(app, ' ');
+  c.learnKnife();
+  T('Space and the knife button cut too; cuts are never pieces: three cuts make four pieces, none served',
+    c.roll.cuts.length === 3 && c.piecesOf(c.roll).length === 4 && c.platedCount() === 0 && said(app) === 'Cut. 4 pieces.');
+  T('no cut is rated or praised in the counting rounds', c.feedback.seq === 0 && !c.feedback.stars && !/Nice|Great|Perfect/.test(said(app)));
+  const tapAt = i => { const p = c.pieceCenter(i); pe(app, 'pointerdown', p.x, p.y); pe(app, 'pointerup', p.x, p.y); advance(app, 400); };
+  tapAt(0);
+  T('a tap on a piece on the board puts it on the plate, and cuts nothing', c.platedCount() === 1 && c.roll.cuts.length === 3);
+  tapAt(0);
+  T('a tap on a piece on the plate takes it back', c.platedCount() === 0);
+  key(app, '+'); key(app, '+'); key(app, 'ArrowRight');
+  T('+ and the arrow put one piece each on the plate', c.platedCount() === 3);
+  key(app, '-');
+  T('− takes one back', c.platedCount() === 2);
+  key(app, '+', { repeat: true });
+  T('a held key is one press, not many', c.platedCount() === 2);
+  advance(app, 20000);
+  T('nothing serves itself: twenty seconds later the plate is as it was left, and no answer is recorded',
+    c.platedCount() === 2 && !eventsOf(app).some(e => e.type === 'response') && c.canAct());
+  makeSet(app, q1);
+  key(app, 'Enter');
+  const r1 = eventsOf(app).filter(e => e.type === 'response');
+  T('Enter serves: the first quantity served is recorded once', r1.length === 1 && r1[0].answer === q1 && r1[0].correct === true &&
+    r1[0].attempt === 1 && r1[0].support === 'none');
+  T('an answer carries its child, session, class, order, activity version, support and time, and nothing about speed, precision or rewards',
+    Object.keys(r1[0]).sort().join() === ['activity', 'activityVersion', 'answer', 'at', 'attempt', 'childId', 'classId', 'correct', 'date', 'id',
+      'itemId', 'seq', 'sessionId', 'skill', 'source', 'support', 'type', 'tz', 'v'].sort().join() &&
+    r1[0].childId === 'kid-01' && r1[0].sessionId === c.learn.session.id && r1[0].classId === c.PROTO_CLASS_ID &&
+    r1[0].activityVersion === A.version && r1[0].date === c.learnDate(r1[0].at, c.learnClass().timezone) && r1[0].source === 'prototype');
+  for(let i = 0; i < 200 && c.game.phase !== 'thanks'; i++) advance(app, 20);
+  T('when its plate arrives, the cat on the order card is pleased', c.game.phase === 'thanks' && /cat-blush/.test(card.innerHTML) &&
+    card.getAttribute('aria-label') === 'The cat is happy with its order.');
+
+  sub('a different quantity gets gentle help and another try; the first answer stays the evidence');
+  waitOrder(app);
+  const it2 = c.learn.item, q2 = it2.quantity;
+  T('every order finds the dock ready: as soon as the child can act, the knife, help and order card are live, and the cat is sleepy again',
+    c.canAct() && ['dockKnife', 'dockHelp', 'orderCard'].every(id => !doc.getElementById(id).hasAttribute('disabled')) &&
+    ['dockAdd', 'dockRemove', 'dockServe'].every(id => doc.getElementById(id).hasAttribute('disabled')) && !/cat-blush/.test(card.innerHTML));
+  makeSet(app, wrongFor(q2));
+  c.learnServe();
+  T('it brings Chef Capy\'s counting together, not an ending', c.learn.stage === 'support' && c.learn.support.level === 'count-together' && !it2.ended);
+  for(let i = 0; i < 400 && c.learn.support; i++) advance(app, 50);
+  T('after the help, the same order waits, as the child left it', c.learn.item === it2 && c.canAct() && c.platedCount() === wrongFor(q2) && !it2.ended);
+  makeSet(app, q2);
+  c.learnServe();
+  const ev2 = eventsOf(app).filter(e => e.itemId === it2.id);
+  T('the retry is a second, supported answer; the order ends completed', ev2.map(e => e.type).join() === 'item.start,response,support,response,item.end' &&
+    ev2[1].correct === false && ev2[1].support === 'none' && ev2[2].reason === 'after-incorrect' &&
+    ev2[3].correct === true && ev2[3].support === 'count-together' && ev2[4].outcome === 'completed');
+  let kid = kidSnap(app, 'kid-01');
+  T('in the summary: one independent incorrect first answer and one supported success',
+    kid.independent.attempted === 2 && kid.independent.correct === 1 && kid.supported.responses === 1 && kid.supported.correct === 1);
+  waitOrder(app);
+  const it3 = c.learn.item;
+  c.learnRepeat();
+  T('hearing the order again is ordinary instruction, not help', it3.support === 'none' &&
+    eventsOf(app).some(e => e.type === 'instruction.repeat' && e.itemId === it3.id));
+  c.learnHelp();
+  for(let i = 0; i < 400 && c.learn.support; i++) advance(app, 50);
+  makeSet(app, it3.quantity);
+  c.learnServe();
+  kid = kidSnap(app, 'kid-01');
+  T('help asked for before answering makes the order assisted-only: independent accuracy is unchanged',
+    kid.independent.attempted === 2 && kid.assistedOnly === 1 && kid.supported.correct === 2 && kid.repeats === 1);
+  waitOrder(app);
+  const it4 = c.learn.item;
+  for(let k = 0; k < 3; k++){ makeSet(app, wrongFor(it4.quantity)); serveNow(app); }
+  const ev4 = eventsOf(app).filter(e => e.itemId === it4.id);
+  T('after a third different quantity, Chef Capy makes the order with the child: it ends modeled, with no fourth answer asked for',
+    ev4.filter(e => e.type === 'response').length === 3 && ev4.some(e => e.type === 'support' && e.level === 'model') &&
+    ev4[ev4.length - 1].outcome === 'modeled' && it4.ended);
+  serveRight(app);
+  const stageBefore = JSON.stringify([c.layout.W, c.layout.ins, c.layout.chef && c.layout.chef.x, c.layout.plateX]);
+  for(let i = 0; i < 300 && c.learn.stage !== 'round-end'; i++) advance(app, 50);
+  T('at the round\'s end the dock steps away but nothing on the stage moves behind the panel',
+    JSON.stringify([c.layout.W, c.layout.ins, c.layout.chef && c.layout.chef.x, c.layout.plateX]) === stageBefore && c.learn.dockOn === true);
+  T('five orders make a short round that ends clearly, with more orders or finish', c.learn.stage === 'round-end' &&
+    doc.getElementById('roundEnd').hidden === false && doc.getElementById('learnDock').hidden === true);
+  T('the round asked for each quantity from 1 to 5 once', eventsOf(app).filter(e => e.type === 'item.start').map(e => e.quantity).sort().join() === '1,2,3,4,5');
+  advance(app, 30000);
+  T('nothing goes on by itself', c.learn.stage === 'round-end');
+  for(let i = 0; i < 100 && c.chefMoving(); i++) advance(app, 50);
+  T('and while it waits nothing is redrawn for it: the stage rests as in play', !c.flatMoving() && !c.sceneMoving());
+  kid = kidSnap(app, 'kid-01');
+  T('four independent first answers, two of them right; the modeled order counts its first answer only, the helped one none',
+    kid.independent.attempted === 4 && kid.independent.correct === 2 && kid.modeled === 1 && kid.assistedOnly === 1 &&
+    kid.independent.over + kid.independent.under === 2);
+  const s1 = c.learn.session;
+  c.learnContinue();
+  const nextShown = waitOrder(app);
+  T('more orders: a new round in the same session, no second demonstration', nextShown && c.learn.stage === 'play' &&
+    c.learn.round.index === 2 && c.learn.session === s1 && !c.learn.demo);
+  makeSet(app, c.learn.item.quantity);
+  c.openTeach();
+  T('a grown-up opening the workspace ends the child\'s session: the open order is unfinished, never incorrect',
+    !c.learn.session && s1.events[s1.events.length - 1].type === 'session.end' && s1.events[s1.events.length - 1].reason === 'teacher' &&
+    s1.events[s1.events.length - 2].outcome === 'interrupted' && kidSnap(app, 'kid-01').interrupted === 1 &&
+    kidSnap(app, 'kid-01').independent.attempted === 4);
+  c.closeTeach();
+  T('closing it returns to the door', c.learn.stage === 'entrance' && !doc.getElementById('teachOverlay').classList.contains('open'));
+  goIn(app, 'kid-02');
+  serveRight(app);
+  T('the next child\'s session is theirs alone, and the first child\'s summary is unchanged',
+    c.learn.session.id !== s1.id && c.learn.session.events.every(e => e.childId === 'kid-02') &&
+    s1.events.every(e => e.childId === 'kid-01' && e.sessionId === s1.id) &&
+    kidSnap(app, 'kid-02').independent.attempted === 1 && kidSnap(app, 'kid-01').independent.attempted === 4);
+  T('every event is append-only with a stable, unique id', (() => {
+    const all = c.classEvents(c.learnClass()), ids = new Set(all.map(e => e.id));
+    return ids.size === all.length && all.every(e => typeof e.id === 'string' && e.id.indexOf(e.sessionId + '.') === 0);
+  })());
+  T('no errors in a whole round', app.errors.length === 0, app.errors.slice(0, 2).join(' | '));
+
+  sub('a reload keeps what was recorded, adds nothing, and an order left open is unfinished');
+  const shared = new Map();
+  const a1 = learnApp({ sharedStorage: shared }), c1 = a1.ctx;
+  goIn(a1, 'kid-03');
+  serveRight(a1);
+  waitOrder(a1);
+  const oldSid = c1.learn.session.id, before = c1.classEvents(c1.learnClass()).length, keysBefore = shared.size;
+  const a2 = learnApp({ sharedStorage: shared, at: SCHOOL_DAY + 120000 }), c2 = a2.ctx;
+  T('after a reload, every recorded event is read back once', c2.classEvents(c2.learnClass()).length === before);
+  const kid3 = kidSnap(a2, 'kid-03');
+  T('the order shown but not served before it is unfinished, not incorrect', kid3.independent.attempted === 1 &&
+    kid3.independent.correct === 1 && kid3.interrupted === 1);
+  T('the reloaded app opens at the door and writes nothing', c2.learn.stage === 'entrance' && shared.size === keysBefore);
+  goIn(a2, 'kid-03');
+  serveRight(a2);
+  T('going in again is a new session; the old one is read, never reopened or rewritten',
+    c2.learn.session.id !== oldSid && kidSnap(a2, 'kid-03').independent.attempted === 2 &&
+    JSON.stringify(c2.classEvents(c2.learnClass()).filter(e => e.sessionId === oldSid)) === JSON.stringify(c1.learn.session.events));
+  T('no errors across the reload', a1.errors.length === 0 && a2.errors.length === 0, a1.errors.concat(a2.errors).slice(0, 2).join(' | '));
+
+  sub('storage that refuses: play goes on, nothing is claimed saved, nothing is lost on this page');
+  const d1 = learnApp({ failWrites: true }), dc = d1.ctx;
+  goIn(d1, 'kid-04');
+  serveRight(d1);
+  T('with no storage at all, the order still counts on this page', kidSnap(d1, 'kid-04').independent.attempted === 1 && d1.storage._map.size === 0);
+  T('and the workspace says plainly that nothing is being kept', dc.learn.store === 'memory' && dc.storageText().indexOf('Not saving') === 0);
+  const q1a = learnApp(), qc = q1a.ctx;
+  goIn(q1a, 'kid-05');
+  q1a.storage.setItem = () => { throw new Error('QuotaExceededError'); };
+  serveRight(q1a);
+  T('storage that starts refusing mid-session: the events stay in memory, still count, and the workspace says so',
+    qc.learn.store === 'refused' && qc.learn.session.refused === true && kidSnap(q1a, 'kid-05').independent.attempted === 1 &&
+    /could not be saved/.test(qc.storageText()));
+  T('no errors when storage refuses', d1.errors.length === 0 && q1a.errors.length === 0, d1.errors.concat(q1a.errors).slice(0, 2).join(' | '));
+
+  sub('a teacher\'s preview plays the same rounds and records nothing');
+  const pv = learnApp(), vc = pv.ctx, vdoc = pv.dom.document;
+  vc.openTeach();
+  const pvKeys = learnKeys(pv).join();
+  vc.teachAct('preview');
+  vc.skipDemo();
+  waitOrder(pv);
+  T('the banner says nothing is recorded', vdoc.getElementById('previewBanner').hidden === false &&
+    vdoc.getElementById('previewBanner').textContent === 'Teacher preview: nothing is recorded' && vc.learn.preview === true);
+  for(let k = 0; k < 5; k++){
+    waitOrder(pv);
+    const q = vc.learn.item.quantity;
+    if(k === 0){ makeSet(pv, wrongFor(q)); serveNow(pv); vc.learnHelp(); for(let i = 0; i < 400 && vc.learn.support; i++) advance(pv, 50); }
+    makeSet(pv, q);
+    vc.learnServe();
+  }
+  for(let i = 0; i < 300 && vc.learn.stage !== 'round-end'; i++) advance(pv, 50);
+  T('a whole previewed round, a wrong answer and help included, wrote nothing and added no evidence',
+    vc.learn.stage === 'round-end' && learnKeys(pv).join() === pvKeys && vc.learn.live.size === 0 &&
+    vc.classEvents(vc.learnClass()).length === 0 && vc.learn.session.events.length === 0);
+  vc.learnFinish();
+  T('finishing a preview returns to the workspace, the banner gone', vdoc.getElementById('teachOverlay').classList.contains('open') &&
+    vdoc.getElementById('previewBanner').hidden === true && vdoc.getElementById('previewBanner').textContent === '' && !vc.learn.session);
+
+  sub('the sample class is made up, labeled, kept in memory, and never mixes with this device\'s records');
+  vc.teach.classId = vc.DEMO_CLASS.id;
+  vc.teachGo('today');
+  const DS = vc.teachSnapshot();
+  const rowan = DS.children.find(k => k.name === 'Rowan');
+  T('it is labeled DEMO sample data on every screen', DS.kind === 'demo' &&
+    vc.TEACH_VIEWS.every(v => { vc.teachGo(v); return vdoc.getElementById('teachBody').innerHTML.indexOf('DEMO sample data') !== -1; }));
+  T('its first child is the specification\'s example: 11 of 12 on two dates, independent in game', rowan.status === 'independent' &&
+    rowan.independent.correct === 11 && rowan.independent.attempted === 12 && rowan.independent.dates.length === 2);
+  T('twenty fictional children, two with no evidence at all', DS.roster === 20 && DS.counts['not-observed'] === 2 && DS.played === 18);
+  T('its events are marked as sample data and belong to it alone', vc.demoEvents().every(e => e.source === 'demo' && e.classId === vc.DEMO_CLASS.id) &&
+    Object.isFrozen(vc.demoEvents()) && !vc.classEvents(vc.learnClass()).some(e => e.source === 'demo'));
+  vc.planNew(); vc.planSave(); vc.saveObservation(rowan.id);
+  T('viewing it, planning with it, saving a plan and trying to note an observation write nothing',
+    learnKeys(pv).join() === pvKeys && vc.teach.demoPlans.length === 1 && vc.loadObservations().length === 0);
+  vc.teach.classId = vc.PROTO_CLASS_ID; vc.teach.draft = null; vc.teach.inputs = null;
+  T('back on this device\'s class, none of the sample plans show', vc.loadPlans().length === 0);
+
+  sub('a teacher\'s observations are kept apart and never change the game\'s counts');
+  c.teach.classId = c.PROTO_CLASS_ID;
+  const beforeObs = JSON.stringify(kidSnap(app, 'kid-01'));
+  const field = (id, tag, v) => { const el = app.dom.mkEl(tag, id); el.value = v; app.dom.byId.set(id, el); };
+  field('obsKind', 'select', 'not-yet'); field('obsContext', 'select', 'Exit check'); field('obsNote', 'textarea', 'Touched one piece twice.');
+  c.saveObservation('kid-01');
+  const obs = c.loadObservations();
+  T('an observation is its own record, under its own key, from the teacher', obs.length === 1 && obs[0].kind === 'not-yet' &&
+    obs[0].childId === 'kid-01' && obs[0].source === 'teacher (this device)' && learnKeys(app).some(k => /data\.learn\.observations$/.test(k)));
+  T('and the game\'s summary for that child is exactly as it was', JSON.stringify(kidSnap(app, 'kid-01')) === beforeObs);
+
+  sub('a lesson draft: deterministic, it adds up, fits the room, and every child has one task');
+  const CLS = { id: 'c-test', kind: 'prototype', name: 'Test class', timezone: 'UTC', calendar: WEEK, roster: roster(12) };
+  let EV = [];
+  CLS.roster.forEach((k, i) => {
+    if(i < 3) EV = EV.concat(made(k.id, k.id + 'a', '2026-10-09', orders(6)), made(k.id, k.id + 'b', '2026-10-12', orders(6)));
+    else if(i < 9) EV = EV.concat(made(k.id, k.id + 'a', '2026-10-09', orders(6, null, 3)), made(k.id, k.id + 'b', '2026-10-12', orders(6, null, 3)));
+    else if(i < 11) EV = EV.concat(made(k.id, k.id + 'a', '2026-10-12', orders(3)));
+  });
+  const CUT = Date.UTC(2026, 9, 12, 20);
+  const SNAP = pc.classSnapshot(CLS, EV, CUT);
+  T('the snapshot: 3 independent, 6 building, 2 gathering, 1 not observed', SNAP.counts.independent === 3 && SNAP.counts.building === 6 &&
+    SNAP.counts.gathering === 2 && SNAP.counts['not-observed'] === 1 && SNAP.withEvidence === 11 && SNAP.played === 11);
+  const P = (inp, snap) => pc.planCountLesson(snap || SNAP, Object.assign({ date: '2026-10-13', minutes: 20, devices: 2, adults: 1,
+    materials: { counters: true, plates: true, checklist: true }, absent: [] }, inp), null);
+  const total = p => p.sequence.reduce((s, x) => s + x.minutes, 0);
+  const once = p => {
+    const n = new Map();
+    p.groups.forEach(g => g.members.forEach(id => n.set(id, (n.get(id) || 0) + 1)));
+    return p.snapshot.children.filter(k => p.absent.indexOf(k.id) === -1).every(k => n.get(k.id) === 1) &&
+           p.absent.every(id => !n.has(id));
+  };
+  const p10 = P({ minutes: 10 });
+  T('a 10-minute plan adds up to exactly 10 minutes', total(p10) === 10 && p10.minutesTotal === 10 && !pc.planBlocked(p10));
+  T('so does every length a teacher can choose', [10, 15, 20, 25, 30, 45].every(m => { const p = P({ minutes: m }); return total(p) === m && !pc.planBlocked(p); }));
+  T('the same snapshot and constraints always give the same draft', JSON.stringify(P({})) === JSON.stringify(P({})));
+  const p20 = P({});
+  T('a draft has every part: objective, rationale, materials, the exact opening words, a timed sequence, groups, support, extension, ' +
+    'the offline activity, an individual exit check and the checks carried over',
+    pc.SECTION_KEYS.every(k => typeof p20.sections[k].text === 'string' && p20.sections[k].text.length > 20 && p20.sections[k].edited === false) &&
+    p20.sequence.length >= 3 && p20.groups.length >= 3 && p20.checked.length + p20.queue.length === 12 && p20.checked.length === 4 &&
+    /Evidence up to 12 October 2026/.test(p20.sections.rationale.text) && p20.snapshot.id === SNAP.id);
+  T('every child present has exactly one task', once(p20) && once(P({ absent: ['k01', 'k12'] })));
+  T('the plan counts children in words that read right', /4 children can be checked in 3 minutes; 8 checks carried to the next block\./.test(p20.sections.exit.text) &&
+    /12 children take part/.test(p20.sections.rationale.text) && !/childs|1 children/.test(JSON.stringify(p20.sections)));
+  const p0 = P({ devices: 0 }), prac0 = p0.groups.find(g => g.id === 'practice');
+  T('with no devices, practice is physical, at the tray, with no device turns', prac0.device === false && prac0.physical === true &&
+    prac0.deviceTurns.length === 0 && prac0.trayMembers.length === prac0.members.length && once(p0) &&
+    !/devices with Chef Capy/.test(p0.sections.materials.text));
+  T('device turns never hold more children than devices', [1, 2, 3].every(d => P({ devices: d }).groups.every(g => (g.deviceTurns || []).every(t => t.members.length <= d))));
+  T('adult-led groups never outnumber the adults at any one time', [1, 2, 3].every(a => {
+    const p = P({ adults: a }), slots = new Map();
+    p.groups.forEach(g => (g.turns || []).forEach(t => slots.set(t.slot, (slots.get(t.slot) || 0) + 1)));
+    return [...slots.values()].every(v => v <= a) && once(p);
+  }));
+  const BIG = { id: 'c-big', kind: 'prototype', name: 'Big class', timezone: 'UTC', calendar: WEEK, roster: roster(16, 'b') };
+  let BEV = [];
+  BIG.roster.slice(0, 14).forEach(k => { BEV = BEV.concat(made(k.id, k.id + 'a', '2026-10-09', orders(6, null, 4), { classId: 'c-big' }),
+    made(k.id, k.id + 'b', '2026-10-12', orders(6, null, 4), { classId: 'c-big' })); });
+  const BIGSNAP = pc.classSnapshot(BIG, BEV, CUT);
+  const tight = P({ minutes: 10, devices: 0, adults: 1 }, BIGSNAP);
+  T('children no adult can reach in a short block practice instead, and the plan says so: every child keeps one task',
+    BIGSNAP.counts.building === 14 && once(tight) && tight.issues.some(x => x.level === 'info' && /could not be reached/.test(x.text)) &&
+    !pc.planBlocked(tight) && tight.groups.find(g => g.id === 'practice').members.length > 0);
+  const noObj = P({ materials: { counters: false, paperSushi: false } });
+  T('with no countable objects, the plan says what is missing and cannot be published',
+    pc.planBlocked(noObj) && noObj.issues.some(x => x.level === 'block' && /countable objects/.test(x.text)));
+  const paper = P({ materials: { counters: false, paperSushi: true } });
+  T('paper sushi stands in for counters, and the plan says so', !pc.planBlocked(paper) && paper.issues.some(x => /paper sushi/i.test(x.text)) &&
+    /Paper sushi circles/.test(paper.sections.materials.text));
+  T('with no plates, a sheet of paper is the plate', /sheet of paper per child/.test(P({ materials: { plates: false } }).sections.materials.text));
+  const obsPlan = P({}, pc.classSnapshot(CLS, [], CUT));
+  T('with no evidence at all, the lesson is an observation lesson, and says why', obsPlan.purpose === 'observation' &&
+    /observation lesson/.test(obsPlan.sections.rationale.text) && obsPlan.groups.length === 1 && obsPlan.groups[0].id === 'meet' && once(obsPlan));
+
+  sub('regenerating keeps a teacher\'s edits and placements');
+  const base = P({});
+  base.sections.opening = { text: 'My own opening words.', edited: true };
+  const moved = pc.moveInPlan(base, 'k01', 'careful');
+  T('moving a child locks them in place, and the plan stays whole', moved.locks.k01 === true && moved.placements.k01 === 'careful' &&
+    moved.groups.find(g => g.id === 'careful').members.indexOf('k01') !== -1 && once(moved) && moved.sections.opening.text === 'My own opening words.');
+  const SNAP2 = pc.classSnapshot(CLS, EV.concat(made('k12', 'k12a', '2026-10-12', orders(3))), CUT + 3600000);
+  const regen = pc.regeneratePlan(moved, SNAP2, moved.inputs);
+  T('new evidence moves the unlocked; every edited section and placed child stays', regen.sections.opening.text === 'My own opening words.' &&
+    regen.sections.opening.edited === true && regen.locks.k01 === true && regen.placements.k01 === 'careful' &&
+    regen.snapshot.id === SNAP2.id && regen.placements.k12 === 'practice' && base.placements.k12 === 'meet' && once(regen));
+  const unl = pc.unlockInPlan(regen, 'k01');
+  T('unlocking hands the child back to the evidence', !unl.locks.k01 && unl.placements.k01 === 'extend' && unl.sections.opening.edited === true);
+
+  sub('a published revision never changes, and publishing sends nothing anywhere');
+  c.teach.classId = c.PROTO_CLASS_ID; c.teach.draft = null; c.teach.inputs = null;
+  c.openTeach();
+  c.planNew();
+  T('a new draft is not kept until the teacher saves or publishes it', c.loadPlans().length === 0 && !!c.teach.draft);
+  c.teach.draft.plan.sections.support = { text: 'Count with Mika first.', edited: true };
+  T('publishing makes revision 1', c.planPublish() === true && c.loadPlans().filter(p => p.kind === 'revision').length === 1);
+  const rev = c.loadPlans().find(p => p.kind === 'revision'), frozen = JSON.stringify(rev);
+  T('it says it stays on this device and reaches no child\'s device', /not sent to any classroom device/.test(rev.note) &&
+    /does not reach any child's device/.test(c.teach.notice) && rev.plan.sections.support.text === 'Count with Mika first.');
+  c.closeTeach();
+  goIn(app, 'kid-06');
+  serveRight(app);
+  waitOrder(app);
+  c.openTeach();
+  c.planRegen();
+  const rev2 = c.loadPlans().find(p => p.id === rev.id);
+  T('later evidence changes the draft, never the published revision', JSON.stringify(rev2) === frozen &&
+    c.teach.draft.plan.snapshot.eventCount > rev.plan.snapshot.eventCount && c.teach.draft.plan.sections.support.text === 'Count with Mika first.');
+  c.teach.inputs.materials.counters = false; c.teach.inputs.materials.paperSushi = false;
+  c.planRegen();
+  T('a draft with something missing cannot be published', c.planPublish() === false && c.loadPlans().filter(p => p.kind === 'revision').length === 1);
+  c.teach.classId = c.DEMO_CLASS.id; c.teach.draft = null; c.teach.inputs = null;
+  c.planNew();
+  c.planPublish();
+  const demoRev = c.loadPlans().find(p => p.kind === 'revision'), demoOpening = demoRev.plan.sections.opening.text;
+  c.onTeachInput({ target: { getAttribute: k => k === 'data-section' ? 'opening' : null, value: 'Typed after publishing.' } });
+  T('typing in the draft after publishing never reaches the revision, even in memory', c.teach.draft.plan.sections.opening.text === 'Typed after publishing.' &&
+    c.loadPlans().find(p => p.id === demoRev.id).plan.sections.opening.text === demoOpening && demoOpening !== 'Typed after publishing.');
+  c.teach.classId = c.PROTO_CLASS_ID; c.teach.draft = null; c.teach.inputs = null;
+
+  sub('one snapshot, two reports: the family copy can say only what its allowlist lets it');
+  const notes = [{ id: 'o1', classId: 'c-test', childId: 'k04', kind: 'not-yet', context: 'Exit check', note: 'PRIVATE-NOTE-TEXT', date: '2026-10-12' }];
+  const tr = pc.teacherReport(SNAP, 'k04', notes, { includeNotes: true, group: 'Count carefully' });
+  const fr = pc.familyReport(tr), fj = JSON.stringify(fr);
+  T('the teacher copy carries private notes and the lesson group only when asked', tr.observations[0].note === 'PRIVATE-NOTE-TEXT' &&
+    tr.group === 'Count carefully' && pc.teacherReport(SNAP, 'k04', notes, {}).observations[0].note === '' && tr.snapshot === SNAP.id);
+  T('the family copy is its allowlisted fields and nothing else', Object.keys(fr).sort().join() === ['audience'].concat(pc.FAMILY_FIELDS).sort().join() &&
+    Object.isFrozen(fr) && pc.FAMILY_FIELDS.join() === 'childName,period,practiced,showed,nextStep,homeActivity,prepared');
+  T('no private note, group, status code, other child or comparison reaches it', fj.indexOf('PRIVATE-NOTE-TEXT') === -1 &&
+    fj.indexOf('Count carefully') === -1 && !/Child (?!4\b)\d+/.test(fj) && !/\bk\d\d\b/.test(fj) &&
+    !/building|gathering|independent|not-observed|percent|%|average|classmates|others/i.test(fj));
+  const frNone = pc.familyReport(pc.teacherReport(SNAP, 'k12', [], {}));
+  const frFew = pc.familyReport(pc.teacherReport(SNAP, 'k10', [], {}));
+  T('with sparse evidence it says modestly what is known, and claims nothing more',
+    /nothing to report about counting yet/.test(frNone.showed) && /not yet enough/.test(frFew.showed));
+  const csv = pc.evidenceCsv(SNAP), lines = csv.trim().split('\n');
+  T('the CSV has a header and one row per child, with the skill, window and rule version',
+    lines.length === 13 && lines[0].split(',').length === 23 && lines[0].indexOf('independent_attempted') !== -1 &&
+    lines.slice(1).every(l => l.indexOf(',count.quantity.1_5,2026-09-23,2026-10-12,2026-10-12,') !== -1 && l.indexOf(',r1,') !== -1));
+  T('an anonymous CSV leaves names out; the sample class\'s says it is sample data', pc.evidenceCsv(SNAP, { anonymous: true }).indexOf('Child 1') === -1 &&
+    pc.evidenceCsv(DS).split('\n')[1].split(',').pop() === 'demo sample data');
+  T('printing shows the report sheet alone, and the screen says how Save as PDF works',
+    /@media print\{[\s\S]*body\.printing-report #app[\s\S]*display: none !important/.test(css()) &&
+    /choose Save as PDF there to keep a file/.test(js()));
+
+  sub('the teacher workspace: behind the grown-ups\' question, labeled a prototype, every screen working');
+  const tw = learnApp(), tc = tw.ctx, tdoc = tw.dom.document, isOpen = id => tdoc.getElementById(id).classList.contains('open');
+  tc.openTeachFromPrefs();
+  T('it does not open without the grown-ups\' settings open first', !isOpen('teachOverlay'));
+  tc.openGate(); tc.__flush();
+  tdoc.getElementById('gateAnswer').value = String(tc.gate.answer);
+  tc.checkGate(); tc.__flush();
+  tc.openTeachFromPrefs(); tc.__flush();
+  T('through the question and the settings, it opens', isOpen('teachOverlay') && !isOpen('prefsOverlay') && !isOpen('gateOverlay'));
+  const tb = () => tdoc.getElementById('teachBody').innerHTML;
+  T('every screen says it is a development prototype with fictional profiles, no sign-in and no syncing',
+    /Development prototype on this device/.test(tb()) && /No teacher sign-in, no syncing between devices/.test(tb()));
+  T('with nothing played, Today is truthful: no evidence, everyone not observed, and a next step', /No counting orders yet in this class/.test(tb()) &&
+    /Not observed<\/span> <strong>6<\/strong> of 6/.test(tb()) && /<p class="teach-metric">0 of 6<\/p>/.test(tb()));
+  tc.teachGo('class');
+  T('the class summary says no evidence is not zero', /which is not the same as zero/.test(tb()));
+  T('every tab renders whole, in either class', [tc.PROTO_CLASS_ID, tc.DEMO_CLASS.id].every(id => {
+    tc.teach.classId = id; tc.teach.draft = null; tc.teach.inputs = null;
+    return tc.TEACH_VIEWS.every(v => { tc.teachAct('go', v); const s = tb(); return s.length > 300 && !/undefined|NaN|\[object/.test(s); });
+  }));
+  tc.teach.classId = tc.DEMO_CLASS.id;
+  tc.teachAct('go', 'class'); tc.teachAct('student', 'demo-01');
+  T('a child\'s profile shows first answers, supported retries, dates and observations apart', tc.teach.view === 'student' &&
+    /Independent first responses/.test(tb()) && /Supported retries/.test(tb()) && /Teacher observations/.test(tb()) &&
+    /kept apart from game results/.test(tb()) && /11 of 12/.test(tb()));
+  tc.teachAct('back');
+  T('Back returns to the class, in the same class', tc.teach.view === 'class' && tc.teach.classId === tc.DEMO_CLASS.id);
+  tc.teachAct('student', 'demo-01'); tc.teachAct('report', 'demo-01');
+  T('a report opens for the same child', tc.teach.view === 'reports' && tc.teach.report.childId === 'demo-01' && /Rowan/.test(tb()));
+  tc.teach.report.audience = 'family'; tc.renderTeach();
+  T('the family preview renders from the allowlisted copy alone', /What Rowan showed/.test(tb()) && !/Status:|Teacher observations|Current lesson group/.test(tb()));
+  key(tw, 'Escape'); tc.__flush();
+  T('Escape leaves the workspace for the sushi bar\'s door', !isOpen('teachOverlay') && tc.learn.stage === 'entrance');
+  T('no errors in the workspace', tw.errors.length === 0, tw.errors.slice(0, 2).join(' | '));
+
+  sub('phones and tablets, either way up; reduced motion; the device\'s own voice or none');
+  [{ width: 844, height: 390, dpr: 3, side: 'right' }, { width: 390, height: 844, dpr: 3, side: 'bottom' },
+   { width: 1180, height: 820, dpr: 2, side: 'right' }, { width: 820, height: 1180, dpr: 2, side: 'bottom' }].forEach(v => {
+    const ap = learnApp({ viewport: v }), cp = ap.ctx, name = v.width + '×' + v.height;
+    goIn(ap, 'kid-01');
+    makeSet(ap, 5);
+    for(let i = 0; i < 20; i++) advance(ap, 50);
+    const dock = ap.dom.document.getElementById('learnDock'), size = cp.dockSize(v.width, v.height);
+    const boxes = cp.pieceRects().map(r => cp.poseBox(cp.layout.view, r.pose));
+    const clear = v.side === 'right' ? boxes.every(b => b.x1 <= v.width - size) : boxes.every(b => b.y1 <= v.height - size);
+    T(name + ': the dock stands on the ' + v.side + ', and no piece, on the board or the plate, sits under it',
+      dock.getAttribute('data-side') === v.side && clear && cp.platedCount() === 5, JSON.stringify(boxes.map(b => [Math.round(b.x1), Math.round(b.y1)])));
+    T(name + ': no errors', ap.errors.length === 0, ap.errors.slice(0, 2).join(' | '));
+  });
+  const rm = learnApp({ reducedMotion: true }), rc = rm.ctx;
+  goIn(rm, 'kid-02', true);
+  makeSet(rm, 2);
+  advance(rm, 20);
+  T('with reduced motion the demonstration still teaches, and pieces move to the plate without a hop',
+    rc.canAct() && rc.platedOrder().every(i => rc.pieces[i].pt === 1) && rm.errors.length === 0);
+  const synth = voices => ({ speak(){}, cancel(){}, getVoices(){ return voices; } });
+  function Utter(t){ this.text = t; }
+  const cloud = learnApp({ windowExtras: { speechSynthesis: synth([{ name: 'Cloud', lang: 'en-US', localService: false }]), SpeechSynthesisUtterance: Utter } });
+  const local = learnApp({ windowExtras: { speechSynthesis: synth([{ name: 'Cloud', lang: 'en-US', localService: false },
+    { name: 'Local', lang: 'en-US', localService: true }]), SpeechSynthesisUtterance: Utter } });
+  T('Chef Capy speaks only with a voice installed on the device, never one that sends words away',
+    cloud.ctx.deviceVoice() === null && local.ctx.deviceVoice().name === 'Local' && cloud.ctx.sayLine('Three pieces, please.') === false);
+  T('no errors', probe.errors.length === 0 && cloud.errors.length === 0 && local.errors.length === 0);
+}
+
 module.exports = {
   T, section, sub, results, reset, testPortability, testSceneLifecycle, testVendoredLibrary,
   testBoot, testConfig, testStorage, testCollision, testMigration,
@@ -4118,5 +4789,5 @@ module.exports = {
   testMobile, testDesignSystem, testPWA, testRelease, testStress,
   testAccessibility, testContamination, testSourcesOfTruth,
   testCutModel, testStrokes, testGeometry, testRhythm, testLayout, testMotion,
-  testLifecycle, testPermanentRules, testCamera, testServing, testChef, testFeedback, testFinish, testCustomer
+  testLifecycle, testPermanentRules, testCamera, testServing, testChef, testFeedback, testFinish, testCustomer, testLearning
 };

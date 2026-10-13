@@ -191,6 +191,15 @@ or tried on a real device in it.
 - **A try-out guide.** [TRY-OUT.md](TRY-OUT.md) walks an adult through the
   whole loop and leaves space for notes.
 
+**0.9.1 — evidence that agrees with itself, and an educator packet.**
+- Rowan, the specification's worked example, is now written out as events
+  (11 of 12 first answers, one supported success), not special-cased in a
+  random draw. Every screen and export is checked to follow a changed
+  answer.
+- Wording claims only the set served, never how a child counted.
+- [EDUCATOR-REVIEW.md](EDUCATOR-REVIEW.md) is ready for a kindergarten
+  educator. Nothing in it is reviewed yet.
+
 The phase sections that follow describe the slicing game as it was built.
 
 ## Phase 0B — the gray-box slicing prototype

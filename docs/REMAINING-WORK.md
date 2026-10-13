@@ -38,7 +38,11 @@ provisioned or paid for. What that backend must do, whatever it is:
 ## Before a learning release
 
 - An educator reviews the counting activity, rule r1, the statuses' wording,
-  lesson template t1 and the family report.
+  lesson template t1 and the family report. The packet for it is
+  [EDUCATOR-REVIEW.md](EDUCATOR-REVIEW.md); its record is blank until a
+  reviewer fills it in.
+- Whether a matching set is enough evidence for a counting skill, or the
+  task or the skill's name should change (packet question 1).
 - Supervised usability sessions with children (Phase A).
 - "With support" needs a reviewed support rubric for `count.quantity.1_5`.
 - The other four stations (Phase D), each after its own content, access,

@@ -557,6 +557,27 @@ The product direction is [docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md).
     other class. The DEMO class's statuses come from its events alone
     (`demoEvents()` sets dates, counts and probabilities, never a result).
 
+## Evidence that agrees with itself (0.9.1)
+
+76. **A worked example is written out as events, never forced.** Rowan,
+    the specification's example (11 of 12, one supported success), is
+    `DEMO_ROWAN`: each order's quantity, first answer and retry. 0.8.0 got
+    the same numbers by special-casing him inside the random draw, which
+    hid where they came from; 0.9.0 removed the special case and lost the
+    example. Every screen and export — Today, Class, the profile, both
+    reports, print, the CSV and a new lesson — reads one snapshot
+    (`teachSnapshot()` → `classEvents()`), and contract 36 changes his
+    answers and follows the change to each of them, and checks a published
+    lesson keeps its own snapshot.
+77. **Claim only what the game observes.** The game sees the set served, not
+    how it was made. `COUNT_ACTIVITY.observes` says so in the rule panels and
+    the teacher report; no game-derived wording may say a child counted
+    aloud, touched each piece, counted one-to-one or read numerals. How a
+    child counts is a teacher observation, kept apart. The educator packet
+    ([docs/EDUCATOR-REVIEW.md](docs/EDUCATOR-REVIEW.md)) asks whether a
+    matching set is enough evidence; until it is answered, it is not
+    assumed.
+
 ## Development
 
 42. **`?tune` is a developer route, not a setting.** It must be removed, or

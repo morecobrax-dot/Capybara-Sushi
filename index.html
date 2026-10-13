@@ -1580,6 +1580,25 @@ const APP_FILES = [
    ========================================================= */
 const APP_UPDATES = [
   {
+    id: 'v0-9-1',
+    version: '0.9.1',
+    title: 'Sample evidence that agrees with itself',
+    date: '2026-10-13',
+    summary: 'The sample class\'s worked example is now written out answer by answer, and every teacher screen and export is checked to agree with it. ' +
+             'Wording now claims only what the game sees: the set a child serves, not how they counted. Still a development prototype; nothing is reviewed by an educator yet.',
+    newFeatures: [
+      'The teacher report and the rule panels say what the game shows and what it cannot: how a child counts is for the teacher to observe'
+    ],
+    improvements: [
+      'Rowan, the sample class\'s worked example, comes from written-out answers: 11 of 12 first answers, and one fixed with help',
+      'Family summaries and next steps no longer suggest the game saw how a child counts',
+      'The class evidence file names its columns "more than asked" and "fewer than asked"'
+    ],
+    fixes: [
+      'The sample class had lost its worked example of a child who is independent but not perfect'
+    ]
+  },
+  {
     id: 'v0-9-0',
     version: '0.9.0',
     title: 'Clearer counting and teacher screens',
@@ -6942,13 +6961,19 @@ const COUNT_ACTIVITY = deepFreeze({
   prompt: 'The customer\'s order card pictures the quantity as that many maki — in a row, a dice pattern or scattered — ' +
           'and, where the device has a voice of its own, Chef Capy says it ("Three pieces, please"). No numerals are shown.',
   demonstration: { quantity: 2, arrangement: 'row',
-                   note: 'Chef Capy slices the roll twice, puts two of the three pieces on the plate and rings the bell. It is never evidence.' },
+                   note: 'Chef Capy slices two pieces off the roll, taps one onto the plate, sends the other with the plate button and rings the bell. ' +
+                         'It is never evidence.' },
   quantities: [1, 2, 3, 4, 5],
   arrangements: ['row', 'dice', 'scatter'],
   variants: [1, 2, 3, 4, 5].reduce((all, q) => all.concat(['row', 'dice', 'scatter'].map(a => ({ id: 'q' + q + '-' + a, quantity: q, arrangement: a }))), []),
   round: { items: 5, rule: 'Each round asks for every quantity from 1 to 5 once, in an order and arrangement drawn deterministically from the session; nothing repeats within a round.' },
   accepted: 'Correct when the number of pieces on the plate at Serve equals the quantity asked for. Piece sizes, how many cuts were made, speed and slicing precision never matter.',
-  distractors: 'None: the child builds the set. The errors recorded are more pieces than asked (over-count) and fewer (under-count).',
+  distractors: 'None: the child builds the set. A set that does not match is recorded as more pieces than asked or fewer. ' +
+               'Only the set served is recorded, never how it was made.',
+  /* What the game can and cannot show, said wherever its evidence is read. */
+  observes: 'The game records the set a child serves: whether the pieces on the plate match the picture order, with or without help. ' +
+            'It does not show how the set was made — counting aloud, touching each piece once, or seeing the amount at a glance — ' +
+            'or whether the child reads numerals; none are shown. How a child counts is for the teacher\'s own observation, kept apart.',
   support: [
     { id: 'repeat', answerRevealing: false, when: 'Any time: the order card, or R', what: 'The order is shown and said again. Ordinary instruction, not support.' },
     { id: 'count-together', answerRevealing: true, when: 'After a first incorrect serve, or when the child asks for help', what: 'Chef Capy counts the order\'s pictures, then the pieces on the plate, one at a time.' },
@@ -6959,7 +6984,7 @@ const COUNT_ACTIVITY = deepFreeze({
              'Every later, supported response', 'Help asked for before any response (the item is then assisted-only)',
              'Repeats of the order (ordinary instruction)', 'Items left unfinished (never counted as incorrect)'],
   access: ['Cut: swipe down across the roll, the knife button, or Space',
-           'Move one piece: tap it, the plus or minus buttons, or + and −',
+           'Move one piece: tap a slice (or a piece on the plate), the plate buttons, or + and −; only a slice cut off the roll goes on the plate',
            'Serve: the bell, or Enter', 'Help: the chef button, or H; repeat the order: the order card, or R',
            'Screen readers hear the order\'s quantity and each move'],
   language: 'en-US. The order is a picture; speech uses only a voice installed on the device.',
@@ -7230,23 +7255,39 @@ function classSnapshot(cls, events, cutoffMs){
 }
 
 /* ---------- the sample class's made-up week ---------- */
+/* Rowan's week is written out answer by answer: the specification's worked
+   example of a child who is independent without being perfect. Two
+   instructional days, six orders each, every quantity from 1 to 5; eleven
+   first answers match, and one (4 asked, 5 served) is followed by counting
+   together and a right retry. Each order is [asked, first served, retry
+   after help]. The rule must derive 11 of 12 and one supported success from
+   these events; nothing tells it so. */
+const DEMO_ROWAN = deepFreeze([
+  { date: '2026-10-08', orders: [[1, 1], [2, 2], [3, 3], [4, 5, 4], [5, 5], [3, 3]] },
+  { date: '2026-10-09', orders: [[4, 4], [2, 2], [1, 1], [5, 5], [3, 3], [4, 4]] }
+]);
 let demoCache = null;
-function demoEvents(){
-  if(demoCache) return demoCache;
+/* The sample class's events. `rowan` replaces Rowan's written-out week
+   (the contracts change one answer and follow it to every screen); the
+   standard week is built once. */
+function demoEvents(rowan){
+  const fixture = rowan || DEMO_ROWAN;
+  if(fixture === DEMO_ROWAN && demoCache) return demoCache;
   const out = [], cls = DEMO_CLASS, r = seeded(0x51A7E5);
   /* 13:30 UTC is 9:30 in New York in October. */
   const at = (date, k) => Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), 13, 30) + k * 90000;
-  /* Each row only sets the dates, how many orders and how likely a right
-     first answer is; nothing is forced. Every child's status comes from the
-     rule, applied to the events drawn. */
+  /* The other nineteen are drawn. Each row only sets a pattern of play —
+     the dates, how many orders and how likely a right first answer is — and
+     never a result: every child's status comes from the rule, applied to
+     the events drawn. Row 1 is Rowan, written out above. */
   const plans = [
-    ['independent', ['2026-10-08', '2026-10-09'], 6, [0.84, 1]],
-    ['independent', ['2026-10-06', '2026-10-08'], 7, [0.86, 1]], ['independent', ['2026-10-07', '2026-10-09'], 7, [0.86, 1]],
-    ['independent', ['2026-10-05', '2026-10-08'], 6, [0.84, 1]],
-    ...Array.from({ length: 11 }, (_, i) => ['building', i % 2 ? ['2026-10-06', '2026-10-08'] : ['2026-10-07', '2026-10-09'], 6 + (i % 3 === 0 ? 1 : 0), [0.42, 0.72]]),
-    ['gathering', ['2026-10-09'], 5, [0.6, 0.9]], ['gathering', ['2026-10-07', '2026-10-09'], 4, [0.5, 0.8]],
-    ['gathering', ['2026-10-08'], 6, [0.6, 0.9]],
-    ['none', [], 0, [0, 0]], ['none', [], 0, [0, 0]]
+    ['written', fixture.map(s => s.date), 0, [0, 0]],
+    ['steady', ['2026-10-06', '2026-10-08'], 7, [0.86, 1]], ['steady', ['2026-10-07', '2026-10-09'], 7, [0.86, 1]],
+    ['steady', ['2026-10-05', '2026-10-08'], 6, [0.84, 1]],
+    ...Array.from({ length: 11 }, (_, i) => ['mixed', i % 2 ? ['2026-10-06', '2026-10-08'] : ['2026-10-07', '2026-10-09'], 6 + (i % 3 === 0 ? 1 : 0), [0.42, 0.72]]),
+    ['few', ['2026-10-09'], 5, [0.6, 0.9]], ['few', ['2026-10-07', '2026-10-09'], 4, [0.5, 0.8]],
+    ['few', ['2026-10-08'], 6, [0.6, 0.9]],
+    ['absent', [], 0, [0, 0]], ['absent', [], 0, [0, 0]]
   ];
   cls.roster.forEach((ch, idx) => {
     const p = plans[idx];
@@ -7260,18 +7301,21 @@ function demoEvents(){
         out.push(e);
       };
       ev('session.start', { mode: 'play' });
-      const order = [1, 2, 3, 4, 5, 3, 4, 2].slice(0, p[2]);
+      const written = p[0] === 'written' ? fixture[si].orders : null;
+      const order = written ? written.map(o => o[0]) : [1, 2, 3, 4, 5, 3, 4, 2].slice(0, p[2]);
       order.forEach((q, i) => {
         const itemId = sid + '.i' + i, arrangement = ['row', 'dice', 'scatter'][(i + si) % 3];
         ev('item.start', { itemId: itemId, round: Math.floor(i / 5), quantity: q, arrangement: arrangement });
-        const want = p[3][0] + (p[3][1] - p[3][0]) * r();
-        const right = r() < want;
-        const first = right ? q : (r() < 0.6 ? q + 1 : Math.max(1, q - 1));
+        let first;
+        if(written) first = written[i][1];
+        else {
+          const want = p[3][0] + (p[3][1] - p[3][0]) * r();
+          first = r() < want ? q : (r() < 0.6 ? q + 1 : Math.max(1, q - 1));
+        }
         ev('response', { itemId: itemId, attempt: 1, answer: first, correct: first === q, support: 'none' });
         if(first !== q){
           ev('support', { itemId: itemId, level: 'count-together', reason: 'after-incorrect' });
-          const fixed = r() < (p[0] === 'building' ? 0.85 : 0.95);
-          const second = fixed ? q : q + 1;
+          const second = written ? (written[i].length > 2 ? written[i][2] : q) : r() < (p[0] === 'mixed' ? 0.85 : 0.95) ? q : q + 1;
           ev('response', { itemId: itemId, attempt: 2, answer: second, correct: second === q, support: 'count-together' });
           if(second !== q){
             ev('support', { itemId: itemId, level: 'spots', reason: 'after-incorrect' });
@@ -7283,8 +7327,9 @@ function demoEvents(){
       ev('session.end', { reason: 'finished' });
     });
   });
-  demoCache = deepFreeze(out);
-  return demoCache;
+  deepFreeze(out);
+  if(fixture === DEMO_ROWAN) demoCache = out;
+  return out;
 }
 
 /* ---------- the lesson template: deterministic, awaiting review ---------- */
@@ -7307,7 +7352,7 @@ const PLAN_GROUPS = deepFreeze({
               reason: 'Some evidence, not yet enough to decide, or older evidence that needs a fresh look.' },
   extend: { name: 'Try a new arrangement', adultLed: false, statuses: ['independent'], device: false,
             task: 'Make five in two different arrangements, then show two ways to split five.',
-            reason: 'Counting 1 to 5 is independent in the game; this checks it with real objects.' }
+            reason: 'Independent in the game at making matching sets of 1 to 5; with real objects an adult can also see how the child counts.' }
 });
 const GROUP_ORDER = Object.freeze(['careful', 'meet', 'practice', 'extend']);
 const SECTION_KEYS = Object.freeze(['objective', 'rationale', 'materials', 'opening', 'support', 'extension', 'offline', 'exit', 'followUp']);
@@ -7518,7 +7563,7 @@ function teacherReport(snap, childId, observations, opts){
     supported: c.supported, assistedOnly: c.assistedOnly, interrupted: c.interrupted, sessions: c.sessions, dates: c.dates, tried: c.tried,
     examples: examples, observations: obs.map(x => ({ date: x.date, kind: x.kind, context: x.context, note: o.includeNotes ? x.note : '' })),
     includesNotes: !!o.includeNotes, group: o.group || null,
-    next: LEARN_STATUS[c.status].next, offline: COUNT_ACTIVITY.offline, limits: limits,
+    next: LEARN_STATUS[c.status].next, offline: COUNT_ACTIVITY.offline, limits: limits, observes: COUNT_ACTIVITY.observes,
     snapshot: snap.id, prepared: dateText(snap.cutoff)
   };
 }
@@ -7532,10 +7577,10 @@ function familyReport(tr){
   const name = tr.childName, ind = tr.independent, days = tr.dates.length;
   const n = (k, s) => k + ' ' + s + (k === 1 ? '' : 's');
   const showed = {
-    'not-observed': 'We have not yet seen ' + name + ' try the counting orders, so there is nothing to report about counting yet.',
+    'not-observed': 'We have not yet seen ' + name + ' try the counting orders, so there is nothing to report yet.',
     'gathering': (tr.tried ? name + ' has tried ' + n(tr.tried, 'counting order') + ' on ' + n(days, 'day') + '. That is'
                            : name + ' has started the counting orders. That is') +
-                 ' not yet enough for us to say how ' + name + ' counts, so we are still watching.',
+                 ' not yet enough for us to say whether ' + name + ' makes matching sets reliably, so we are still watching.',
     'building': name + ' made sets of up to five pieces in ' + n(ind.attempted, 'counting order') + ' on ' + n(days, 'day') +
                 '. Some sets matched the order and some did not yet, so we are practicing touching each piece once while counting.',
     'independent': 'In ' + n(ind.attempted, 'counting order') + ' on ' + n(days, 'different day') + ', ' + name +
@@ -7544,7 +7589,7 @@ function familyReport(tr){
   }[tr.status];
   const next = {
     'not-observed': 'Watching ' + name + ' make small sets of objects.',
-    'gathering': 'More counting orders, so we can see how ' + name + ' counts.',
+    'gathering': 'More counting orders, on another day, so we can see whether ' + name + ' makes matching sets reliably.',
     'building': 'Counting each object once, and knowing the last number says how many.',
     'independent': 'Counting the same sets with real objects, and then larger numbers.',
     'fresh-check': 'A quick counting check with real objects.'
@@ -7559,7 +7604,7 @@ function familyReport(tr){
   const full = {
     childName: name,
     period: dateText(tr.period.start) + ' – ' + dateText(tr.period.end),
-    practiced: 'Counting out one to five objects: making exactly as many sushi pieces as a customer\'s picture order asks for.',
+    practiced: 'Making sets of one to five: putting exactly as many sushi pieces on a plate as a customer\'s picture order asks for.',
     showed: showed, nextStep: next, homeActivity: home,
     prepared: 'Prepared from Chef Capy\'s counting activity (a development preview) on ' + tr.prepared + '.'
   };
@@ -7571,7 +7616,7 @@ function familyReport(tr){
 function evidenceCsv(snap, opts){
   const anonymous = !!(opts && opts.anonymous);
   const cols = ['student_id', 'display_name', 'skill', 'window_start', 'window_end', 'cutoff', 'status', 'rule', 'rule_version',
-                'independent_correct', 'independent_attempted', 'over_counts', 'under_counts', 'quantities_covered',
+                'independent_correct', 'independent_attempted', 'more_than_asked', 'fewer_than_asked', 'quantities_covered',
                 'supported_responses', 'supported_correct', 'assisted_only_orders', 'interrupted_orders', 'sessions', 'instructional_dates',
                 'last_evidence_date', 'outside_calendar_orders', 'source'];
   /* A cell a spreadsheet would read as a formula is kept as text. */
@@ -8745,7 +8790,7 @@ function teachToday(snap, cls){
   if(snap.eventCount === 0) insights.push({ text: 'No counting orders yet in this class. Preview the activity, then let a child play from the sushi bar\'s door.', act: 'preview', label: 'Preview the activity' });
   if(c['not-observed'] && snap.eventCount) insights.push({ text: c['not-observed'] + ' of ' + snap.roster + ' children have no usable counting evidence in this window. An observation, not remediation, comes first.', act: 'go', arg: 'lessons', label: 'Plan an observation' });
   if(c.building) insights.push({ text: c.building + ' of ' + snap.roster + ' children have enough independent counting orders to decide, but fewer than 80% matched the order.', act: 'go', arg: 'class', label: 'See who, and why' });
-  if(c.independent) insights.push({ text: c.independent + ' of ' + snap.roster + ' children are independent in the game for counting 1 to 5. Check it with real objects before moving on.', act: 'go', arg: 'students', label: 'See the children' });
+  if(c.independent) insights.push({ text: c.independent + ' of ' + snap.roster + ' children are independent in the game at making matching sets of 1 to 5. Check with real objects, watching how they count, before moving on.', act: 'go', arg: 'students', label: 'See the children' });
   if(c.gathering && insights.length < 3) insights.push({ text: c.gathering + ' of ' + snap.roster + ' children need more counting orders, on another instructional day, before the rule can decide.', act: 'go', arg: 'class', label: 'See coverage' });
   if(c['fresh-check'] && insights.length < 3) insights.push({ text: c['fresh-check'] + ' of ' + snap.roster + ' children met the rule only before this window and need a fresh check.', act: 'go', arg: 'class', label: 'See who' });
   const draft = currentDraft(), revs = loadPlans().filter(p => p.kind === 'revision').sort((a, b) => b.rev - a.rev), lastRev = revs[0];
@@ -8791,6 +8836,7 @@ function teachClassView(snap){
     disc('class-rule', 'How this is decided', '<p>' + h(COUNT_RULE.text) + ' Rule ' + h(COUNT_RULE.id) + ' ' + h(COUNT_RULE.version) +
     ', proposed in the product specification and awaiting educator validation. Only the first answer to each order counts as independent, and only when no help came before it. ' +
     'Help and later tries are counted as supported. Unfinished orders, the demonstration and teacher previews are never evidence. "With support" is not assigned until a support rubric for this skill is reviewed.</p>' +
+    '<p>' + h(COUNT_ACTIVITY.observes) + '</p>' +
     '<p>Independent first answers that did not match the order: ' + over + ' with more pieces than asked, ' + under + ' with fewer.</p>' +
     '<p>Evidence up to ' + h(snap.takenAt.replace('T', ' ').slice(0, 16)) + ' UTC · ' + h(snap.eventCount) + ' events · summary ' + h(EVIDENCE_VERSION) +
     ' · activity ' + h(COUNT_ACTIVITY.id) + ' ' + h(COUNT_ACTIVITY.version) + ' (educator review ' + h(COUNT_ACTIVITY.review.status) + ').</p>');
@@ -8849,7 +8895,7 @@ function teachStudent(snap){
     '<p class="teach-small">matched after help · ' + c.assistedOnly + ' assisted-only ' + (c.assistedOnly === 1 ? 'order' : 'orders') + ' (help came first)</p></section>' +
     '<section class="teach-card"><div class="teach-kicker">Sessions and dates</div><p class="teach-metric">' + h(c.sessions) + '</p>' +
     '<p class="teach-small">' + (c.dates.length ? c.dates.map(shortDate).join(', ') : 'none in this window') + (c.interrupted ? ' · ' + c.interrupted + ' unfinished (not counted)' : '') + '</p></section></div>' +
-    disc('crit-' + c.id, 'How the rule is met · ' + met + ' of 4', criteriaList(c) + '<p class="teach-small">Rule ' + h(R.id) + ' ' + h(R.version) + ', awaiting educator validation.</p>') +
+    disc('crit-' + c.id, 'How the rule is met · ' + met + ' of 4', criteriaList(c) + '<p class="teach-small">Rule ' + h(R.id) + ' ' + h(R.version) + ', awaiting educator validation. ' + h(COUNT_ACTIVITY.observes) + '</p>') +
     disc('rows-' + c.id, 'Every counting order in this window · ' + c.recent.length,
       recent ? '<div class="table-wrap"><table class="teach-table"><caption class="sr-only">Counting orders, newest first</caption><thead><tr><th scope="col">Date</th><th scope="col">Asked</th><th scope="col">First served</th>' +
                '<th scope="col">How it was answered</th><th scope="col">Later tries</th></tr></thead><tbody>' + recent + '</tbody></table></div>' : '<p class="teach-small">No counting orders in this window.</p>') +
@@ -9026,7 +9072,7 @@ function teacherSheet(tr){
     '<h3>' + h(tr.childName) + ' — counting quantities 1–5</h3><p class="teach-small">Window ' + h(dateText(tr.period.start)) + ' – ' + h(dateText(tr.period.end)) +
     ' (' + tr.period.days + ' instructional days) · rule ' + h(tr.rule) + '</p></header>' +
     '<p><strong>Status:</strong> ' + h(tr.statusLabel) + '</p>' +
-    '<p><strong>Independent first answers:</strong> ' + h(frac(tr.independent.correct, tr.independent.attempted)) + (tr.independent.attempted ? ' matched (' + tr.independent.over + ' over, ' + tr.independent.under + ' under)' : '') +
+    '<p><strong>Independent first answers:</strong> ' + h(frac(tr.independent.correct, tr.independent.attempted)) + (tr.independent.attempted ? ' matched (' + tr.independent.over + ' with more pieces, ' + tr.independent.under + ' with fewer)' : '') +
     ' · quantities ' + h(tr.independent.quantities.join(', ') || 'none') + ' · dates ' + h(tr.independent.dates.map(shortDate).join(', ') || 'none') + '</p>' +
     '<p><strong>Supported retries:</strong> ' + h(frac(tr.supported.correct, tr.supported.responses)) + ' matched after help · ' + tr.assistedOnly + ' assisted-only · ' + tr.interrupted + ' unfinished (not counted)</p>' +
     (tr.examples.length ? '<p><strong>Examples:</strong></p><ul>' + tr.examples.map(x => '<li>' + h(x) + '</li>').join('') + '</ul>' : '') +
@@ -9034,6 +9080,7 @@ function teacherSheet(tr){
     (tr.group ? '<p><strong>Current lesson group:</strong> ' + h(tr.group) + '</p>' : '') +
     '<p><strong>Next step:</strong> ' + h(tr.next) + '</p><p><strong>Offline transfer:</strong> ' + h(tr.offline) + '</p>' +
     (tr.limits.length ? '<p><strong>Limits:</strong></p><ul>' + tr.limits.map(x => '<li>' + h(x) + '</li>').join('') + '</ul>' : '') +
+    '<p><strong>What the game shows:</strong> ' + h(tr.observes) + '</p>' +
     '<p class="teach-small">Prepared ' + h(tr.prepared) + ' from Chef Capy\'s counting activity (a development preview).</p>';
 }
 /* Rendered from the allowlisted family object alone. */

@@ -147,6 +147,9 @@ test/run.js             the runner
 
 - [docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md): the learning product
   specification (a summary of v1.1) and what 0.8.0 and 0.9.0 implement.
+- [docs/EDUCATOR-REVIEW.md](docs/EDUCATOR-REVIEW.md): a compact packet for a
+  kindergarten educator's review of the activity, rule r1 and the lesson
+  template, with a derived example report and blank fields for feedback.
 - [docs/TRY-OUT.md](docs/TRY-OUT.md): a supervised hands-on try-out of the
   whole loop with the fictional profiles, with space for notes.
 - [docs/PRODUCT.md](docs/PRODUCT.md): the product, its permanent rules, the

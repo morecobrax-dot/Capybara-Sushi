@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "appId": "capybara-sushi",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "phase": "Phase A — Playable learning foundation",
   "status": "building",
   "needsQa": true,
   "needsDecision": false,
   "currentTask": null,
-  "nextAction": "Run the hands-on try-out in docs/TRY-OUT.md with the fictional profiles on an iPad and a phone, then have a kindergarten educator review the counting activity and its rule",
+  "nextAction": "Send docs/EDUCATOR-REVIEW.md to a kindergarten educator and run the hands-on try-out in docs/TRY-OUT.md on an iPad and a phone",
   "blocker": null,
-  "updatedAt": "2026-10-13T08:13:47Z"
+  "updatedAt": "2026-10-13T12:03:15Z"
 }

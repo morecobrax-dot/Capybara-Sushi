@@ -4583,6 +4583,17 @@ function testLearning(){
   T('nothing is forced: no one is "With support", and the made-up week shows several statuses', DS.children.every(k => k.status !== 'with-support') &&
     vc.STATUS_ORDER.filter(k => DS.counts[k] > 0).length >= 3 && Object.keys(DS.counts).indexOf('with-support') === -1);
   T('twenty fictional children; the two with no evidence are not observed', DS.roster === 20 && DS.counts['not-observed'] === 2 && DS.played === 18);
+  /* 0.8.0 got Rowan's 11 of 12 by special-casing him inside the random draw;
+     0.9.0 dropped the special case and he drew 12 of 12. His week is now
+     written out, and the rule derives the example from it. */
+  const rowanFirsts = demoEv.filter(e => e.childId === rowan.id && e.type === 'response' && e.attempt === 1).map(e => e.answer).join();
+  T('Rowan, the specification\'s worked example, comes from his written-out answers: 12 independent first answers on two instructional dates, ' +
+    'all five quantities, 11 matching, and one different answer followed by counting together and a right retry',
+    rowanFirsts === vc.DEMO_ROWAN.map(s => s.orders.map(o => o[1]).join()).join() &&
+    rowan.independent.attempted === 12 && rowan.independent.correct === 11 && rowan.independent.dates.length === 2 &&
+    rowan.independent.quantities.join() === '1,2,3,4,5' && rowan.supported.responses === 1 && rowan.supported.correct === 1 &&
+    rowan.status === 'independent' && demoEv.some(e => e.childId === rowan.id && e.type === 'support' && e.level === 'count-together'),
+    JSON.stringify({ ind: rowan.independent, sup: rowan.supported, status: rowan.status }));
   T('its events are marked as sample data and belong to it alone', vc.demoEvents().every(e => e.source === 'demo' && e.classId === vc.DEMO_CLASS.id) &&
     Object.isFrozen(vc.demoEvents()) && !vc.classEvents(vc.learnClass()).some(e => e.source === 'demo'));
   vc.planNew(); vc.planSave(); vc.saveObservation(rowan.id);
@@ -4725,7 +4736,20 @@ function testLearning(){
   const frNone = pc.familyReport(pc.teacherReport(SNAP, 'k12', [], {}));
   const frFew = pc.familyReport(pc.teacherReport(SNAP, 'k10', [], {}));
   T('with sparse evidence it says modestly what is known, and claims nothing more',
-    /nothing to report about counting yet/.test(frNone.showed) && /not yet enough/.test(frFew.showed));
+    /nothing to report yet/.test(frNone.showed) && /not yet enough/.test(frFew.showed));
+  const claimsAll = [pc.COUNT_ACTIVITY.objective, pc.COUNT_ACTIVITY.distractors].concat(
+    Object.values(pc.PLAN_GROUPS).map(g => g.reason),
+    ['not-observed', 'gathering', 'building', 'independent', 'fresh-check'].map(k => {
+      const s = JSON.parse(JSON.stringify(SNAP)); s.children.forEach(ch => { ch.status = k; });
+      const f = pc.familyReport(pc.teacherReport(s, 'k10', [], {}));
+      return f.practiced + ' ' + f.showed + ' ' + f.nextStep;
+    })).join(' ');
+  T('nothing claims how a child counted: game results speak of the sets served, never of counting aloud, one-to-one touching or numerals ' +
+    '(the 0.8.0 family summary said "how they count" and the CSV said "over_counts")',
+    !/how \w+ counts|counted (aloud|each)|one-to-one|over-count|under-count|reads? numerals|counts? accurately/i.test(claimsAll) &&
+    /does not show how the set was made/.test(pc.COUNT_ACTIVITY.observes) && /more_than_asked,fewer_than_asked/.test(pc.evidenceCsv(SNAP).split('\n')[0]) &&
+    /What the game shows:<\/strong> The game records the set a child serves/.test(pc.teacherSheet(pc.teacherReport(SNAP, 'k10', [], {}))),
+    claimsAll.slice(0, 200));
   const csv = pc.evidenceCsv(SNAP), lines = csv.trim().split('\n');
   T('the CSV has a header and one row per child, with the skill, window and rule version',
     lines.length === 13 && lines[0].split(',').length === 23 && lines[0].indexOf('independent_attempted') !== -1 &&
@@ -4826,6 +4850,73 @@ function testLearning(){
   key(tw, 'Escape'); tc.__flush();
   T('Escape leaves the workspace for the sushi bar\'s door', !isOpen('teachOverlay') && tc.learn.stage === 'entrance');
   T('no errors in the workspace', tw.errors.length === 0, tw.errors.slice(0, 2).join(' | '));
+
+  sub('one changed answer in the sample week reaches every screen and export alike, and no published lesson');
+  const ca = learnApp(), cx = ca.ctx, cdoc = ca.dom.document, cb = () => cdoc.getElementById('teachBody').innerHTML;
+  cx.openGate(); cx.__flush();
+  cdoc.getElementById('gateAnswer').value = String(cx.gate.answer);
+  cx.checkGate(); cx.__flush();
+  cx.openTeachFromPrefs(); cx.__flush();
+  cx.onTeachChange({ target: { value: cx.DEMO_CLASS.id, getAttribute: n => n === 'data-change' ? 'class' : null } });
+  let csvOut = null;
+  cx.downloadText = (name, text) => { csvOut = text; return true; };
+  const origDemo = cx.demoEvents;
+  /* Every place Rowan's evidence is shown, read as the teacher would see it. */
+  const demoViews = () => {
+    const v = {};
+    cx.teachAct('go', 'today'); v.today = cb();
+    cx.teachAct('go', 'class'); v.cls = cb();
+    cx.teachAct('student', 'demo-01'); v.profile = cb();
+    cx.teach.report.audience = 'teacher'; cx.teachAct('report', 'demo-01'); v.report = cb();
+    cx.teach.report.audience = 'family'; cx.renderTeach(); v.family = cb();
+    cx.teach.report.audience = 'teacher';
+    csvOut = null; cx.teachAct('csv'); v.csv = csvOut;
+    cx.teach.draft = null; cx.teachAct('plan-start'); v.plan = cx.teach.draft.plan;
+    return v;
+  };
+  /* What each view must say, worked out apart from the app from the events alone. */
+  const viewsAgree = (v, evs) => {
+    const o = oracle('demo-01', evs), lab = cx.LEARN_STATUS[o.status].label;
+    const counts = {};
+    cx.DEMO_CLASS.roster.forEach(ch => { const s = oracle(ch.id, evs).status; counts[s] = (counts[s] || 0) + 1; });
+    const row = v.csv.trim().split('\n').map(l => l.split(',')), head = row[0], rw = row.find(r => r[0] === 'demo-01');
+    const col = k => rw[head.indexOf(k)];
+    const classRow = (v.cls.split('<tr>').find(t => t.indexOf('>Rowan</button>') !== -1) || '');
+    const checks = {
+      today: Object.keys(counts).every(k => v.today.indexOf(cx.LEARN_STATUS[k].label + '</span> <strong>' + counts[k] + '</strong> of 20') !== -1),
+      cls: classRow.indexOf('>' + lab + '</span>') !== -1,
+      profile: v.profile.indexOf('Rowan ' + '<span class="status-chip st-' + o.status + '">') !== -1 &&
+               v.profile.indexOf('<p class="teach-metric">' + o.correct + ' of ' + o.attempted + '</p>') !== -1,
+      report: v.report.indexOf('<strong>Status:</strong> ' + lab) !== -1 && v.report.indexOf('<strong>Independent first answers:</strong> ' + o.correct + ' of ' + o.attempted) !== -1,
+      family: o.status === 'independent' ? /without help in most of them/.test(v.family) : /some did not yet/.test(v.family),
+      csv: col('status') === o.status && +col('independent_correct') === o.correct && +col('independent_attempted') === o.attempted &&
+           row.slice(1).every(r => r[head.indexOf('cutoff')] === '2026-10-12'),
+      plan: v.plan.snapshot.children.find(k => k.id === 'demo-01').status === o.status &&
+            v.plan.placements['demo-01'] === (o.status === 'independent' ? 'extend' : 'careful') && v.plan.snapshot.cutoff === '2026-10-12'
+    };
+    return { ok: Object.keys(checks).every(k => checks[k]), checks: checks, o: o };
+  };
+  const vBefore = demoViews(), agreeBefore = viewsAgree(vBefore, origDemo());
+  T('Today, Class, the profile, both reports, the class CSV and a new lesson all say what the events say: Rowan 11 of 12, Independent in game',
+    agreeBefore.ok && agreeBefore.o.correct === 11 && agreeBefore.o.status === 'independent', JSON.stringify(agreeBefore.checks));
+  cx.teachAct('plan-publish');
+  const pubRev = cx.loadPlans().find(p => p.kind === 'revision'), pubRevRowan = JSON.stringify(pubRev.plan.snapshot.children.find(k => k.id === 'demo-01'));
+  /* Two of Rowan's right first answers on the second day become different ones, each fixed after help. */
+  const changedRowan = cx.DEMO_ROWAN.map((s, si) => ({ date: s.date, orders: s.orders.map((o, i) => si === 1 && i < 2 ? [o[0], o[0] + 1, o[0]] : o.slice()) }));
+  cx.demoEvents = () => origDemo(changedRowan);
+  const vAfter = demoViews(), agreeAfter = viewsAgree(vAfter, cx.demoEvents());
+  T('change two answers in the written-out week and every one of them follows: 9 of 12, Building, in Today\'s counts, Class, the profile, both reports, the CSV and a new lesson\'s groups',
+    agreeAfter.ok && agreeAfter.o.correct === 9 && agreeAfter.o.status === 'building' && vAfter.csv !== vBefore.csv, JSON.stringify(agreeAfter.checks));
+  const pubRevNow = cx.loadPlans().find(p => p.id === pubRev.id);
+  cx.teachAct('revision', pubRev.id);
+  T('the lesson published before the change is untouched: its snapshot still says 11 of 12, Independent in game, and Rowan stays in its extension group',
+    JSON.stringify(pubRevNow.plan.snapshot.children.find(k => k.id === 'demo-01')) === pubRevRowan && pubRevNow.plan.placements['demo-01'] === 'extend' &&
+    JSON.parse(pubRevRowan).independent.correct === 11 && /Revision 1/.test(cb()));
+  cx.demoEvents = origDemo;
+  const vBack = demoViews(), agreeBack = viewsAgree(vBack, origDemo());
+  T('put the answers back and every view returns to 11 of 12: nothing kept a stale copy', agreeBack.ok && agreeBack.o.correct === 11 && vBack.csv === vBefore.csv,
+    JSON.stringify(agreeBack.checks));
+  T('no errors while following the change', ca.errors.length === 0, ca.errors.slice(0, 2).join(' | '));
 
   sub('prepared pieces, a visible move, and pictures for every tool');
   const pa = learnApp(), px = pa.ctx, pdoc = pa.dom.document;

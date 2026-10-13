@@ -33,7 +33,8 @@ None of this is approved. Some of it is for an educator, and some only a
 child can answer: watch, do not lead. [TRY-OUT.md](TRY-OUT.md) is a
 step-by-step guide for a supervised try-out of the whole loop.
 
-For an educator (before any classroom use):
+For an educator (before any classroom use) — the packet is
+[EDUCATOR-REVIEW.md](EDUCATOR-REVIEW.md):
 
 - [ ] The counting activity (`COUNT_ACTIVITY` 1.0.0): its objective, the
       pictured quantities, the help ladder and what counts as evidence.

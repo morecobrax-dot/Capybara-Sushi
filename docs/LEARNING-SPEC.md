@@ -196,14 +196,19 @@ specification makes no legal or standards-compliance claim.
   analysis; more customers, decorating and recipes. Child chatbots,
   diagnostic scoring, leaderboards and automated family messages are held.
 
-## What 0.8.0 implements
+## What 0.8.0 and 0.9.0 implement
 
 A connected, **single-device development prototype** of one slice: Slice &
 Serve counting 1–5 → evidence on this device → teacher summary → an
 editable lesson draft → a student report, with fictional profiles. It has no
 teacher sign-in, no backend and no synchronization between devices; the
 times-table gate in front of the teacher workspace is not authentication.
-Its content and counting rule await educator review. See
+Its content and counting rule await educator review. 0.9.0 makes the same
+slice clearer — only sliced pieces can be plated, the order is the
+customer's picture request, the teacher screens lead with the action and
+the current evidence, and a lesson can be stepped through on the same
+device — and adds a guide for a supervised try-out ([TRY-OUT.md](TRY-OUT.md)).
+It changes no threshold or rule. See
 [ARCHITECTURE.md](../ARCHITECTURE.md) (Learning prototype) and
 [REMAINING-WORK.md](REMAINING-WORK.md) for exactly what exists and what the
 multi-device milestone needs.

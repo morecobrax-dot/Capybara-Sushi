@@ -4561,9 +4561,28 @@ function testLearning(){
   const rowan = DS.children.find(k => k.name === 'Rowan');
   T('it is labeled DEMO sample data on every screen', DS.kind === 'demo' &&
     vc.TEACH_VIEWS.every(v => { vc.teachGo(v); return vdoc.getElementById('teachBody').innerHTML.indexOf('DEMO sample data') !== -1; }));
-  T('its first child is the specification\'s example: 11 of 12 on two dates, independent in game', rowan.status === 'independent' &&
-    rowan.independent.correct === 11 && rowan.independent.attempted === 12 && rowan.independent.dates.length === 2);
-  T('twenty fictional children, two with no evidence at all', DS.roster === 20 && DS.counts['not-observed'] === 2 && DS.played === 18);
+  /* An oracle written apart from the app: one first answer per order, given
+     with no help before it, and the rule as the specification words it. */
+  const oracle = (childId, evs) => {
+    const orders = new Map();
+    evs.filter(e => e.childId === childId).forEach(e => {
+      if(e.type === 'item.start') orders.set(e.itemId, { q: e.quantity, date: e.date, first: null });
+      if(e.type === 'response' && e.attempt === 1 && orders.has(e.itemId)) orders.get(e.itemId).first = e;
+    });
+    const all = [...orders.values()], ind = all.filter(o => o.first && o.first.support === 'none');
+    const right = ind.filter(o => o.first.answer === o.q).length, dates = new Set(ind.map(o => o.date)), qs = new Set(ind.map(o => o.q));
+    const status = !all.some(o => o.first) ? 'not-observed' :
+      ind.length >= 12 && dates.size >= 2 && qs.size >= 4 && qs.has(5) ? (right / ind.length >= 0.8 ? 'independent' : 'building') : 'gathering';
+    return { attempted: ind.length, correct: right, dates: dates.size, status: status };
+  };
+  const demoEv = vc.demoEvents();
+  T('every sample child\'s numbers and status come from its own events and the rule as written: an oracle outside the app agrees for all twenty',
+    DS.children.every(k => { const o = oracle(k.id, demoEv); return o.attempted === k.independent.attempted && o.correct === k.independent.correct &&
+      o.dates === k.independent.dates.length && o.status === k.status; }),
+    DS.children.map(k => k.name + ' ' + k.status + ' ' + k.independent.correct + '/' + k.independent.attempted).join(', '));
+  T('nothing is forced: no one is "With support", and the made-up week shows several statuses', DS.children.every(k => k.status !== 'with-support') &&
+    vc.STATUS_ORDER.filter(k => DS.counts[k] > 0).length >= 3 && Object.keys(DS.counts).indexOf('with-support') === -1);
+  T('twenty fictional children; the two with no evidence are not observed', DS.roster === 20 && DS.counts['not-observed'] === 2 && DS.played === 18);
   T('its events are marked as sample data and belong to it alone', vc.demoEvents().every(e => e.source === 'demo' && e.classId === vc.DEMO_CLASS.id) &&
     Object.isFrozen(vc.demoEvents()) && !vc.classEvents(vc.learnClass()).some(e => e.source === 'demo'));
   vc.planNew(); vc.planSave(); vc.saveObservation(rowan.id);
@@ -4739,18 +4758,158 @@ function testLearning(){
   }));
   tc.teach.classId = tc.DEMO_CLASS.id;
   tc.teachAct('go', 'class'); tc.teachAct('student', 'demo-01');
-  T('a child\'s profile shows first answers, supported retries, dates and observations apart', tc.teach.view === 'student' &&
-    /Independent first responses/.test(tb()) && /Supported retries/.test(tb()) && /Teacher observations/.test(tb()) &&
-    /kept apart from game results/.test(tb()) && /11 of 12/.test(tb()));
+  const r01 = tc.teachSnapshot().children.find(k => k.id === 'demo-01'), ph = tb(), at = t => ph.indexOf(t);
+  T('a child\'s profile leads with the objective, the evidence now and the next useful observation', tc.teach.view === 'student' &&
+    at('>Objective<') !== -1 && at('>Objective<') < at('Evidence now') && at('Evidence now') < at('Next useful observation') &&
+    at('Next useful observation') < at('Independent first answers'));
+  T('then independent first answers and supported retries, side by side but apart', at('Independent first answers') < at('Supported retries') &&
+    ph.indexOf(r01.independent.correct + ' of ' + r01.independent.attempted) !== -1 && /kept apart from game results/.test(ph));
+  T('the rule\'s criteria and every order wait behind disclosures, still one tap away', at('data-keep="crit-demo-01"') !== -1 &&
+    at('teach-criteria') > at('data-keep="crit-demo-01"') && at('<table') > at('data-keep="rows-demo-01"') && at('data-keep="rows-demo-01"') > at('Supported retries'));
   tc.teachAct('back');
   T('Back returns to the class, in the same class', tc.teach.view === 'class' && tc.teach.classId === tc.DEMO_CLASS.id);
   tc.teachAct('student', 'demo-01'); tc.teachAct('report', 'demo-01');
   T('a report opens for the same child', tc.teach.view === 'reports' && tc.teach.report.childId === 'demo-01' && /Rowan/.test(tb()));
   tc.teach.report.audience = 'family'; tc.renderTeach();
   T('the family preview renders from the allowlisted copy alone', /What Rowan showed/.test(tb()) && !/Status:|Teacher observations|Current lesson group/.test(tb()));
+  tc.teach.draft = null; tc.teach.inputs = null; tc.teachAct('go', 'today');
+  let th = tb();
+  T('Today puts the lesson first, then coverage with denominators and the window, then at most three next steps',
+    th.indexOf('lesson-now') !== -1 && th.indexOf('lesson-now') < th.indexOf('Participation') && th.indexOf('Participation') < th.indexOf('>Next<') &&
+    /of 20<\/p>/.test(th) && /instructional days/.test(th) && (th.match(/<li><p>/g) || []).length <= 3);
+  T('skill and rule identifiers wait in an evidence disclosure', th.indexOf('data-keep="today-evidence"') !== -1 &&
+    th.slice(0, th.indexOf('data-keep="today-evidence"')).indexOf(tc.COUNT_RULE.id) === -1 &&
+    th.indexOf(tc.COUNT_RULE.id) > th.indexOf('data-keep="today-evidence"'));
+  T('every screen carries one short prototype label; the long explanation sits once, behind "About this prototype"',
+    tc.TEACH_VIEWS.every(v => { tc.teachAct('go', v); const x = tb(); return (x.match(/Local prototype · Fictional profiles/g) || []).length === 1 &&
+      (x.match(/No teacher sign-in, no syncing between devices/g) || []).length === 1 && x.indexOf('No teacher sign-in') > x.indexOf('data-keep="about"'); }));
+  tc.teachAct('go', 'today');
+  tc.teachAct('plan-start');
+  const lh = tb(), li = t => lh.indexOf(t);
+  T('"Prepare a lesson" on Today makes a draft and opens it', tc.teach.view === 'lessons' && !!tc.teach.draft && li('lesson-head') !== -1);
+  T('the lesson reads as a preview: objective and facts first, the teaching sequence as the main content, every section open to edit below',
+    li('lesson-facts') < li('Teaching sequence') && li('Teaching sequence') < li('Lesson sections') &&
+    tc.SECTION_KEYS.every(k => lh.indexOf('data-keep="draft-sec-' + k + '"') !== -1 && lh.indexOf('id="sec-' + k + '"') > lh.indexOf('data-keep="draft-sec-' + k + '"')) &&
+    li('Teach this lesson') < li('Teaching sequence'));
+  tc.teach.open.add('draft-groups');
+  tc.renderTeach();
+  T('a disclosure the teacher opened stays open when the screen is redrawn', /data-keep="draft-groups" open/.test(tb()));
+  const steps = tc.teach.draft.plan.sequence;
+  tc.teachAct('run');
+  let rh = tb();
+  T('"Teach this lesson" opens a focused view: the first step, its exact words, and the next step', tc.teach.view === 'run' &&
+    rh.indexOf('Step 1 of ' + steps.length) !== -1 && rh.indexOf(tc.teach.draft.plan.sections.opening.text.slice(0, 40)) !== -1 &&
+    rh.indexOf('Next step: ' + steps[1].title) !== -1 && tc.teach.refocus === null);
+  for(let k = 1; k < steps.length; k++) tc.teachAct('run-next');
+  rh = tb();
+  T('step by step to the last, which offers Finish; the minutes are the plan\'s, with no clock counting down',
+    rh.indexOf('Step ' + steps.length + ' of ' + steps.length) !== -1 && /data-act="run-exit">Finish/.test(rh) && !/remaining|countdown|\d+:\d\d/.test(rh));
+  tc.teachAct('run-exit');
+  T('leaving it returns to the lesson', tc.teach.view === 'lessons');
+  const pickClass = v => tc.onTeachChange({ target: { value: v, getAttribute: n => n === 'data-change' ? 'class' : null } });
+  tc.teachAct('plan-save');
+  const saidSaved = /Saved for this visit only/.test(tb());
+  pickClass(tc.PROTO_CLASS_ID);
+  T('switching class clears a notice about the other class\'s draft', saidSaved && tc.teach.notice === '' && tb().indexOf('teach-notice') === -1 &&
+    tc.teach.classId === tc.PROTO_CLASS_ID && tc.teach.view === 'lessons');
+  tc.teachAct('run');
+  pickClass(tc.DEMO_CLASS.id);
+  T('switching class while teaching a lesson goes to Today, not to a lesson of the other class', tc.teach.view === 'today' && tc.teach.classId === tc.DEMO_CLASS.id);
+  tc.teachAct('report', 'demo-01');
+  const rp = tb(), ri = t => rp.indexOf(t), snapId = tc.teachSnapshot().id;
+  T('the report keeps the child, the period, the audience and the preview together', ri('id="repChild"') < ri('Reporting period') &&
+    ri('Reporting period') < ri('id="reportSheet"') && ri('name="repAud"') < ri('id="reportSheet"'));
+  T('exporting this report is apart from downloading the whole class\'s evidence, which says it is the whole class',
+    ri('Print or save this report as PDF') < ri('class-export') && /one row for each of the 20 children in Willow class, not only Rowan/.test(rp) &&
+    ri('data-act="csv"') > ri('class-export'));
+  T('snapshot identifiers sit in the report\'s details, not in its explanation', ri(snapId) > ri('data-keep="report-details"') && ri('data-keep="report-details"') !== -1);
   key(tw, 'Escape'); tc.__flush();
   T('Escape leaves the workspace for the sushi bar\'s door', !isOpen('teachOverlay') && tc.learn.stage === 'entrance');
   T('no errors in the workspace', tw.errors.length === 0, tw.errors.slice(0, 2).join(' | '));
+
+  sub('prepared pieces, a visible move, and pictures for every tool');
+  const pa = learnApp(), px = pa.ctx, pdoc = pa.dom.document;
+  goIn(pa, 'kid-04');
+  px.learnKnife();
+  T('after one cut there is one prepared slice and the rest of the roll', px.piecesOf(px.roll).length === 2 && px.pieceReady(0) && !px.pieceReady(1));
+  T('the rest of the roll is not a piece: it stays on the board, and the knife is shown instead', px.platePiece(1) === false && px.platedCount() === 0 &&
+    said(pa) === 'Slice a piece off the roll first.');
+  T('the plate button takes the prepared slice', px.plateNext() === true && px.platedCount() === 1 && px.pieces[0].plate === 1);
+  T('with only the roll left, it asks for slicing and never moves the roll', px.plateNext() === false && px.platedCount() === 1 &&
+    said(pa) === 'Slice a piece off the roll first.');
+  T('a moved piece is marked where it lands, for a moment', !!px.learn.landed && px.learn.landed.index === 0);
+  advance(pa, px.LEARN_TIMING.plateHopMs + px.LEARN_TIMING.landedMs + 100);
+  T('the mark fades, and the piece has arrived: nothing keeps frames running', !px.learn.landed && px.pieces[0].pt === 1 && !px.platesMoving() && !px.learnAnimating());
+  advance(pa, 3000);
+  T('three seconds on it is still exactly where it landed (it used to bob on the plate and keep frames running)', px.pieces[0].pt === 1 && !px.platesMoving());
+  T('no quantity can run short: one roll always gives six prepared pieces', makeSet(pa, 6) === 6 && px.pieces.every((p, i) => px.pieceReady(i)) &&
+    makeSet(pa, 5) === 5 && makeSet(pa, 1) === 1);
+  const qa = learnApp(), qx = qa.ctx;
+  goIn(qa, 'kid-03');
+  for(let k = 0; k < 5; k++) qx.learnKnife();
+  advance(qa, 200);
+  for(let g = 0; g < 6; g++){
+    const i = qx.pieces.findIndex((p, k) => p && !p.plate && qx.pieceReady(k)), c0 = qx.pieceCenter(i);
+    pe(qa, 'pointerdown', c0.x, c0.y); pe(qa, 'pointerup', c0.x, c0.y);
+    advance(qa, 60);
+  }
+  T('quick taps along the row each put one more piece on the plate (a tap used to grab the piece still hopping back)',
+    qx.platedCount() === 6 && qa.errors.length === 0, String(qx.platedCount()));
+  const icon = id => pdoc.getElementById(id).innerHTML;
+  T('the tools are pictures, named for assistive technology: a piece going up to the plate, a piece back to the board, Chef Capy for help',
+    /<ellipse/.test(icon('dockAdd')) && /<rect/.test(icon('dockRemove')) && /<rect/.test(icon('dockHelp')) &&
+    icon('dockAdd').indexOf('M8 3.6v8.8M3.6 8h8.8') === -1 && ['dockAdd:Put one piece on the plate', 'dockRemove:Take one piece back to the board',
+    'dockHelp:Ask Chef Capy for help'].every(x => new RegExp('id="' + x.split(':')[0] + '"[^>]*aria-label="' + x.split(':')[1] + '"').test(H.readApp())));
+  T('the order is the customer\'s request: its portrait, with the maki in a speech bubble pointing at it',
+    /bubble-paper/.test(icon('orderCard')) && /cat-face/.test(icon('orderCard')) && (icon('orderCard').match(/class="order-pic"/g) || []).length === px.learn.item.quantity);
+  T('the bell is the one filled, primary button once there is something to serve', /\.dock-serve:not\(:disabled\)\{ background: var\(--done-mark\)/.test(css()));
+  const da = learnApp(), dx = da.ctx;
+  dx.chooseChild('kid-05');
+  advance(da, dx.LEARN_TIMING.enterMs + 40);
+  const DEMO = dx.DEMO_STEPS, pressAt = DEMO.findIndex(s => s.act === 'button') + 1;
+  const lead = Number((/\.ghost-hand\{[^}]*transition: transform ([\d.]+)s/.exec(css()) || [])[1]) * 1000;
+  const where = s => s.act === 'bell' ? 'dockServe' : s.button ? s.button : s.piece !== undefined ? 'piece' + s.piece : 'swipe' + (s.swipe !== undefined ? s.swipe : s.u);
+  T('the demonstration\'s hand reaches each place before Chef Capy acts there (a press used to be over before the gliding hand arrived)',
+    lead > 0 && DEMO.every((s, k) => {
+      if(['swipe', 'cut', 'plate', 'button', 'bell'].indexOf(s.act) === -1) return true;
+      const prev = DEMO.slice(0, k).reverse().find(p => p.act !== 'say');
+      if(s.act === 'cut') return !!prev && prev.act === 'swipe' && prev.u === s.u && s.at - prev.at > 0 && s.at - prev.at < lead;
+      return !!prev && prev.act === 'point' && where(prev) === where(s) && s.at - prev.at >= lead;
+    }), 'lead ' + lead);
+  for(let i = 0; i < 600 && !(dx.learn.demo && dx.learn.demo.next >= pressAt); i++) advance(da, 20);
+  T('the demonstration taps one slice onto the plate and sends the other with the plate button, shown pressed',
+    dx.platedCount() === 2 && da.dom.document.getElementById('dockAdd').classList.contains('pressed') && dx.piecesOf(dx.roll).length === 3 &&
+    dx.pieceReady(0) && dx.pieceReady(1) && !da.dom.document.getElementById('ghostHand').hidden);
+  for(let i = 0; i < 400 && dx.learn.demo; i++) advance(da, 50);
+  T('and the button looks ordinary again once it is over', !da.dom.document.getElementById('dockAdd').classList.contains('pressed'));
+
+  sub('the way a child moves food never changes what is recorded');
+  const serveBy = (a, how) => {
+    const x = a.ctx;
+    waitOrder(a);
+    const q = x.learn.item.quantity;
+    for(let k = 0; k < 8 && x.piecesOf(x.roll).length < Math.min(q + 1, x.roll.n) && x.countCutTarget(); k++) x.learnKnife();
+    for(let g = 0; g < 12 && x.platedCount() < q; g++){
+      if(how === 'tap'){
+        const i = x.pieces.findIndex((p, k) => p && !p.plate && x.pieceReady(k)), c0 = x.pieceCenter(i);
+        pe(a, 'pointerdown', c0.x, c0.y); pe(a, 'pointerup', c0.x, c0.y);
+      } else if(how === 'key') key(a, '+');
+      else x.plateNext();
+      advance(a, 60);
+    }
+    if(how === 'key') key(a, 'Enter'); else x.learnServe();
+    const r = x.learn.session.events.filter(e => e.type === 'response').pop();
+    for(let i = 0; i < 100 && x.game.phase !== 'ready'; i++) advance(a, 50);
+    return { q: q, r: r };
+  };
+  const ma = learnApp(), mr = learnApp({ reducedMotion: true });
+  goIn(ma, 'kid-01'); goIn(mr, 'kid-02');
+  const byTap = serveBy(ma, 'tap'), byButton = serveBy(ma, 'button'), byKey = serveBy(mr, 'key');
+  const shape = x => Object.keys(x.r).sort().join();
+  T('taps, the plate button, keys and reduced motion all record the same answer the same way', [byTap, byButton, byKey].every(x =>
+    x.r && x.r.answer === x.q && x.r.correct === true && x.r.support === 'none' && x.r.attempt === 1) &&
+    shape(byTap) === shape(byButton) && shape(byButton) === shape(byKey) && ma.errors.length === 0 && mr.errors.length === 0,
+    [byTap, byButton, byKey].map(x => x.q + ':' + (x.r && x.r.answer)).join(' '));
 
   sub('phones and tablets, either way up; reduced motion; the device\'s own voice or none');
   [{ width: 844, height: 390, dpr: 3, side: 'right' }, { width: 390, height: 844, dpr: 3, side: 'bottom' },

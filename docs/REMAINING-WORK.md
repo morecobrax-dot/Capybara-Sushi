@@ -4,7 +4,8 @@ None of this is done. It is listed so nothing here reads as finished.
 
 ## For a real classroom: the multi-device milestone (not built)
 
-0.8.0 is a single-device development prototype. Before any real class uses
+The learning prototype (0.8.0, 0.9.0) is a single-device development
+prototype. Before any real class uses
 it, it needs a small authenticated backend, which has **not** been chosen,
 provisioned or paid for. What that backend must do, whatever it is:
 
@@ -53,8 +54,9 @@ provisioned or paid for. What that backend must do, whatever it is:
 - Only English. Chef Capy speaks only with an English voice installed on
   the device; where there is none it is silent and the picture carries the
   order. Which devices have one was not checked.
-- The teacher workspace has no live teaching view and does not distribute
-  plans: "publish" keeps a fixed copy on this device.
+- The teacher workspace does not distribute plans: "publish" keeps a fixed
+  copy on this device. Since 0.9.0 a lesson can be stepped through on the
+  same device; nothing in it is live from children's devices.
 - In counting rounds the plate waits behind the board on every screen, and
   the order is on the dock's card; the cat's bubble is not drawn.
 - **In landscape, on tablets, desktops and phones alike, the cat has no seat in counting rounds**:
@@ -66,6 +68,20 @@ provisioned or paid for. What that backend must do, whatever it is:
 - The leftover piece of a roll stays on the board until the next customer
   comes; at a round's end it waits under the panel.
 - `?tune`, Backup & data and What's new are still developer routes.
+
+## Known limits (0.9.0: clearer counting and teacher screens)
+
+- Every clarity change is an untested assumption until someone tries it:
+  that the portrait and bubble read as the customer asking, that the
+  pictured tools are understood without plus and minus, that the landing
+  ring helps a child follow a piece, that "slice a piece off first" is
+  clear, and that teachers find the reordered screens easier. The try-out
+  guide ([TRY-OUT.md](TRY-OUT.md)) is how to start finding out.
+- In landscape the cat still has no seat; the order card stands for it.
+- Which disclosures a teacher opened is remembered only while the app is
+  open, never stored.
+- The teaching view keeps no time and records nothing; it is a reading
+  aid for the lesson plan, not a classroom tool.
 
 ## From the template's new-product steps
 

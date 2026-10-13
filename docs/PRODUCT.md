@@ -22,7 +22,9 @@ are superseded, not done.
 evidence → teacher summary → lesson draft → report — as a **single-device
 development prototype** with fictional profiles. It has no sign-in, no
 backend and no syncing between devices, and nothing in it is approved by an
-educator or tried with children yet.
+educator or tried with children yet. 0.9.0 makes that slice clearer for a
+child and for a teacher, and readies it for a supervised hands-on try-out
+([TRY-OUT.md](TRY-OUT.md)).
 
 ## What it was first (0.1.0–0.7.0)
 
@@ -77,8 +79,9 @@ From 0.8.0, the specification's release sequence:
 - **Phase A — Playable learning foundation.** The sushi-bar entrance, one
   Slice & Serve skill family, teacher preview, accessible interactions and a
   trustworthy event stream; supervised usability sessions with children.
-  **(In progress: 0.8.0 builds counting 1–5 on one device. Educator review,
-  device QA and sessions with children are still to come.)**
+  **(In progress: 0.8.0 builds counting 1–5 on one device; 0.9.0 makes it
+  clearer and ready for a hands-on try-out. Educator review, device QA and
+  sessions with children are still to come.)**
 - **Phase B — Teacher classroom loop.** Roster, classroom devices, Today,
   class insights, student profiles, observations and one reviewed lesson
   template; identity isolation, event sync, honest denominators. **(0.8.0
@@ -87,7 +90,8 @@ From 0.8.0, the specification's release sequence:
 - **Phase C — Planning and reports.** Deterministic drafts, editable groups,
   constraints, publication, the live teaching view, teacher and family
   reports, PDF/CSV. **(0.8.0 has a single-device prototype of the draft,
-  revisions and reports; no live teaching view.)**
+  revisions and reports; 0.9.0 adds a step-by-step teaching view on the same
+  device, with nothing live from classroom devices.)**
 - **Phase D — Complete five-station V1.** Bento Builder, Pattern Parade,
   Shape Kitchen and Sound Kitchen, each after content, access, rubric and
   lesson review. **(Not started.)**
@@ -146,6 +150,46 @@ for the whole product.
 - **Kept out.** The other four stations, numerals, sign-in, classroom
   devices, sync, a live teaching view, "With support" (until a rubric is
   reviewed), and any claim that this is ready for a classroom.
+
+## 0.9.0 — clearer counting and teacher screens (Phase A, in progress)
+
+The same slice, made clearer and ready for a supervised try-out with the
+fictional profiles. Nothing was approved by an educator, played by a child
+or tried on a real device in it.
+
+- **The next action is obvious.** The dock reads top to bottom as the job
+  does: the customer's order, the tools, then the bell, the one filled
+  button once something can be served. The tools are coloured pictures — a
+  knife, Chef Capy for help, a piece going up to the plate, a piece going
+  back down to the board — not only plus and minus.
+- **Only a slice goes on the plate.** The uncut part of the roll stays on
+  the board as the roll; tapping it, or the plate button with no slice
+  ready, points at the knife ("Slice a piece off the roll first"). Plated
+  pieces and the roll beside them are the same roll, so nothing is
+  duplicated or replenished, and one roll always gives six pieces.
+- **A visible move.** A piece hops between the board and the plate more
+  slowly, and a soft ring marks where it landed (at once, without motion,
+  with reduced motion). A tap on a plated piece sends it back.
+- **The order is the customer's request.** The order card is the cat's
+  portrait with a speech bubble holding the maki; the same cat is pleased,
+  with a heart, when the plate arrives.
+- **The demonstration shows both ways.** Chef Capy taps one slice onto the
+  plate and sends the other with the plate button, shown pressed, then
+  rings the bell; the hand reaches each place before it acts.
+- **Teacher screens are easier to scan.** One short label, "Local prototype
+  · Fictional profiles", and the fuller explanation in a panel; Today leads
+  with the lesson, then coverage and up to three next steps, with the rule's
+  identifiers in a disclosure; a child's profile leads with the objective,
+  the evidence now and the next useful observation, first answers and
+  supported retries apart, and every order behind a disclosure; a lesson
+  reads as a preview with the teaching sequence as its body, its sections
+  open to edit, and a step-by-step teaching view; Reports keeps the child,
+  period, audience and preview together, with "print this report" apart
+  from "download the class's evidence". Opened disclosures stay open.
+- **The DEMO class is derived, not forced.** Its statuses come from its
+  made-up events alone; "With support" stays unassigned.
+- **A try-out guide.** [TRY-OUT.md](TRY-OUT.md) walks an adult through the
+  whole loop and leaves space for notes.
 
 The phase sections that follow describe the slicing game as it was built.
 
@@ -351,3 +395,7 @@ cast card stays partial: no other animals, personalities or outfits yet.
   changed). The 0.7.0 endless slicing remains as the developer route
   `?free`. No backend was chosen or provisioned; what one must do is in
   [REMAINING-WORK.md](REMAINING-WORK.md).
+- 0.9.0: only pieces sliced off the roll can be plated; the order card is
+  the customer's portrait and speech bubble; the teacher screens put the
+  action and the current evidence first and keep identifiers and rows in
+  disclosures. No stored data changed shape.

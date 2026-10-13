@@ -453,9 +453,10 @@ prototype. Each carries its reason; keep the reason with the rule.
     draws the maki from the food's own tokens in a bubble with a tail to the
     cat, with no words and no clock of its own; the order is said through
     `#playStatus` and on the stage's label. In the counting rounds the order
-    card in the dock pictures the quantity instead — that many maki in a
-    row, a dice pattern or scattered, never a numeral — and the bubble is
-    not drawn.
+    card in the dock pictures the request instead: the same cat's portrait
+    with a speech bubble holding that many maki — in a row, a dice pattern
+    or scattered, never a numeral (`orderCardSvg()`) — pleased, with a
+    heart, when its plate arrives; the stage's bubble is not drawn.
 
 ## Chef Capy's learning prototype (0.8.0)
 
@@ -523,6 +524,38 @@ The product direction is [docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md).
     away but its side stays kept, so nothing on the stage moves.
 72. **The endless slicing is the developer route `?free`.** Children meet
     the counting rounds; the engine's own contracts (20–35) run `?free`.
+
+## Clearer counting and teacher screens (0.9.0)
+
+73. **Only a slice goes on the plate.** `pieceReady(i)`: a piece with a free
+    guide inside it is the rest of the roll, not a prepared piece, unless
+    the roll is complete. A tap on it, or the plate button with no slice
+    ready, refuses and points at the knife; nothing is duplicated or
+    replenished, and one roll always gives six pieces, more than any order
+    plus one. A plated piece hops (`LEARN_TIMING.plateHopMs`) and a ring
+    marks where it landed (`learn.landed`); with reduced motion it is
+    simply there, ring and all. The hop must come to rest exactly at its
+    end (`stepPlates`: a piece at its target used to step away and back,
+    and frames never stopped), and a plated piece is only tappable once
+    most of the way there, or a quick second tap sent it back mid-hop.
+    Contract 36 holds both.
+74. **The demonstration's hand arrives before it acts.** `.ghost-hand`
+    glides (0.45 s), so every swipe, tap, press and the bell in
+    `DEMO_STEPS` has a `point` step to the same place at least that long
+    before; a swipe cuts as it crosses. The dock is disabled during it, but
+    the one button pressed (`pressLook()`) shows at full strength. The tool
+    icons are coloured pictures (`dockIcons()`); plus and minus are never
+    the only cue.
+75. **Teacher screens lead with the action and the current evidence.** One
+    short label on every screen ("Local prototype · Fictional profiles"),
+    the DEMO badge, and the full explanation once, in the About panel.
+    Identifiers, rule criteria and event rows live in disclosures
+    (`disc()`), whose open state survives a redraw (`teach.open`). The
+    teaching view (`teachRun()`) shows one step, its words and the next,
+    with no clock. A report's "print or save" is this child's; the class
+    CSV says it is every child. Switching class clears a notice about the
+    other class. The DEMO class's statuses come from its events alone
+    (`demoEvents()` sets dates, counts and probabilities, never a result).
 
 ## Development
 

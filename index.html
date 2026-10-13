@@ -884,8 +884,10 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
   right: calc(var(--inset-right) + var(--space-sm)); width: var(--dock-size, 132px); flex-direction: column;
   justify-content: center;
 }
-/* Beside the stage the tools stay square, and the bell sits under them. */
-.dock[data-side="right"] .dock-tools{ flex: 0 0 auto; grid-auto-rows: auto; }
+/* Three things in order of importance: the customer's request at the top,
+   the bell at the bottom, and the quieter tools between them. Beside the
+   stage the tools stay square and small; the bell spans the dock. */
+.dock[data-side="right"] .dock-tools{ flex: 0 0 auto; grid-auto-rows: auto; grid-template-columns: repeat(2, minmax(var(--touch-min), 64px)); justify-content: center; }
 .dock[data-side="right"] .dock-btn{ aspect-ratio: 1 / 1; }
 .dock[data-side="right"] .dock-serve{ min-height: 88px; }
 .dock[data-side="bottom"]{
@@ -896,12 +898,13 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
   flex: 0 0 auto; padding: 0; margin: 0; cursor: pointer;
   background: none; border: none; border-radius: var(--radius-lg);
 }
-.dock[data-side="right"] .order-card{ width: 100%; aspect-ratio: 6 / 5; }
-.dock[data-side="bottom"] .order-card{ height: 100%; aspect-ratio: 6 / 5; }
+.dock[data-side="right"] .order-card{ width: 100%; aspect-ratio: 1 / 1; }
+.dock[data-side="bottom"] .order-card{ height: 100%; aspect-ratio: 1 / 1; }
 .order-card:disabled{ cursor: default; }
 .order-svg{ display: block; width: 100%; height: 100%; }
-.card-paper{ fill: var(--order-bubble); stroke: var(--order-edge); stroke-width: 1.6; }
-.card-tail{ fill: var(--order-edge); }
+.card-paper{ fill: var(--dock-surface); stroke: var(--dock-edge); stroke-width: 1.6; }
+.bubble-paper{ fill: var(--order-bubble); stroke: var(--order-edge); stroke-width: 1.8; stroke-linejoin: round; }
+.cat-heart{ fill: var(--chef-blush); }
 .maki-side{ fill: var(--nori-dark); }
 .maki-nori{ fill: var(--nori); }
 .maki-rice{ fill: var(--rice); }
@@ -920,9 +923,25 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
   color: var(--dock-ink); background: var(--dock-surface);
   border: 2px solid var(--dock-edge); border-radius: var(--radius-lg);
 }
+.dock-btn{ border-width: 1.5px; }
 .dock-serve{ flex: 0 0 auto; min-height: 72px; border: 3px solid var(--done-mark); color: var(--done-mark); border-radius: var(--radius-xl); }
+.dock-serve:not(:disabled){ background: var(--done-mark); color: var(--order-bubble); }
 .dock[data-side="bottom"] .dock-serve{ min-width: 92px; }
 .dock-btn:disabled, .dock-serve:disabled{ opacity: 0.4; cursor: default; }
+/* During the demonstration the dock is disabled; the one button Chef Capy
+   presses shows at full strength, so the press is seen. */
+.dock-btn.pressed{ border-color: var(--done-mark); background: var(--order-bubble); }
+.dock-btn.pressed:disabled{ opacity: 1; }
+.ic-nori{ fill: var(--nori); }
+.ic-rice{ fill: var(--rice); }
+.ic-salmon{ fill: var(--salmon); }
+.ic-plate{ fill: var(--plate-glaze); stroke: var(--dock-ink); stroke-width: 1; }
+.ic-board{ fill: var(--board-wood); stroke: var(--dock-ink); stroke-width: 1; }
+.ic-arrow{ fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ic-hat{ fill: var(--chef-hat); stroke: var(--dock-ink); stroke-width: 1; }
+.ic-fur{ fill: var(--chef-fur); }
+.ic-snout{ fill: var(--chef-fur-dark); }
+.ic-eye{ fill: var(--chef-eye); }
 .nudge{ animation: dock-nudge 0.32s var(--ease); }
 @keyframes dock-nudge{ 25%{ transform: translateX(-4px); } 75%{ transform: translateX(4px); } }
 .demo-skip{
@@ -1029,10 +1048,6 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
 }
 .teach .sheet{ max-width: 1040px; background: var(--teach-paper); }
 .teach .sheet-scroll{ line-height: var(--lh-body); }
-.teach-banner{
-  padding: var(--space-md); margin-bottom: var(--space-md); border-radius: var(--radius-md);
-  background: var(--teach-warn-soft); border: 1px solid var(--teach-border); font-size: var(--fs-support); color: var(--text);
-}
 .demo-badge{
   display: inline-block; margin-left: var(--space-xs); padding: 0 var(--space-sm); border-radius: var(--radius-pill);
   background: var(--st-fresh-check); color: var(--teach-raised); font-weight: 700; font-size: var(--fs-meta);
@@ -1130,6 +1145,55 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
 .report-sheet h3{ font-size: var(--fs-section); margin: var(--space-xs) 0; }
 .report-sheet h4{ font-size: var(--fs-title); margin: var(--space-lg) 0 var(--space-xs); }
 .report-sheet p{ margin: 0 0 var(--space-sm); }
+/* One short, persistent prototype label; the full explanation sits behind
+   "About this prototype". */
+.teach-statusbar{ display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.proto-chip, .warn-chip{
+  display: inline-block; padding: 2px var(--space-sm); border-radius: var(--radius-pill); border: 1px solid var(--border);
+  background: var(--teach-warn-soft); font-size: var(--fs-meta); font-weight: 700; color: var(--text);
+}
+.warn-chip{ border-left: 4px solid var(--danger); }
+.teach-statusbar .demo-badge{ margin-left: 0; }
+.teach-statusbar .teach-drawer{ flex: 1 1 auto; margin: 0; padding: 0; background: none; border: none; }
+.teach-statusbar .teach-drawer[open]{ flex-basis: 100%; padding: 0 var(--space-md) var(--space-sm); background: var(--surface); border: 1px solid var(--border); }
+.teach-statusbar .teach-drawer summary{ font-size: var(--fs-meta); color: var(--accent); text-decoration: underline; }
+.teach-classbar select{ width: auto; max-width: 22em; }
+.teach-drawer{ margin-bottom: var(--space-md); }
+.teach-drawer[open] summary{ margin-bottom: var(--space-sm); }
+.teach-objective{ font-size: var(--fs-support); color: var(--text-dim); margin: 0 0 var(--space-md); }
+.lesson-now{ border-left: 4px solid var(--accent); }
+.profile-lead p{ margin: 0 0 var(--space-md); }
+.lesson-facts{ font-size: var(--fs-support); font-weight: 600; margin: 0 0 var(--space-sm); }
+.lesson-seq{ list-style: none; margin: 0 0 var(--space-xs); padding: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.lesson-seq li{
+  display: grid; grid-template-columns: 6.5em 1fr; gap: var(--space-md);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-md);
+}
+.seq-time{ font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+.seq-body{ display: flex; flex-direction: column; gap: var(--space-xs); font-size: var(--fs-support); min-width: 0; }
+.seq-body strong{ font-size: var(--fs-title); }
+.lesson-part textarea{ width: 100%; max-width: none; line-height: var(--lh-body); }
+/* The teaching view: one step at a time, large enough to read across a room. */
+.run-top{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.run-steps{ list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-xs); margin: var(--space-md) 0; padding: 0; }
+.run-steps li{ padding: 2px var(--space-sm); border-radius: var(--radius-pill); border: 1px solid var(--border); font-size: var(--fs-meta); color: var(--text-dim); }
+.run-steps li.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); font-weight: 700; }
+.run-title{ font-size: var(--fs-display); margin: var(--space-xs) 0 var(--space-md); }
+.run-title:focus{ outline: none; }
+.run-detail{ font-size: var(--fs-title); }
+.run-script{
+  margin: var(--space-md) 0; padding: var(--space-lg); border-radius: var(--radius-md);
+  background: var(--surface); border-left: 4px solid var(--accent); font-size: var(--fs-section); line-height: var(--lh-body);
+}
+.run-script p{ margin: 0; white-space: pre-line; }
+.run-group{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-sm); }
+.run-group p{ margin: 0 0 var(--space-xs); }
+.run-nav{ display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-sm); margin-top: var(--space-xl); }
+/* "Previous step" on the first step and a blocked "Publish" must look unavailable. */
+#teachBody .btn-secondary:disabled{ opacity: 0.45; cursor: not-allowed; }
+.report-pick{ display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 var(--space-lg); }
+.report-export{ margin: var(--space-md) 0; }
+.class-export{ margin-top: var(--space-xl); }
 
 /* Print / Save as PDF shows the report alone. */
 @media print{
@@ -1140,9 +1204,8 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
     position: static !important; display: block !important; overflow: visible !important; height: auto !important;
     max-height: none !important; animation: none !important; box-shadow: none !important; background: var(--teach-raised) !important;
   }
-  body.printing-report #teachOverlay .page-topbar, body.printing-report .teach-banner, body.printing-report .teach-classbar,
-  body.printing-report .teach-nav, body.printing-report .teach-notice, body.printing-report .teach-h,
-  body.printing-report .report-controls{ display: none !important; }
+  body.printing-report #teachOverlay .page-topbar, body.printing-report #teachBody > :not(#teachMain),
+  body.printing-report #teachMain > :not(#reportSheet){ display: none !important; }
   body.printing-report .report-sheet{ border: none; padding: 0; max-width: none; }
 }
 @media (max-width: 560px){
@@ -1201,7 +1264,7 @@ html, body{ height: 100%; overflow: hidden; overscroll-behavior: none; }
         <button class="dock-btn" id="dockKnife" type="button" aria-label="Cut the roll" onclick="learnKnife()" disabled></button>
         <button class="dock-btn" id="dockHelp" type="button" aria-label="Ask Chef Capy for help" onclick="learnHelp()" disabled></button>
         <button class="dock-btn" id="dockAdd" type="button" aria-label="Put one piece on the plate" onclick="plateNext()" disabled></button>
-        <button class="dock-btn" id="dockRemove" type="button" aria-label="Take one piece back" onclick="unplateLast()" disabled></button>
+        <button class="dock-btn" id="dockRemove" type="button" aria-label="Take one piece back to the board" onclick="unplateLast()" disabled></button>
       </div>
       <button class="dock-serve" id="dockServe" type="button" aria-label="Ring the bell to serve the order" onclick="learnServe()" disabled></button>
     </div>
@@ -1516,6 +1579,33 @@ const APP_FILES = [
    New products replace this array wholesale; this one did at 0.1.0.
    ========================================================= */
 const APP_UPDATES = [
+  {
+    id: 'v0-9-0',
+    version: '0.9.0',
+    title: 'Clearer counting and teacher screens',
+    date: '2026-10-13',
+    summary: 'The counting prototype made easier to follow, for a child and for a teacher, and ready for a supervised try-out with pretend profiles. ' +
+             'Only slices cut off the roll go on the plate, the order is the customer\'s own picture request, and the teacher screens put the next action ' +
+             'and the current evidence first. Still a development prototype on one device; nothing here has been tried with children yet.',
+    newFeatures: [
+      'The order card shows the customer asking, with the maki in its speech bubble; the same cat is pleased when the plate arrives',
+      'A step-by-step teaching view for a lesson: one step, its words and the next',
+      'A try-out guide for grown-ups, with space for notes'
+    ],
+    improvements: [
+      'Only a slice cut off the roll can go on the plate; tapping the rest of the roll points at the knife',
+      'A piece hops to the plate where it can be followed, and a soft ring shows where it landed',
+      'The tools are pictures: the knife, Chef Capy for help, a piece going up to the plate and back down to the board',
+      'Chef Capy\'s demonstration shows a tap and the plate button, with the hand arriving before each action',
+      'Teacher screens: one short prototype label, the lesson action first, the evidence now on a child\'s profile, details tucked behind disclosures',
+      'Reports keep this child\'s report apart from downloading the whole class\'s evidence'
+    ],
+    fixes: [
+      'Pieces on the plate now come fully to rest instead of moving very slightly forever, so the screen stops redrawing',
+      'A quick second tap no longer sends back a piece that is still on its way to the plate',
+      'Switching class no longer leaves a message about the other class on screen'
+    ]
+  },
   {
     id: 'v0-8-0',
     version: '0.8.0',
@@ -7122,7 +7212,7 @@ function classSnapshot(cls, events, cutoffMs){
              status: s.status, independent: s.independent, coverage: s.coverage, supported: s.supported,
              assistedOnly: s.assistedOnly, interrupted: s.interrupted, modeled: s.modeled, repeats: s.repeats, tried: s.tried,
              sessions: s.sessions, dates: s.dates, lastDate: s.lastDate, prior: s.prior, outsideCalendar: s.outsideCalendar,
-             clock: s.clock, olderOrders: s.olderOrders, recent: s.recent.slice(0, 12) };
+             clock: s.clock, olderOrders: s.olderOrders, recent: s.recent.slice(0, 40) };
   });
   const counts = {};
   STATUS_ORDER.forEach(k => { counts[k] = 0; });
@@ -7146,8 +7236,11 @@ function demoEvents(){
   const out = [], cls = DEMO_CLASS, r = seeded(0x51A7E5);
   /* 13:30 UTC is 9:30 in New York in October. */
   const at = (date, k) => Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), 13, 30) + k * 90000;
+  /* Each row only sets the dates, how many orders and how likely a right
+     first answer is; nothing is forced. Every child's status comes from the
+     rule, applied to the events drawn. */
   const plans = [
-    ['independent', ['2026-10-08', '2026-10-09'], 6, [0.84, 1]],   // Rowan: 11 of 12, as in the specification's example
+    ['independent', ['2026-10-08', '2026-10-09'], 6, [0.84, 1]],
     ['independent', ['2026-10-06', '2026-10-08'], 7, [0.86, 1]], ['independent', ['2026-10-07', '2026-10-09'], 7, [0.86, 1]],
     ['independent', ['2026-10-05', '2026-10-08'], 6, [0.84, 1]],
     ...Array.from({ length: 11 }, (_, i) => ['building', i % 2 ? ['2026-10-06', '2026-10-08'] : ['2026-10-07', '2026-10-09'], 6 + (i % 3 === 0 ? 1 : 0), [0.42, 0.72]]),
@@ -7172,12 +7265,12 @@ function demoEvents(){
         const itemId = sid + '.i' + i, arrangement = ['row', 'dice', 'scatter'][(i + si) % 3];
         ev('item.start', { itemId: itemId, round: Math.floor(i / 5), quantity: q, arrangement: arrangement });
         const want = p[3][0] + (p[3][1] - p[3][0]) * r();
-        const right = idx === 0 ? !(si === 0 && i === 3) : r() < want;
+        const right = r() < want;
         const first = right ? q : (r() < 0.6 ? q + 1 : Math.max(1, q - 1));
         ev('response', { itemId: itemId, attempt: 1, answer: first, correct: first === q, support: 'none' });
         if(first !== q){
           ev('support', { itemId: itemId, level: 'count-together', reason: 'after-incorrect' });
-          const fixed = idx === 0 || r() < (p[0] === 'building' ? 0.85 : 0.95);
+          const fixed = r() < (p[0] === 'building' ? 0.85 : 0.95);
           const second = fixed ? q : q + 1;
           ev('response', { itemId: itemId, attempt: 2, answer: second, correct: second === q, support: 'count-together' });
           if(second !== q){
@@ -7500,8 +7593,10 @@ function evidenceCsv(snap, opts){
    child ends it, so no event can ever change hands. A teacher's preview
    plays exactly the same rounds and records nothing. */
 const FREE_ROUTE = /[?&]free(=|&|$)/.test(String((typeof location !== 'undefined' && location.search) || ''));
-const LEARN_TIMING = Object.freeze({ enterMs: 650, enterReducedMs: 250, plateHopMs: 240, helpStepMs: 650, helpTailMs: 500,
-                                     spotsMs: 900, modelStepMs: 450, demoGap: 0 });
+/* A piece's hop between the board and the plate is slow enough to follow
+   with the eye; a soft ring then marks where it landed. */
+const LEARN_TIMING = Object.freeze({ enterMs: 650, enterReducedMs: 250, plateHopMs: 420, landedMs: 700, helpStepMs: 650, helpTailMs: 500,
+                                     spotsMs: 900, modelStepMs: 450, pressMs: 350, demoGap: 0 });
 const learn = {
   cls: null,
   store: 'unknown',          // unknown (nothing kept yet) | saved | memory | unreadable | refused
@@ -7515,6 +7610,7 @@ const learn = {
   spots: false,              // the plate's rings are showing
   litPiece: -1,              // the piece being counted
   ringSpots: [],             // where the rings stand on the plate
+  landed: null,              // the piece that just moved, and how long ago: { index, t }
   demo: null,                // Chef Capy's demonstration under way
   enterTimer: 0,
   dockOn: false,             // the dock is showing, and its side is kept clear
@@ -7629,6 +7725,7 @@ function beginOrder(){
                  helpAsked: false, shown: false, ended: false, last: rd.pos === rd.items.length - 1, demo: false };
   learn.spots = false;
   learn.litPiece = -1;
+  learn.landed = null;
   renderDock();
 }
 /* The order is presented when the customer has sat down: that is when the
@@ -7659,7 +7756,7 @@ function freshCounter(){
   newVisit();
   calmChef();
   clearFeedback();
-  learn.support = null; learn.spots = false; learn.litPiece = -1;
+  learn.support = null; learn.spots = false; learn.litPiece = -1; learn.landed = null;
 }
 function learnStartRound(){
   const s = learn.session;
@@ -7687,21 +7784,32 @@ function canAct(){
   return game.mode === 'count' && learn.stage === 'play' && game.phase === 'ready' && !isPaused() &&
          !!learn.item && learn.item.shown && !learn.item.ended && !!layout;
 }
+/* A prepared piece is one slice: no uncut guide is left inside it (or the
+   roll is all cut). What is left of the roll is still the roll, not one
+   big piece, so it stays on the board until it is sliced. Every roll can
+   always be sliced into six pieces, so the task can never run short. */
+function pieceReady(i){
+  const p = piecesOf(roll)[i];
+  if(!p) return false;
+  if(rollComplete(roll)) return true;
+  return !freeGuides(roll).some(g => g > p.u0 + 1e-9 && g < p.u1 - 1e-9);
+}
 function platePiece(i, force){
   if(!force && !canAct()) return false;
   const s = pieces[i];
   if(!s || s.plate) return false;
-  if(!roll.cuts.length){
-    /* A whole roll is not a piece: it needs slicing first. */
+  if(!pieceReady(i)){
+    /* The roll, or what is left of it, is not a piece: slice one off first. */
     nudge('dockKnife');
-    announce('Slice the roll first.');
-    kickPiece(0, -SCENE.kickTap);
+    announce(roll.cuts.length ? 'Slice a piece off the roll first.' : 'Slice the roll first.');
+    kickPiece(i, -SCENE.kickTap);
     requestFrame();
     return false;
   }
   s.plate = 1;
   s.plateOrd = ++learn.plateSeq;
   if(!(s.pt > 0)) s.pt = 0;
+  learn.landed = { index: i, t: 0 };
   playPop(1);
   announce('One piece on the plate.');
   renderDock();
@@ -7713,17 +7821,23 @@ function unplatePiece(i, force){
   const s = pieces[i];
   if(!s || !s.plate) return false;
   s.plate = 0;
+  learn.landed = { index: i, t: 0 };
   playPop(0.8);
   announce('One piece back on the board.');
   renderDock();
   requestFrame();
   return true;
 }
-/* The plus and minus buttons and keys: exactly one piece each press. */
+/* The plate buttons and keys: exactly one piece each press, the same move
+   a tap makes, so either way of moving food counts the same. */
 function plateNext(){
   if(!canAct()) return false;
-  const i = pieces.findIndex(p => p && !p.plate);
-  if(i === -1){ nudge('dockKnife'); announce('Every piece is on the plate.'); return false; }
+  const i = pieces.findIndex((p, k) => p && !p.plate && pieceReady(k));
+  if(i === -1){
+    const rest = pieces.findIndex(p => p && !p.plate);
+    if(rest !== -1) return platePiece(rest);              // only the roll is left: slice it first
+    nudge('dockKnife'); announce('Every piece is on the plate.'); return false;
+  }
   return platePiece(i);
 }
 function unplateLast(){
@@ -7733,14 +7847,16 @@ function unplateLast(){
   return unplatePiece(order[order.length - 1]);
 }
 /* A tap on a piece moves it: from the plate back to the board, or from
-   the board onto the plate. Never a cut. */
+   the board onto the plate. Never a cut. A piece still on its way up is
+   not sent back by a quick second tap: only pieces that have (nearly)
+   arrived on the plate answer a tap there. */
 function learnTap(p){
   if(!canAct() || !p) return false;
   const v = layout.view;
   let hit = -1, best = Infinity;
   pieceRects().forEach(r => {
     const s = pieces[r.index];
-    if(!s || !s.plate) return;
+    if(!s || !s.plate || (s.pt || 0) < 0.6) return;
     const b = poseBox(v, r.pose), pad = 10;
     if(p.x < b.x0 - pad || p.x > b.x1 + pad || p.y < b.y0 - pad || p.y > b.y1 + pad) return;
     const d = Math.hypot(p.x - (b.x0 + b.x1) / 2, p.y - (b.y0 + b.y1) / 2);
@@ -7784,6 +7900,7 @@ function learnKnife(){
    piece placed lands on the plate's next spot; the row re-centres gently. */
 function stepPlates(ms){
   if(!layout) return;
+  if(learn.landed){ learn.landed.t += ms; if(learn.landed.t >= LEARN_TIMING.plateHopMs + LEARN_TIMING.landedMs) learn.landed = null; }
   const order = platedOrder(), it = learn.item;
   const lens = order.map(i => { const p = piecesOf(roll)[i]; return (p.u1 - p.u0) * SCENE.rollLen; });
   const want = learn.spots && it ? Math.max(0, it.quantity - order.length) : 0;
@@ -7798,10 +7915,12 @@ function stepPlates(ms){
     if(Math.abs(sp.x - s.sx) > 1e-3 || Math.abs(sp.turn - s.st) > 1e-4) learn.easing = true;
     else { s.sx = sp.x; s.sz = sp.z; s.st = sp.turn; }
   });
+  /* A piece that has arrived stays put: at its target it neither hops back
+     a step nor keeps frames running. */
   const step = ms / LEARN_TIMING.plateHopMs;
   pieces.forEach(s => {
     const target = s.plate ? 1 : 0, cur = s.pt || 0;
-    s.pt = motionReduced() ? target : target > cur ? Math.min(1, cur + step) : Math.max(0, cur - step);
+    s.pt = motionReduced() ? target : cur < target ? Math.min(target, cur + step) : cur > target ? Math.max(target, cur - step) : target;
   });
 }
 function platesMoving(){
@@ -7906,11 +8025,11 @@ function modelStep(){
   const it = learn.item, n = platedCount();
   if(n > it.quantity){ const o = platedOrder(); return unplatePiece(o[o.length - 1], true); }
   if(n === it.quantity) return false;
-  const board = pieces.map((p, i) => i).filter(i => pieces[i] && !pieces[i].plate);
+  const ready = pieces.map((p, i) => i).filter(i => pieces[i] && !pieces[i].plate && pieceReady(i));
   const t = countCutTarget();
-  if(roll.cuts.length && board.length && (board.length >= it.quantity - n || !t)) return platePiece(board[0], true);
+  if(ready.length && (ready.length >= it.quantity - n || !t)) return platePiece(ready[0], true);
   if(t){ commitCut(t.index, t.u, null, 'nice'); return true; }
-  return false;
+  return ready.length ? platePiece(ready[0], true) : false;
 }
 function endSupport(){
   const sp = learn.support;
@@ -7956,7 +8075,7 @@ function syncDock(){
    moving, so it asks for no frames of its own. */
 function phaseBusy(){ return game.phase !== 'ready' && game.phase !== 'round-end'; }
 function learnAnimating(){
-  return game.mode === 'count' && (!!learn.support || !!learn.demo || platesMoving());
+  return game.mode === 'count' && (!!learn.support || !!learn.demo || !!learn.landed || platesMoving());
 }
 
 /* ---------- the round's end: continue or finish ---------- */
@@ -7996,14 +8115,21 @@ function learnFinish(){
 }
 
 /* ---------- Chef Capy shows the task once ---------- */
-/* On the real counter, with a ghost finger: two cuts, two pieces on the
-   plate, the bell. It is never evidence, it can be skipped, and with
-   reduced motion the finger simply appears where it acts. */
+/* On the real counter, with a ghost finger: two slices cut off the roll's
+   end; one tapped onto the plate, the other sent there with the plate
+   button, so both ways of moving food are shown; then the bell. It is
+   never evidence, it can be skipped, and with reduced motion the finger
+   simply appears where it acts. The hand glides (.ghost-hand's transition, 0.45 s), so each place it acts
+   is pointed at first, 600 ms before: the cut, the tap, the press and the
+   bell happen where the hand already is, not while it is still on its way.
+   A swipe glides down across the roll and cuts as it crosses. */
 const DEMO_STEPS = deepFreeze([
   { at: 500, act: 'say', text: 'Watch Chef Capy. Two pieces, please.' },
-  { at: 1300, act: 'cut', u: 2 / 6 }, { at: 2600, act: 'cut', u: 4 / 6 },
-  { at: 3900, act: 'plate', piece: 0 }, { at: 4800, act: 'plate', piece: 1 },
-  { at: 5900, act: 'bell' }
+  { at: 700, act: 'point', swipe: 1 / 6 }, { at: 1300, act: 'swipe', u: 1 / 6 }, { at: 1500, act: 'cut', u: 1 / 6 },
+  { at: 1900, act: 'point', swipe: 2 / 6 }, { at: 2500, act: 'swipe', u: 2 / 6 }, { at: 2700, act: 'cut', u: 2 / 6 },
+  { at: 3100, act: 'point', piece: 0 }, { at: 3700, act: 'plate', piece: 0 },
+  { at: 4300, act: 'point', button: 'dockAdd' }, { at: 4900, act: 'button', piece: 1, button: 'dockAdd' },
+  { at: 5600, act: 'point', button: 'dockServe' }, { at: 6200, act: 'bell' }
 ]);
 function startDemo(){
   learn.stage = 'demo';
@@ -8019,12 +8145,21 @@ function stepDemo(ms){
   const d = learn.demo;
   if(!d || !learn.item || !learn.item.shown || learn.item.ended){ if(d && d.served && game.phase === 'ready') endDemo(); return; }
   d.t += ms;
+  if(d.pressed && d.t >= d.pressed.until){ pressLook(d.pressed.id, false); d.pressed = null; }
   while(d.next < DEMO_STEPS.length && d.t >= DEMO_STEPS[d.next].at){
     const st = DEMO_STEPS[d.next++];
     if(st.act === 'say'){ sayLine(st.text); announce('Chef Capy shows how: two pieces, please.'); }
+    else if(st.act === 'point'){ const e = st.swipe !== undefined ? swipeEnds(st.swipe) : null;
+      ghostAt(st.button ? elementCenter(st.button) : e ? e.a : pieceCenter(st.piece)); }
+    else if(st.act === 'swipe'){ const e = swipeEnds(st.u); if(e) ghostAt(e.b); }
+    else if(st.act === 'button'){
+      ghostAt(elementCenter(st.button));
+      pressLook(st.button, true);
+      d.pressed = { id: st.button, until: d.t + LEARN_TIMING.pressMs };
+      platePiece(st.piece, true);
+    }
     else if(st.act === 'cut'){
       const pcs = piecesOf(roll), i = pcs.findIndex(p => st.u > p.u0 && st.u < p.u1);
-      ghostSwipe(st.u);
       if(i !== -1) commitCut(i, st.u, null, 'nice');
     }
     else if(st.act === 'plate'){ ghostAt(pieceCenter(st.piece)); platePiece(st.piece, true); }
@@ -8033,6 +8168,7 @@ function stepDemo(ms){
 }
 function endDemo(){
   if(!learn.demo) return;
+  pressLook('dockAdd', false);
   learn.demo = null;
   learn.stage = 'play';
   showSkip(false);
@@ -8042,6 +8178,7 @@ function endDemo(){
 function skipDemo(){
   if(!learn.demo) return false;
   learnRecord('demo', { phase: 'skipped' });
+  pressLook('dockAdd', false);
   learn.demo = null;
   showSkip(false);
   ghostHide();
@@ -8192,6 +8329,8 @@ function nudge(id){
   void el.offsetWidth;
   el.classList.add('nudge');
 }
+/* How a dock button looks while Chef Capy's demonstration presses it. */
+function pressLook(id, on){ const b = document.getElementById(id); if(b && b.classList) b.classList.toggle('pressed', !!on); }
 function showSkip(on){ const b = document.getElementById('demoSkip'); if(b) b.hidden = !on; }
 function setPreviewBanner(on){
   const b = document.getElementById('previewBanner');
@@ -8217,13 +8356,13 @@ function ghostAt(p){
   g.hidden = false;
   if(g.style) g.style.transform = 'translate(' + Math.round(p.x) + 'px,' + Math.round(p.y) + 'px)';
 }
-function ghostSwipe(u){
-  if(!layout) return;
+/* Where a demonstrated swipe at u starts (above the roll) and ends (below). */
+function swipeEnds(u){
+  if(!layout) return null;
   const r = pieceRects().find(q => u > q.u0 && u < q.u1);
-  if(!r) return;
-  const x = xAt(r, u), a = toStage(x, layout.top - layout.T * 0.7), b = toStage(x, layout.bot + layout.T * 0.5);
-  ghostAt(a);
-  if(!motionReduced()) setTimeout(() => { if(learn.demo) ghostAt(b); }, 120);
+  if(!r) return null;
+  const x = xAt(r, u);
+  return { a: toStage(x, layout.top - layout.T * 0.7), b: toStage(x, layout.bot + layout.T * 0.5) };
 }
 function ghostHide(){ const g = document.getElementById('ghostHand'); if(g) g.hidden = true; }
 
@@ -8317,13 +8456,21 @@ function makiSvg(cx, cy, r){
          '<rect class="maki-salmon" x="' + (cx - r * 0.3) + '" y="' + (top - ry * 0.3) + '" width="' + (r * 0.6) + '" height="' + (ry * 0.6) +
          '" rx="' + (r * 0.16) + '"/><ellipse class="maki-ring" cx="' + cx + '" cy="' + (top + side * 0.35) + '" rx="' + (r * 1.28) + '" ry="' + (ry * 1.5 + side * 0.4) + '"/></g>';
 }
+/* The customer asking: the cat's portrait at the card's foot, and its
+   request in a speech bubble whose tail points at it. Pleased, the same cat
+   smiles, blushes and shows a heart, so the request, the delivery and the
+   thanks all belong to one customer. */
 function orderCardSvg(q, arrangement, pleased){
   const pts = q > 0 ? COUNT_PICTURES[arrangement][q] : [];
-  const r = arrangement === 'row' ? Math.min(11, 92 / (2.4 * Math.max(1, q))) : 10.5;
-  const pics = pts.map(p => makiSvg(14 + p[0] * 92, 34 + p[1] * 56, r)).join('');
-  return '<svg viewBox="0 0 120 100" aria-hidden="true" focusable="false" class="order-svg">' +
-         '<rect class="card-paper" x="2" y="2" width="116" height="96" rx="14"/>' + catFaceSvg(20, 18, 11, pleased) +
-         '<path class="card-tail" d="M33 20 l9 -5 v10 z"/>' + pics + '</svg>';
+  const r = arrangement === 'row' ? Math.min(11, 88 / (2.4 * Math.max(1, q))) : 10;
+  const pics = pts.map(p => makiSvg(16 + p[0] * 88, 14 + p[1] * 54, r)).join('');
+  return '<svg viewBox="0 0 120 120" aria-hidden="true" focusable="false" class="order-svg">' +
+         '<rect class="card-paper" x="2" y="2" width="116" height="116" rx="14"/>' +
+         '<path class="bubble-paper" d="M20 8h80a12 12 0 0 1 12 12v42a12 12 0 0 1-12 12H50l-13 13 1-13H20A12 12 0 0 1 8 62V20A12 12 0 0 1 20 8z"/>' +
+         pics +
+         '<ellipse class="cat-head" cx="30" cy="124" rx="22" ry="13"/>' + catFaceSvg(30, 99, 14, pleased) +
+         (pleased ? '<path class="cat-heart" d="M60 104c-5-3.4-8-6.4-8-9.4a3.9 3.9 0 0 1 8-1.6 3.9 3.9 0 0 1 8 1.6c0 3-3 6-8 9.4z"/>' : '') +
+         '</svg>';
 }
 /* Sleepy, its eyes soft closed curves; pleased, they turn up into happy
    arcs and its cheeks go pink, as the cat at the counter does. */
@@ -8359,9 +8506,17 @@ function avatarSvg(kind, size){
 function dockIcons(){
   const put = (id, html) => { const b = document.getElementById(id); if(b) b.innerHTML = html; };
   put('dockKnife', svg('<path d="M3 12.8 11.6 4.2a1.6 1.6 0 0 1 2.3 2.3L5.3 15.1"/><path d="M3 12.8l2.3 2.3"/>', 30));
-  put('dockAdd', svg('<path d="M8 3.6v8.8M3.6 8h8.8"/>', 30));
-  put('dockRemove', svg('<path d="M3.6 8h8.8"/>', 30));
-  put('dockHelp', svg('<circle cx="8" cy="8" r="6"/><path d="M6.3 6.4a1.8 1.8 0 1 1 2.4 1.7c-.5.2-.7.6-.7 1.1"/><circle cx="8" cy="11.4" r="0.7" fill="currentColor" stroke="none"/>', 30));
+  /* Pictures, not arithmetic signs, in the scene's own colours: a piece
+     going up onto the green plate (which waits behind the board), a piece
+     coming down to the wooden board, and Chef Capy's own face for help. */
+  const pic = inner => '<svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + inner + '</svg>';
+  const maki = (x, y) => '<circle class="ic-nori" cx="' + x + '" cy="' + y + '" r="4.6"/><circle class="ic-rice" cx="' + x + '" cy="' + y + '" r="3.2"/>' +
+                         '<rect class="ic-salmon" x="' + (x - 1.3) + '" y="' + (y - 1.1) + '" width="2.6" height="2.2" rx=".6"/>';
+  put('dockAdd', pic('<ellipse class="ic-plate" cx="12" cy="5.4" rx="9" ry="3.2"/><path class="ic-arrow" d="M12 13.4V9.2M9.9 11.2 12 9.1l2.1 2.1"/>' + maki(12, 18.2)));
+  put('dockRemove', pic(maki(12, 5.6) + '<path class="ic-arrow" d="M12 10.8V15M9.9 12.9 12 15l2.1-2.1"/><rect class="ic-board" x="3" y="17" width="18" height="4.6" rx="1.6"/>'));
+  put('dockHelp', pic('<path class="ic-hat" d="M7.4 9.4V7.2a2.4 2.4 0 0 1 1.4-4.3 3.4 3.4 0 0 1 6.4 0 2.4 2.4 0 0 1 1.4 4.3v2.2z"/>' +
+                      '<rect class="ic-fur" x="5" y="9" width="14" height="12.4" rx="6"/><ellipse class="ic-snout" cx="12" cy="17.6" rx="4.2" ry="2.6"/>' +
+                      '<circle class="ic-eye" cx="9.2" cy="13.4" r="1.1"/><circle class="ic-eye" cx="14.8" cy="13.4" r="1.1"/>'));
   put('dockServe', svg('<path d="M3 11.6h10M4.2 11.6a3.8 3.8 0 0 1 7.6 0M8 4.2v3.6M6.6 4.2h2.8"/><path d="M2.4 13.6h11.2"/>', 40));
   put('demoSkip', svg('<path d="M3.4 3.6 8.4 8l-5 4.4zM8.6 3.6 13.6 8l-5 4.4z"/>', 20));
   put('roundMore', svg('<circle cx="8" cy="8" r="5.6"/><path d="M7 5.6 9.6 8 7 10.4"/>', 44));
@@ -8379,6 +8534,18 @@ function drawLearnMarks(c, rects){
     const r = rects[learn.litPiece];
     if(r){ const b = poseBox(v, r.pose); c.strokeStyle = C.helpRing; c.lineWidth = Math.max(3, layout.T * 0.06);
            c.beginPath(); c.ellipse((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.x1 - b.x0) * 0.62, (b.y1 - b.y0) * 0.62, 0, 0, Math.PI * 2); c.stroke(); }
+  }
+  /* Where a moved piece landed: a soft ring that fades once the hop is over
+     (at once with reduced motion). It marks the move, never the answer. */
+  const ld = learn.landed, hop = motionReduced() ? 0 : LEARN_TIMING.plateHopMs;
+  if(ld && ld.t >= hop && rects[ld.index]){
+    const b = poseBox(v, rects[ld.index].pose), k = 1 - (ld.t - hop) / LEARN_TIMING.landedMs;
+    if(k > 0){
+      c.globalAlpha = Math.min(1, k * 1.4);
+      c.strokeStyle = C.hint; c.lineWidth = Math.max(2.5, layout.T * 0.05);
+      c.beginPath(); c.ellipse((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.x1 - b.x0) * 0.64, (b.y1 - b.y0) * 0.64, 0, 0, Math.PI * 2); c.stroke();
+      c.globalAlpha = 1;
+    }
   }
   if(learn.spots && learn.ringSpots.length){
     const d = deliveryAt(), top = plateTop();
@@ -8409,6 +8576,10 @@ const teach = {
   inputs: null,            // the planner's constraints, as last chosen
   draft: null,             // the working lesson draft (saved only when the teacher saves or publishes)
   demoPlans: [],           // the sample class's plans live in memory only
+  open: new Set(),         // which disclosures the teacher has open, kept across redraws
+  runFrom: null,           // the teaching view: a revision's id, or null for the draft
+  runStep: 0,
+  refocus: null,           // where the keyboard goes after a redraw
   notice: ''
 };
 function teachClass(){ return teach.classId === DEMO_CLASS.id ? DEMO_CLASS : learnClass(); }
@@ -8500,9 +8671,16 @@ function renderTeach(){
   if(!body) return;
   const snap = teachSnapshot(), cls = teachClass();
   const views = { today: teachToday, class: teachClassView, students: teachStudents, student: teachStudent, lessons: teachLessons,
-                  revision: teachRevision, reports: teachReports };
+                  revision: teachRevision, reports: teachReports, run: teachRun };
   const main = (views[teach.view] || teachToday)(snap, cls);
   body.innerHTML = teachHeader(snap, cls) + '<div class="teach-main" id="teachMain">' + main + '</div>';
+  /* After a step or a redraw, the keyboard stays where the teacher was. */
+  const again = teach.refocus;
+  teach.refocus = null;
+  if(again && typeof body.querySelector === 'function'){
+    const el = body.querySelector(again);
+    if(el && typeof el.focus === 'function') el.focus({ preventScroll: true });
+  }
 }
 function storageText(){
   if(teachIsDemo()) return 'Sample data, built in memory and never stored.';
@@ -8513,23 +8691,44 @@ function storageText(){
   if(s === 'refused') return 'Some records could not be saved on this device (storage refused them); they last only until the app closes.';
   return 'Nothing recorded on this device yet.';
 }
+/* Disclosures stay as the teacher left them when a screen is redrawn. */
+function disc(key, summary, inner, cls){
+  return '<details class="teach-drawer' + (cls ? ' ' + cls : '') + '" data-keep="' + h(key) + '"' + (teach.open.has(key) ? ' open' : '') + '>' +
+         '<summary>' + summary + '</summary>' + inner + '</details>';
+}
+function onTeachToggle(ev){
+  const t = ev && ev.target;
+  if(!t || typeof t.getAttribute !== 'function') return;
+  const k = t.getAttribute('data-keep');
+  if(!k) return;
+  if(t.open) teach.open.add(k); else teach.open.delete(k);
+}
+/* One short, persistent label; the full explanation of storage, the
+   missing sign-in and the missing sync behind "About this prototype". */
 function teachHeader(snap, cls){
   const tabs = TEACH_VIEWS.map(v => {
-    const on = teach.view === v || (v === 'students' && teach.view === 'student') || (v === 'lessons' && teach.view === 'revision');
+    const on = teach.view === v || (v === 'students' && teach.view === 'student') ||
+               (v === 'lessons' && (teach.view === 'revision' || teach.view === 'run'));
     return '<button class="teach-tab' + (on ? ' on' : '') + '" type="button" data-act="go" data-arg="' + v + '"' +
            (on ? ' aria-current="page"' : '') + '>' + TEACH_LABELS[v] + '</button>';
   }).join('');
-  return '<div class="teach-banner" role="note"><strong>Development prototype on this device.</strong> Fictional profiles only. ' +
-         'No teacher sign-in, no syncing between devices, not for real student records. The counting content and its rule await educator review.' +
-         (cls.kind === 'demo' ? ' <span class="demo-badge">DEMO sample data, as of ' + h(dateText(snap.cutoff)) + '</span>' : '') + '</div>' +
-         '<div class="teach-classbar"><label class="teach-label" for="teachClassPick">Class</label>' +
-         '<select id="teachClassPick" data-change="class">' +
-         '<option value="' + PROTO_CLASS_ID + '"' + (teachIsDemo() ? '' : ' selected') + '>Prototype class (this device)</option>' +
-         '<option value="' + DEMO_CLASS.id + '"' + (teachIsDemo() ? ' selected' : '') + '>Willow class (DEMO sample data)</option></select>' +
-         '<span class="teach-meta">' + h(cls.roster.length) + ' fictional children · ' + h(cls.timezone) + ' · ' + h(cls.language) + ' · ' + h(storageText()) + '</span>' +
-         '<button class="btn-secondary" type="button" data-act="preview">Preview the activity (records nothing)</button></div>' +
-         '<nav class="teach-nav" aria-label="Teacher workspace">' + tabs + '</nav>' +
-         (teach.notice ? '<div class="notice teach-notice" role="status">' + h(teach.notice) + '</div>' : '');
+  const notSaving = !teachIsDemo() && (learn.store === 'memory' || learn.store === 'refused' || learn.store === 'unreadable');
+  return '<div class="teach-statusbar"><span class="proto-chip">Local prototype · Fictional profiles</span>' +
+    (cls.kind === 'demo' ? '<span class="demo-badge">DEMO sample data, as of ' + h(dateText(snap.cutoff)) + '</span>' : '') +
+    (notSaving ? '<span class="warn-chip">Not saving on this device</span>' : '') +
+    disc('about', 'About this prototype',
+      '<p><strong>Development prototype on this device.</strong> Fictional profiles only. No teacher sign-in, no syncing between devices, ' +
+      'not for real student records. The counting content and its rule await educator review.</p>' +
+      '<p>' + h(storageText()) + ' Class time zone ' + h(cls.timezone) + ' · ' + h(cls.language) + '.</p>' +
+      '<p>The grown-ups\' times-table question keeps children out of this workspace; it is not a sign-in.</p>') + '</div>' +
+    '<div class="teach-classbar"><label class="teach-label" for="teachClassPick">Class</label>' +
+    '<select id="teachClassPick" data-change="class">' +
+    '<option value="' + PROTO_CLASS_ID + '"' + (teachIsDemo() ? '' : ' selected') + '>Prototype class (this device)</option>' +
+    '<option value="' + DEMO_CLASS.id + '"' + (teachIsDemo() ? ' selected' : '') + '>Willow class (DEMO sample data)</option></select>' +
+    '<span class="teach-meta">' + h(cls.roster.length) + ' fictional children</span>' +
+    '<button class="btn-secondary" type="button" data-act="preview">Preview the activity (records nothing)</button></div>' +
+    '<nav class="teach-nav" aria-label="Teacher workspace">' + tabs + '</nav>' +
+    (teach.notice ? '<div class="notice teach-notice" role="status">' + h(teach.notice) + '</div>' : '');
 }
 function windowText(snap){
   return dateText(snap.window.start) + ' – ' + dateText(snap.window.end) + ' (' + snap.window.days + ' instructional days)';
@@ -8537,31 +8736,46 @@ function windowText(snap){
 function statusRows(snap){
   return STATUS_ORDER.map(k => '<li>' + chip(k) + ' <strong>' + snap.counts[k] + '</strong> of ' + snap.roster + '</li>').join('');
 }
+/* The lesson first, then who has played and what the evidence says, then at
+   most three things to do. Rule and skill details wait behind a disclosure. */
 function teachToday(snap, cls){
   const c = snap.counts, insights = [];
   if(!teachIsDemo() && learn.store !== 'saved' && learn.store !== 'unknown')
     insights.push({ text: storageText(), act: null });
   if(snap.eventCount === 0) insights.push({ text: 'No counting orders yet in this class. Preview the activity, then let a child play from the sushi bar\'s door.', act: 'preview', label: 'Preview the activity' });
-  if(c['not-observed'] && snap.eventCount) insights.push({ text: c['not-observed'] + ' of ' + snap.roster + ' children have no usable counting evidence in this window. An observation, not remediation, comes first.', act: 'go', arg: 'lessons', label: 'Prepare an observation lesson' });
+  if(c['not-observed'] && snap.eventCount) insights.push({ text: c['not-observed'] + ' of ' + snap.roster + ' children have no usable counting evidence in this window. An observation, not remediation, comes first.', act: 'go', arg: 'lessons', label: 'Plan an observation' });
   if(c.building) insights.push({ text: c.building + ' of ' + snap.roster + ' children have enough independent counting orders to decide, but fewer than 80% matched the order.', act: 'go', arg: 'class', label: 'See who, and why' });
   if(c.independent) insights.push({ text: c.independent + ' of ' + snap.roster + ' children are independent in the game for counting 1 to 5. Check it with real objects before moving on.', act: 'go', arg: 'students', label: 'See the children' });
   if(c.gathering && insights.length < 3) insights.push({ text: c.gathering + ' of ' + snap.roster + ' children need more counting orders, on another instructional day, before the rule can decide.', act: 'go', arg: 'class', label: 'See coverage' });
-  const draft = currentDraft(), revs = loadPlans().filter(p => p.kind === 'revision');
-  const lastRev = revs.sort((a, b) => b.rev - a.rev)[0];
-  const lesson = draft ? 'A lesson draft for ' + h(dateText(draft.plan.inputs.date)) + ' (' + h(draft.plan.inputs.minutes) + ' minutes, ' + h(draft.plan.purpose) + ').' :
-                 lastRev ? 'Published revision ' + h(lastRev.rev) + ' for ' + h(dateText(lastRev.plan.inputs.date)) + '.' : 'No lesson prepared yet.';
+  if(c['fresh-check'] && insights.length < 3) insights.push({ text: c['fresh-check'] + ' of ' + snap.roster + ' children met the rule only before this window and need a fresh check.', act: 'go', arg: 'class', label: 'See who' });
+  const draft = currentDraft(), revs = loadPlans().filter(p => p.kind === 'revision').sort((a, b) => b.rev - a.rev), lastRev = revs[0];
+  const purpose = p => p.purpose === 'observation' ? 'observation lesson' : 'practice lesson';
+  const lesson = draft ?
+      '<p class="teach-lead">Draft ' + h(purpose(draft.plan)) + ' for ' + h(dateText(draft.plan.inputs.date)) + ', ' + h(draft.plan.inputs.minutes) + ' minutes.</p>' +
+      (planBlocked(draft.plan) ? '<p class="teach-small">Something needs fixing before it can be published.</p>' : '') +
+      '<div class="plan-actions"><button class="btn-primary" type="button" data-act="go" data-arg="lessons">Open the lesson</button>' +
+      (planBlocked(draft.plan) ? '' : '<button class="btn-secondary" type="button" data-act="run">Teach it</button>') + '</div>'
+    : lastRev ?
+      '<p class="teach-lead">Published revision ' + h(lastRev.rev) + ': ' + h(purpose(lastRev.plan)) + ' for ' + h(dateText(lastRev.plan.inputs.date)) + '.</p>' +
+      '<div class="plan-actions"><button class="btn-primary" type="button" data-act="run" data-arg="' + h(lastRev.id) + '">Teach it</button>' +
+      '<button class="btn-secondary" type="button" data-act="go" data-arg="lessons">Lessons</button></div>'
+    : '<p class="teach-lead">No lesson prepared yet.</p><p class="teach-small">A draft is built from the evidence as it is now; you can change every part.</p>' +
+      '<div class="plan-actions"><button class="btn-primary" type="button" data-act="plan-start">Prepare a lesson</button></div>';
   return '<h2 class="teach-h">Today, ' + h(dateText(learnDate(teachIsDemo() ? cls.cutoffMs : learnNow(), cls.timezone))) + '</h2>' +
-    '<section class="teach-card"><div class="teach-kicker">Current objective</div><p class="teach-lead">' + h(COUNT_ACTIVITY.objective) + '</p>' +
-    '<p class="teach-small">Skill ' + h(COUNT_SKILL) + ' · rule ' + h(COUNT_RULE.version) + ', awaiting educator validation · reporting window ' + h(windowText(snap)) + '.</p></section>' +
+    '<p class="teach-objective">Objective: ' + h(COUNT_ACTIVITY.objective) + '</p>' +
+    '<section class="teach-card lesson-now"><div class="teach-kicker">Lesson</div>' + lesson + '</section>' +
+    '<h3 class="teach-h3">Counting 1–5 · ' + h(windowText(snap)) + '</h3>' +
     '<div class="teach-grid">' +
     '<section class="teach-card"><div class="teach-kicker">Participation</div><p class="teach-metric">' + h(frac(snap.played, snap.roster)) + '</p><p class="teach-small">children played counting orders in this window</p></section>' +
-    '<section class="teach-card"><div class="teach-kicker">Evidence coverage</div><p class="teach-metric">' + h(frac(snap.withEvidence, snap.roster)) + '</p><p class="teach-small">children have independent first responses in this window</p></section>' +
-    '<section class="teach-card"><div class="teach-kicker">Counting 1–5</div><ul class="teach-statuses">' + statusRows(snap) + '</ul></section></div>' +
+    '<section class="teach-card"><div class="teach-kicker">Evidence coverage</div><p class="teach-metric">' + h(frac(snap.withEvidence, snap.roster)) + '</p><p class="teach-small">children have independent first answers in this window</p></section>' +
+    '<section class="teach-card"><div class="teach-kicker">Where the class is</div><ul class="teach-statuses">' + statusRows(snap) + '</ul></section></div>' +
     '<h3 class="teach-h3">Next</h3><ul class="teach-insights">' + insights.slice(0, 3).map(x => '<li><p>' + h(x.text) + '</p>' +
       (x.act ? '<button class="btn-secondary" type="button" data-act="' + x.act + '"' + (x.arg ? ' data-arg="' + h(x.arg) + '"' : '') + '>' + h(x.label) + '</button>' : '') + '</li>').join('') +
     (insights.length ? '' : '<li><p>Nothing needs attention yet.</p></li>') + '</ul>' +
-    '<section class="teach-card"><div class="teach-kicker">Lesson</div><p>' + lesson + '</p><button class="btn-primary" type="button" data-act="go" data-arg="lessons">' +
-    (draft || lastRev ? 'Review the lesson' : 'Prepare a lesson') + '</button></section>';
+    disc('today-evidence', 'Evidence details',
+      '<p>Skill ' + h(COUNT_SKILL) + ' · rule ' + h(COUNT_RULE.id) + ' ' + h(COUNT_RULE.version) + ', awaiting educator validation: ' + h(COUNT_RULE.text) + '</p>' +
+      '<p>Evidence up to ' + h(snap.takenAt.replace('T', ' ').slice(0, 16)) + ' UTC · ' + h(snap.eventCount) + ' events · summary ' + h(EVIDENCE_VERSION) +
+      ' · activity ' + h(COUNT_ACTIVITY.id) + ' ' + h(COUNT_ACTIVITY.version) + ' (educator review ' + h(COUNT_ACTIVITY.review.status) + ').</p>');
 }
 function teachClassView(snap){
   const by = k => snap.children.filter(c => c.status === k);
@@ -8571,15 +8785,15 @@ function teachClassView(snap){
     '</td><td>' + h(LEARN_STATUS[k].next) + '</td></tr>').join('');
   return '<h2 class="teach-h">Counting quantities 1–5</h2>' +
     (snap.eventCount === 0 ? '<div class="notice"><strong>No evidence yet</strong>No counting orders have been played in this class. Every child is Not observed, which is not the same as zero.</div>' : '') +
-    '<p class="teach-small">Window ' + h(windowText(snap)) + ' · evidence up to ' + h(snap.takenAt.replace('T', ' ').slice(0, 16)) + ' UTC · ' +
-    h(snap.eventCount) + ' events · ' + h(snap.withEvidence) + ' of ' + h(snap.roster) + ' children observed independently.</p>' +
+    '<p class="teach-small">Window ' + h(windowText(snap)) + ' · ' + h(snap.withEvidence) + ' of ' + h(snap.roster) + ' children observed independently.</p>' +
     '<div class="table-wrap"><table class="teach-table"><caption class="sr-only">Children by counting status</caption><thead><tr><th scope="col">Status</th><th scope="col">Children</th>' +
     '<th scope="col">Who</th><th scope="col">Suggested next step</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '<details class="teach-drawer"><summary>How this is decided</summary><p>' + h(COUNT_RULE.text) + ' Rule ' + h(COUNT_RULE.id) + ' ' + h(COUNT_RULE.version) +
+    disc('class-rule', 'How this is decided', '<p>' + h(COUNT_RULE.text) + ' Rule ' + h(COUNT_RULE.id) + ' ' + h(COUNT_RULE.version) +
     ', proposed in the product specification and awaiting educator validation. Only the first answer to each order counts as independent, and only when no help came before it. ' +
     'Help and later tries are counted as supported. Unfinished orders, the demonstration and teacher previews are never evidence. "With support" is not assigned until a support rubric for this skill is reviewed.</p>' +
-    '<p>Independent first responses that did not match the order: ' + over + ' with more pieces than asked, ' + under + ' with fewer.</p>' +
-    '<p>Summary version ' + h(EVIDENCE_VERSION) + ' · activity ' + h(COUNT_ACTIVITY.id) + ' ' + h(COUNT_ACTIVITY.version) + ' (educator review ' + h(COUNT_ACTIVITY.review.status) + ').</p></details>';
+    '<p>Independent first answers that did not match the order: ' + over + ' with more pieces than asked, ' + under + ' with fewer.</p>' +
+    '<p>Evidence up to ' + h(snap.takenAt.replace('T', ' ').slice(0, 16)) + ' UTC · ' + h(snap.eventCount) + ' events · summary ' + h(EVIDENCE_VERSION) +
+    ' · activity ' + h(COUNT_ACTIVITY.id) + ' ' + h(COUNT_ACTIVITY.version) + ' (educator review ' + h(COUNT_ACTIVITY.review.status) + ').</p>');
 }
 function teachStudents(snap){
   return '<h2 class="teach-h">Students</h2><ul class="teach-list">' + snap.children.map(c =>
@@ -8599,29 +8813,46 @@ function criteriaList(c){
     item(ind.attempted >= R.minIndependent && ind.correct / ind.attempted >= R.minAccuracy,
          ind.attempted ? ind.correct + ' of ' + ind.attempted + ' correct (needs 80% once the rest is met)' : 'Accuracy: no independent responses yet') + '</ul>';
 }
+/* What the evidence says now, in words, and the next useful observation. */
+function evidenceNow(c){
+  const ind = c.independent, days = n => n + (n === 1 ? ' day' : ' days');
+  if(c.status === 'not-observed') return 'No usable counting orders in this window yet.';
+  if(c.status === 'gathering') return ind.attempted + ' of ' + COUNT_RULE.minIndependent + ' independent first answers so far, on ' + days(ind.dates.length) + ': not yet enough to decide.';
+  if(c.status === 'building') return ind.correct + ' of ' + ind.attempted + ' independent first answers matched the order, on ' + days(ind.dates.length) + ': fewer than 80%.';
+  if(c.status === 'independent') return ind.correct + ' of ' + ind.attempted + ' independent first answers matched the order, on ' + days(ind.dates.length) + '.';
+  return 'Earlier evidence, up to ' + dateText(c.prior && c.prior.lastDate) + ', was ' + (c.prior ? LEARN_STATUS[c.prior.status].label : '') + '; nothing recent enough in this window.';
+}
+/* The objective, the evidence now and the next observation first; first
+   answers and supported retries side by side but apart; the rule's
+   criteria and every order behind disclosures. */
 function teachStudent(snap){
   const c = snap.children.find(x => x.id === teach.childId);
   if(!c) return '<p>That child is not in this class.</p>';
   const obs = loadObservations().filter(o => o.childId === c.id && o.classId === snap.classId);
+  const R = COUNT_RULE, ind = c.independent;
+  const met = [ind.attempted >= R.minIndependent, ind.dates.length >= R.minDates,
+               ind.quantities.length >= R.minQuantities && ind.quantities.indexOf(R.mustInclude) !== -1,
+               ind.attempted >= R.minIndependent && ind.correct / ind.attempted >= R.minAccuracy].filter(Boolean).length;
   const recent = c.recent.map(x => '<tr><td>' + h(shortDate(x.date)) + '</td><td>' + h(x.quantity) + ' (' + h(x.arrangement) + ')</td><td>' + h(x.first) +
     (x.firstCorrect ? ' ✓' : '') + '</td><td>' + (x.independent ? 'Independently' : 'After help (' + h(x.supportBefore) + ')') + '</td><td>' +
     (x.retries.length ? x.retries.map(r => h(r.answer) + (r.correct ? ' ✓' : '') + ' with ' + h(r.support)).join('; ') : '—') + '</td></tr>').join('');
   const kinds = { independent: 'Did it independently', 'with-support': 'Did it with support', 'not-yet': 'Not yet', note: 'Note' };
   return '<button class="link-btn back-link" type="button" data-act="back">Back</button>' +
     '<h2 class="teach-h">' + avatarSvg(c.avatar, 44) + ' ' + h(c.name) + ' ' + chip(c.status) + '</h2>' +
-    (c.status === 'fresh-check' && c.prior ? '<p class="teach-small">Earlier evidence (to ' + h(dateText(c.prior.lastDate)) + ') was ' + h(LEARN_STATUS[c.prior.status].label) + '.</p>' : '') +
-    '<section class="teach-card"><div class="teach-kicker">Counting quantities 1–5 · window ' + h(windowText(snap)) + '</div>' + criteriaList(c) +
-    '<p class="teach-small">Next: ' + h(LEARN_STATUS[c.status].next) + '</p></section>' +
+    '<section class="teach-card profile-lead"><div class="teach-kicker">Objective</div><p>' + h(COUNT_ACTIVITY.objective) + '</p>' +
+    '<div class="teach-kicker">Evidence now · ' + h(windowText(snap)) + '</div><p class="teach-lead">' + h(evidenceNow(c)) + '</p>' +
+    '<div class="teach-kicker">Next useful observation</div><p>' + h(LEARN_STATUS[c.status].next) + '</p></section>' +
     '<div class="teach-grid">' +
-    '<section class="teach-card"><div class="teach-kicker">Independent first responses</div><p class="teach-metric">' + h(frac(c.independent.correct, c.independent.attempted)) + '</p>' +
-    '<p class="teach-small">' + (c.independent.attempted ? 'correct · ' + c.independent.over + ' over, ' + c.independent.under + ' under' : 'no independent first answers yet') + '</p></section>' +
+    '<section class="teach-card"><div class="teach-kicker">Independent first answers</div><p class="teach-metric">' + h(frac(ind.correct, ind.attempted)) + '</p>' +
+    '<p class="teach-small">' + (ind.attempted ? 'matched the order · ' + ind.over + ' with more pieces, ' + ind.under + ' with fewer' : 'no independent first answers yet') + '</p></section>' +
     '<section class="teach-card"><div class="teach-kicker">Supported retries</div><p class="teach-metric">' + h(frac(c.supported.correct, c.supported.responses)) + '</p>' +
-    '<p class="teach-small">matched after help · ' + c.assistedOnly + ' assisted-only ' + (c.assistedOnly === 1 ? 'order' : 'orders') + '</p></section>' +
+    '<p class="teach-small">matched after help · ' + c.assistedOnly + ' assisted-only ' + (c.assistedOnly === 1 ? 'order' : 'orders') + ' (help came first)</p></section>' +
     '<section class="teach-card"><div class="teach-kicker">Sessions and dates</div><p class="teach-metric">' + h(c.sessions) + '</p>' +
     '<p class="teach-small">' + (c.dates.length ? c.dates.map(shortDate).join(', ') : 'none in this window') + (c.interrupted ? ' · ' + c.interrupted + ' unfinished (not counted)' : '') + '</p></section></div>' +
-    '<h3 class="teach-h3">Game evidence, newest first</h3>' +
-    (recent ? '<div class="table-wrap"><table class="teach-table"><thead><tr><th scope="col">Date</th><th scope="col">Asked</th><th scope="col">First served</th>' +
-              '<th scope="col">How it was answered</th><th scope="col">Later tries</th></tr></thead><tbody>' + recent + '</tbody></table></div>' : '<p class="teach-small">No counting orders in this window.</p>') +
+    disc('crit-' + c.id, 'How the rule is met · ' + met + ' of 4', criteriaList(c) + '<p class="teach-small">Rule ' + h(R.id) + ' ' + h(R.version) + ', awaiting educator validation.</p>') +
+    disc('rows-' + c.id, 'Every counting order in this window · ' + c.recent.length,
+      recent ? '<div class="table-wrap"><table class="teach-table"><caption class="sr-only">Counting orders, newest first</caption><thead><tr><th scope="col">Date</th><th scope="col">Asked</th><th scope="col">First served</th>' +
+               '<th scope="col">How it was answered</th><th scope="col">Later tries</th></tr></thead><tbody>' + recent + '</tbody></table></div>' : '<p class="teach-small">No counting orders in this window.</p>') +
     '<h3 class="teach-h3">Teacher observations <span class="teach-small">(kept apart from game results)</span></h3>' +
     (obs.length ? '<ul class="teach-obs">' + obs.map(o => '<li><strong>' + h(dateText(o.date)) + ' · ' + h(kinds[o.kind] || o.kind) + '</strong> · ' + h(o.context) +
                   (o.note ? '<div class="teach-note">' + h(o.note) + '</div>' : '') + '</li>').join('') + '</ul>' : '<p class="teach-small">None recorded.</p>') +
@@ -8645,35 +8876,53 @@ function planInputsFor(snap){
                    materials: { counters: true, paperSushi: false, plates: true, checklist: true }, absent: [] };
   return teach.inputs;
 }
-function teachLessons(snap){
-  const inp = planInputsFor(snap), draftRec = currentDraft();
-  const revs = loadPlans().filter(p => p.kind === 'revision').sort((a, b) => b.rev - a.rev);
+/* The lesson's constraints: date, length, devices, adults, materials, absences. */
+function constraintsForm(inp, snap){
   const mins = [10, 15, 20, 25, 30].map(m => '<option' + (inp.minutes === m ? ' selected' : '') + '>' + m + '</option>').join('');
   const mat = (k, label) => '<label class="teach-check"><input type="checkbox" data-plan="mat-' + k + '"' + (inp.materials[k] ? ' checked' : '') + '> ' + h(label) + '</label>';
   const kids = snap.children.map(c => '<label class="teach-check"><input type="checkbox" data-plan="absent" value="' + h(c.id) + '"' +
     (inp.absent.indexOf(c.id) !== -1 ? ' checked' : '') + '> ' + h(c.name) + '</label>').join('');
-  const form = '<section class="teach-card"><div class="teach-kicker">Constraints</div><div class="teach-form-grid">' +
-    '<label class="teach-label" for="planDate">Date</label><input id="planDate" type="date" data-plan="date" value="' + h(inp.date) + '">' +
-    '<label class="teach-label" for="planMinutes">Minutes</label><select id="planMinutes" data-plan="minutes">' + mins + '</select>' +
-    '<label class="teach-label" for="planDevices">Devices</label><input id="planDevices" type="number" min="0" max="30" inputmode="numeric" data-plan="devices" value="' + h(inp.devices) + '">' +
-    '<label class="teach-label" for="planAdults">Adults</label><select id="planAdults" data-plan="adults">' + [1, 2, 3].map(a => '<option' + (inp.adults === a ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></div>' +
+  return '<div class="teach-form-grid">' +
+    '<div><label class="teach-label" for="planDate">Date</label><input id="planDate" type="date" data-plan="date" value="' + h(inp.date) + '"></div>' +
+    '<div><label class="teach-label" for="planMinutes">Minutes</label><select id="planMinutes" data-plan="minutes">' + mins + '</select></div>' +
+    '<div><label class="teach-label" for="planDevices">Devices</label><input id="planDevices" type="number" min="0" max="30" inputmode="numeric" data-plan="devices" value="' + h(inp.devices) + '"></div>' +
+    '<div><label class="teach-label" for="planAdults">Adults</label><select id="planAdults" data-plan="adults">' + [1, 2, 3].map(a => '<option' + (inp.adults === a ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></div></div>' +
     '<div class="teach-kicker">Materials at hand</div>' + mat('counters', 'Counters or blocks') + mat('paperSushi', 'Paper sushi circles') + mat('plates', 'Trays or plates') + mat('checklist', 'Printed checklist') +
-    '<div class="teach-kicker">Absent today (marked by you)</div><div class="teach-checks">' + kids + '</div>' +
-    '<button class="btn-primary" type="button" data-act="plan-new">' + (draftRec ? 'Prepare a new draft from today\'s evidence' : 'Prepare a draft from today\'s evidence') + '</button></section>';
-  const draftHtml = draftRec ? planHtml(draftRec.plan, false) : '<p class="teach-small">No draft yet. A draft is built from the evidence as it is when you press the button, and you can edit every part.</p>';
+    '<div class="teach-kicker">Absent today (marked by you)</div><div class="teach-checks">' + kids + '</div>';
+}
+function teachLessons(snap){
+  const inp = planInputsFor(snap), d = currentDraft();
+  const revs = loadPlans().filter(p => p.kind === 'revision').sort((a, b) => b.rev - a.rev);
   const revHtml = revs.length ? '<ul class="teach-list">' + revs.map(r => '<li><button class="teach-row" type="button" data-act="revision" data-arg="' + h(r.id) + '"><span class="teach-row-main">' +
     '<span class="teach-row-title">Revision ' + h(r.rev) + ' · ' + h(dateText(r.plan.inputs.date)) + '</span><span class="teach-row-sub">Published ' + h(r.publishedAt.replace('T', ' ').slice(0, 16)) +
     ' UTC from evidence up to ' + h(dateText(r.plan.snapshot.cutoff)) + '</span></span></button></li>').join('') + '</ul>' : '<p class="teach-small">No published revisions.</p>';
-  return '<h2 class="teach-h">Lessons</h2>' + form + draftHtml +
-    '<h3 class="teach-h3">Published revisions</h3><p class="teach-small">Publishing keeps a fixed copy on this device. It does not send anything to children\'s devices: this prototype has no classroom devices.</p>' + revHtml;
+  const revisions = '<h3 class="teach-h3">Published revisions</h3><p class="teach-small">Publishing keeps a fixed copy on this device. Nothing is sent to children\'s devices: this prototype has none.</p>' + revHtml;
+  if(!d) return '<h2 class="teach-h">Lessons</h2><section class="teach-card"><p class="teach-lead">No lesson draft yet.</p>' +
+    '<p class="teach-small">A draft is built from the evidence as it is when you press the button, for the room you describe here. You can change every part.</p>' +
+    constraintsForm(inp, snap) + '<div class="plan-actions"><button class="btn-primary" type="button" data-act="plan-new">Prepare a draft from today\'s evidence</button></div></section>' + revisions;
+  return '<h2 class="teach-h">Lessons</h2>' + planHtml(d.plan, false) +
+    disc('lesson-settings', 'Change the date, length, devices, adults, materials or absences',
+      constraintsForm(inp, snap) + '<div class="plan-actions"><button class="btn-secondary" type="button" data-act="plan-regen">Regenerate (keeps your edits and placements)</button>' +
+      '<button class="btn-secondary" type="button" data-act="plan-new">Start a fresh draft</button></div>' +
+      '<p class="teach-small">Regenerate uses today\'s evidence and these settings and keeps what you edited or placed; a fresh draft starts over.</p>') +
+    revisions;
 }
 function nameOf(snap, id){ const c = snap.children.find(x => x.id === id); return c ? c.name : id; }
-/* One plan, as a draft (editable) or a published revision (read-only). */
-function planHtml(plan, readOnly){
-  const snap = plan.snapshot;
-  const issues = plan.issues.map(x => '<li class="issue-' + x.level + '">' + (x.level === 'block' ? '<strong>Needs fixing before publishing:</strong> ' : '') + h(x.text) + '</li>').join('');
-  const seq = plan.sequence.map(s => '<tr><td>' + s.start + '–' + (s.start + s.minutes) + ' min</td><td>' + h(s.title) + '</td><td>' + h(s.detail) + '</td></tr>').join('');
+/* A lesson as a readable preview: objective, the facts of the room, what
+   to bring and what to do next; then the teaching sequence; groups,
+   materials and every section open to edit behind disclosures. */
+function planHtml(plan, readOnly, revId){
+  const snap = plan.snapshot, inp = plan.inputs, base = readOnly ? 'rev-' : 'draft-';
+  const n = (k, s, p) => k + ' ' + (k === 1 ? s : (p || s + 's'));
+  const present = snap.children.length - plan.absent.length;
+  const blocked = planBlocked(plan);
+  const issues = plan.issues.slice().sort((a, b) => (a.level === 'block' ? 0 : 1) - (b.level === 'block' ? 0 : 1))
+    .map(x => '<li class="issue-' + x.level + '">' + (x.level === 'block' ? '<strong>Needs fixing before publishing:</strong> ' : '') + h(x.text) + '</li>').join('');
+  const resources = plan.sections.materials.text.split('\n').filter(Boolean).join(' · ');
+  const titles = { objective: 'Objective', rationale: 'Why this lesson', materials: 'Materials', opening: 'Opening script (exact words)', support: 'Support',
+                   extension: 'Extension', offline: 'Offline activity', exit: 'Individual exit check', followUp: 'Follow-up' };
   const opts = id => GROUP_ORDER.map(g => '<option value="' + g + '"' + (g === id ? ' selected' : '') + '>' + h(PLAN_GROUPS[g].name) + '</option>').join('');
+  const locked = Object.keys(plan.locks || {}).length;
   const groups = plan.groups.map(g => '<section class="teach-card group-card"><div class="teach-kicker">' + h(g.name) + (g.adultLed ? ' · adult-led' : '') +
     (g.device ? ' · device practice' : '') + '</div><p>' + h(g.task) + '</p><p class="teach-small">' + h(g.reason) + '</p>' +
     (g.turns && g.turns.length ? '<p class="teach-small">' + g.turns.map(t => 'Adult ' + t.adult + ', turn ' + (t.slot + 1) + ' (' + t.minutes + ' min): ' + t.members.map(id => h(nameOf(snap, id))).join(', ')).join('<br>') + '</p>' : '') +
@@ -8682,49 +8931,94 @@ function planHtml(plan, readOnly){
     '<ul class="group-members">' + g.members.map(id => '<li>' + h(nameOf(snap, id)) + (plan.locks[id] ? ' <span class="lock-mark">(placed by you)</span>' : '') +
       (readOnly ? '' : ' <label class="sr-only" for="mv-' + h(id) + '">Move ' + h(nameOf(snap, id)) + '</label><select id="mv-' + h(id) + '" data-move="' + h(id) + '">' + opts(g.id) + '</select>' +
         (plan.locks[id] ? ' <button class="link-btn" type="button" data-act="unlock" data-arg="' + h(id) + '">Unlock</button>' : '')) + '</li>').join('') + '</ul></section>').join('');
-  const titles = { objective: 'Objective', rationale: 'Rationale', materials: 'Materials', opening: 'Opening script (exact words)', support: 'Support',
-                   extension: 'Extension', offline: 'Offline activity', exit: 'Individual exit check', followUp: 'Follow-up' };
-  const sections = SECTION_KEYS.map(k => '<div class="plan-section"><div class="teach-kicker">' + titles[k] + (plan.sections[k].edited ? ' · edited by you' : '') + '</div>' +
-    (readOnly ? '<p class="plan-text">' + h(plan.sections[k].text) + '</p>' :
-     '<label class="sr-only" for="sec-' + k + '">' + titles[k] + '</label><textarea id="sec-' + k + '" rows="' + (k === 'rationale' || k === 'materials' ? 4 : 3) + '" data-section="' + k + '">' + h(plan.sections[k].text) + '</textarea>') + '</div>').join('');
   const queue = '<p class="teach-small">Exit checks in this block: ' + (plan.checked.length ? plan.checked.map(id => h(nameOf(snap, id))).join(', ') : 'none') + '.' +
     (plan.queue.length ? ' Carried to the next block (unfinished observations): ' + plan.queue.map(id => h(nameOf(snap, id))).join(', ') + '.' : '') +
     (plan.absent.length ? ' Absent (teacher-marked): ' + plan.absent.map(id => h(nameOf(snap, id))).join(', ') + '.' : '') + '</p>';
-  return '<section class="plan" aria-label="Lesson plan"><div class="teach-kicker">' + (readOnly ? 'Published revision' : 'Draft') + ' · ' + h(plan.purpose) + ' lesson · ' +
-    h(dateText(plan.inputs.date)) + ' · ' + h(plan.inputs.minutes) + ' minutes · ' + h(plan.inputs.devices) + ' devices · ' + h(plan.inputs.adults) + (plan.inputs.adults === 1 ? ' adult' : ' adults') + '</div>' +
-    '<p class="teach-small">Template ' + h(plan.template) + ' (awaiting educator review) · evidence snapshot ' + h(snap.id) + ', up to ' + h(dateText(snap.cutoff)) + '.</p>' +
+  const sections = SECTION_KEYS.map(k => disc(base + 'sec-' + k, h(titles[k]) + (plan.sections[k].edited ? ' · edited by you' : ''),
+    readOnly ? '<p class="plan-text">' + h(plan.sections[k].text) + '</p>' :
+    '<label class="sr-only" for="sec-' + k + '">' + h(titles[k]) + '</label><textarea id="sec-' + k + '" rows="' + (k === 'rationale' || k === 'materials' ? 5 : 4) + '" data-section="' + k + '">' + h(plan.sections[k].text) + '</textarea>', 'lesson-part')).join('');
+  return '<section class="teach-card lesson-head plan" aria-label="Lesson plan">' +
+    '<div class="teach-kicker">' + (readOnly ? 'Published revision' : 'Draft') + ' · ' + (plan.purpose === 'observation' ? 'Observation lesson' : 'Practice lesson') + '</div>' +
+    '<p class="teach-lead">' + h(plan.sections.objective.text) + '</p>' +
+    '<p class="lesson-facts">' + h(dateText(inp.date)) + ' · ' + h(inp.minutes) + ' minutes · ' + n(present, 'child', 'children') +
+    (plan.absent.length ? ' (' + plan.absent.length + ' absent)' : '') + ' · ' + n(inp.adults, 'adult') + ' · ' + n(inp.devices, 'device') + '</p>' +
+    '<p class="teach-small"><strong>Bring:</strong> ' + h(resources) + '</p>' +
     (issues ? '<ul class="plan-issues">' + issues + '</ul>' : '') +
-    '<div class="table-wrap"><table class="teach-table"><caption class="sr-only">Timed sequence</caption><thead><tr><th scope="col">When</th><th scope="col">Step</th><th scope="col">What happens</th></tr></thead><tbody>' + seq +
-    '</tbody><tfoot><tr><td colspan="3">Total ' + plan.minutesTotal + ' of ' + plan.inputs.minutes + ' minutes</td></tr></tfoot></table></div>' +
-    '<h3 class="teach-h3">Temporary groups</h3>' + groups + queue + '<h3 class="teach-h3">The plan</h3>' + sections +
-    (readOnly ? '' : '<div class="plan-actions"><button class="btn-secondary" type="button" data-act="plan-regen">Regenerate (keeps your edits and placements)</button>' +
-     '<button class="btn-secondary" type="button" data-act="plan-save">Save draft</button>' +
-     '<button class="btn-primary" type="button" data-act="plan-publish"' + (planBlocked(plan) ? ' disabled' : '') + '>Publish a revision (this device only)</button></div>') + '</section>';
+    '<div class="plan-actions">' + (blocked ? '' : '<button class="btn-primary" type="button" data-act="run"' + (readOnly && revId ? ' data-arg="' + h(revId) + '"' : '') + '>Teach this lesson</button>') +
+    (readOnly ? '' : '<button class="btn-secondary" type="button" data-act="plan-save">Save draft</button>' +
+      '<button class="btn-secondary" type="button" data-act="plan-publish"' + (blocked ? ' disabled' : '') + '>Publish a revision (this device only)</button>') + '</div>' +
+    '<p class="teach-small">Template ' + h(plan.template) + ', awaiting educator review. ' + (readOnly ? 'This revision never changes.' : 'Saving and publishing keep the lesson on this device; nothing is sent to children\'s devices.') + '</p></section>' +
+    '<h3 class="teach-h3">Teaching sequence</h3><ol class="lesson-seq">' + plan.sequence.map(s => '<li><span class="seq-time">' + s.start + '–' + (s.start + s.minutes) + ' min</span>' +
+      '<span class="seq-body"><strong>' + h(s.title) + '</strong><span>' + h(s.detail) + '</span></span></li>').join('') + '</ol>' +
+    '<p class="teach-small">Total ' + plan.minutesTotal + ' of ' + inp.minutes + ' minutes.</p>' +
+    disc(base + 'groups', 'Temporary groups · ' + plan.groups.length + (locked ? ' · ' + locked + ' placed by you' : ''), groups + queue, 'lesson-part') +
+    '<h3 class="teach-h3">Lesson sections</h3>' + sections +
+    disc(base + 'snapshot', 'Evidence used', '<p class="teach-small">Evidence snapshot ' + h(snap.id) + ', up to ' + h(dateText(snap.cutoff)) + ' (' + h(snap.window.days) + ' instructional days) · rule ' +
+      h(snap.rule) + ' ' + h(snap.ruleVersion) + ', awaiting validation.</p>');
 }
 function teachRevision(){
   const rec = loadPlans().find(p => p.id === teach.revisionId);
   if(!rec) return '<button class="link-btn back-link" type="button" data-act="back">Back</button><p>That revision is not here.</p>';
   return '<button class="link-btn back-link" type="button" data-act="back">Back</button><h2 class="teach-h">Revision ' + h(rec.rev) + '</h2>' +
     '<p class="teach-small">Published ' + h(rec.publishedAt.replace('T', ' ').slice(0, 16)) + ' UTC. It never changes: later evidence makes a new draft, not a new version of this one. ' + h(rec.note) + '</p>' +
-    planHtml(rec.plan, true) + '<p><button class="btn-secondary" type="button" data-act="plan-copy" data-arg="' + h(rec.id) + '">Start a new draft from this revision</button></p>';
+    planHtml(rec.plan, true, rec.id) + '<p><button class="btn-secondary" type="button" data-act="plan-copy" data-arg="' + h(rec.id) + '">Start a new draft from this revision</button></p>';
 }
+/* The teaching view: the current step, what to say or do, and the next. It
+   keeps no clock: the minutes are the plan's, not a timer. */
+function teachRun(snap){
+  const src = teach.runFrom ? loadPlans().find(p => p.id === teach.runFrom) : currentDraft();
+  const plan = src && src.plan;
+  if(!plan) return '<button class="link-btn back-link" type="button" data-act="back">Back</button><p>There is no lesson to teach yet.</p>' +
+    '<button class="btn-primary" type="button" data-act="go" data-arg="lessons">Lessons</button>';
+  const ps = plan.snapshot, steps = plan.sequence, i = Math.max(0, Math.min(steps.length - 1, teach.runStep || 0)), s = steps[i];
+  teach.runStep = i;
+  const names = ids => ids.map(id => h(nameOf(ps, id))).join(', ');
+  let body = '<p class="run-detail">' + h(s.detail) + '</p>';
+  if(s.title === 'Chef Capy model') body += '<div class="run-script"><div class="teach-kicker">Say</div><p>' + h(plan.sections.opening.text) + '</p></div>';
+  else if(s.title === 'Tray practice') body += '<div class="run-script"><div class="teach-kicker">If a child needs help</div><p>' + h(plan.sections.support.text) + '</p></div>';
+  else if(s.title === 'Centers') body += plan.groups.map(g => '<section class="run-group"><div class="teach-kicker">' + h(g.name) + (g.adultLed ? ' · adult-led' : '') + (g.device ? ' · devices' : '') + '</div>' +
+      '<p>' + h(g.task) + '</p><p class="teach-small">' + names(g.members) + '</p>' +
+      (g.turns && g.turns.length ? '<p class="teach-small">' + g.turns.map(t => 'Adult ' + t.adult + ', turn ' + (t.slot + 1) + ': ' + names(t.members)).join('<br>') + '</p>' : '') +
+      (g.deviceTurns && g.deviceTurns.length ? '<p class="teach-small">' + g.deviceTurns.map(t => 'Device turn ' + t.turn + ': ' + names(t.members)).join('<br>') + '</p>' : '') + '</section>').join('');
+  else if(s.title === 'Exit check') body += '<div class="run-script"><div class="teach-kicker">Ask each child</div><p>' + h(plan.sections.exit.text) + '</p></div>' +
+      '<p class="teach-small">Check now: ' + (plan.checked.length ? names(plan.checked) : 'none') + '.' + (plan.queue.length ? ' Next block: ' + names(plan.queue) + '.' : '') + '</p>';
+  return '<div class="run" role="region" aria-label="Teaching view">' +
+    '<div class="run-top"><button class="link-btn" type="button" data-act="run-exit">Leave the teaching view</button>' +
+    '<span class="teach-small">' + (src.kind === 'revision' ? 'Revision ' + h(src.rev) : 'Draft') + ' · ' + h(dateText(plan.inputs.date)) + '</span></div>' +
+    '<ol class="run-steps" aria-label="Steps">' + steps.map((x, k) => '<li class="' + (k === i ? 'on' : '') + '"' + (k === i ? ' aria-current="step"' : '') + '>' + h(x.title) + '</li>').join('') + '</ol>' +
+    '<div class="teach-kicker">Step ' + (i + 1) + ' of ' + steps.length + ' · planned ' + s.minutes + ' min (' + s.start + '–' + (s.start + s.minutes) + ')</div>' +
+    '<h2 class="run-title" tabindex="-1">' + h(s.title) + '</h2>' + body +
+    '<div class="run-nav"><button class="btn-secondary" type="button" data-act="run-prev"' + (i === 0 ? ' disabled' : '') + '>Previous step</button>' +
+    (i < steps.length - 1 ? '<button class="btn-primary" type="button" data-act="run-next">Next step: ' + h(steps[i + 1].title) + '</button>' :
+                            '<button class="btn-primary" type="button" data-act="run-exit">Finish</button>') + '</div></div>';
+}
+/* The child, the period, the audience and the preview together; exporting
+   this report apart from downloading the whole class's evidence. */
 function teachReports(snap){
   const r = teach.report;
   if(!r.childId || !snap.children.some(c => c.id === r.childId)) r.childId = snap.children[0] ? snap.children[0].id : null;
+  const child = snap.children.find(c => c.id === r.childId);
   const kids = snap.children.map(c => '<option value="' + h(c.id) + '"' + (c.id === r.childId ? ' selected' : '') + '>' + h(c.name) + '</option>').join('');
   const draft = currentDraft(), group = draft && draft.plan.placements[r.childId] ? PLAN_GROUPS[draft.plan.placements[r.childId]].name : null;
   const tr = teacherReport(snap, r.childId, loadObservations(), { includeNotes: r.includeNotes, group: group });
   const sheet = r.audience === 'family' ? familySheet(familyReport(tr)) : teacherSheet(tr);
-  return '<h2 class="teach-h">Reports</h2><section class="teach-card report-controls">' +
-    '<label class="teach-label" for="repChild">Child</label><select id="repChild" data-change="rep-child">' + kids + '</select>' +
+  return '<h2 class="teach-h">Reports</h2>' +
+    '<section class="teach-card report-controls" aria-label="Report for one child"><div class="report-pick">' +
+    '<div><label class="teach-label" for="repChild">Child</label><select id="repChild" data-change="rep-child">' + kids + '</select></div>' +
     '<div class="teach-seg" role="radiogroup" aria-label="Who the report is for">' +
     '<label class="teach-check"><input type="radio" name="repAud" value="teacher" data-change="rep-aud"' + (r.audience === 'teacher' ? ' checked' : '') + '> Teacher report</label>' +
-    '<label class="teach-check"><input type="radio" name="repAud" value="family" data-change="rep-aud"' + (r.audience === 'family' ? ' checked' : '') + '> Family summary</label></div>' +
+    '<label class="teach-check"><input type="radio" name="repAud" value="family" data-change="rep-aud"' + (r.audience === 'family' ? ' checked' : '') + '> Family summary</label></div></div>' +
     (r.audience === 'teacher' ? '<label class="teach-check"><input type="checkbox" data-change="rep-notes"' + (r.includeNotes ? ' checked' : '') + '> Include my private notes (teacher copy only)</label>' : '') +
-    '<div class="plan-actions"><button class="btn-primary" type="button" data-act="print">Print / Save as PDF</button>' +
-    '<button class="btn-secondary" type="button" data-act="csv">Download class evidence (CSV)</button></div>' +
-    '<p class="teach-small">Print opens the browser\'s print dialog; choose Save as PDF there to keep a file. Both come from the same evidence snapshot (' + h(snap.id) + ').</p></section>' +
-    '<article class="report-sheet" id="reportSheet">' + sheet + '</article>';
+    '<p class="teach-small">Reporting period ' + h(windowText(snap)) + '.</p></section>' +
+    '<article class="report-sheet" id="reportSheet" aria-label="Report preview">' + sheet + '</article>' +
+    '<div class="report-export"><button class="btn-primary" type="button" data-act="print">Print or save this report as PDF</button>' +
+    '<p class="teach-small">Print opens the browser\'s print dialog; choose Save as PDF there to keep a file. Only this report is printed.</p></div>' +
+    disc('report-details', 'Report details',
+      '<p class="teach-small">Built from evidence snapshot ' + h(snap.id) + ', up to ' + h(dateText(snap.cutoff)) + ' · rule ' + h(snap.rule) + ' ' + h(snap.ruleVersion) +
+      ' · summary ' + h(EVIDENCE_VERSION) + '. The teacher and family versions come from this same snapshot; the family version is built only from its allowed fields.</p>') +
+    '<section class="teach-card class-export"><div class="teach-kicker">Class evidence</div>' +
+    '<p>A CSV with one row for each of the ' + h(snap.roster) + ' children in ' + h(snap.className) + (child ? ', not only ' + h(child.name) : '') + '.</p>' +
+    '<button class="btn-secondary" type="button" data-act="csv">Download class evidence (CSV)</button></section>';
 }
 function teacherSheet(tr){
   if(!tr) return '<p>No child selected.</p>';
@@ -8732,15 +9026,15 @@ function teacherSheet(tr){
     '<h3>' + h(tr.childName) + ' — counting quantities 1–5</h3><p class="teach-small">Window ' + h(dateText(tr.period.start)) + ' – ' + h(dateText(tr.period.end)) +
     ' (' + tr.period.days + ' instructional days) · rule ' + h(tr.rule) + '</p></header>' +
     '<p><strong>Status:</strong> ' + h(tr.statusLabel) + '</p>' +
-    '<p><strong>Independent first responses:</strong> ' + h(frac(tr.independent.correct, tr.independent.attempted)) + (tr.independent.attempted ? ' correct (' + tr.independent.over + ' over, ' + tr.independent.under + ' under)' : '') +
+    '<p><strong>Independent first answers:</strong> ' + h(frac(tr.independent.correct, tr.independent.attempted)) + (tr.independent.attempted ? ' matched (' + tr.independent.over + ' over, ' + tr.independent.under + ' under)' : '') +
     ' · quantities ' + h(tr.independent.quantities.join(', ') || 'none') + ' · dates ' + h(tr.independent.dates.map(shortDate).join(', ') || 'none') + '</p>' +
-    '<p><strong>Support:</strong> ' + h(frac(tr.supported.correct, tr.supported.responses)) + ' supported responses matched · ' + tr.assistedOnly + ' assisted-only · ' + tr.interrupted + ' unfinished (not counted)</p>' +
+    '<p><strong>Supported retries:</strong> ' + h(frac(tr.supported.correct, tr.supported.responses)) + ' matched after help · ' + tr.assistedOnly + ' assisted-only · ' + tr.interrupted + ' unfinished (not counted)</p>' +
     (tr.examples.length ? '<p><strong>Examples:</strong></p><ul>' + tr.examples.map(x => '<li>' + h(x) + '</li>').join('') + '</ul>' : '') +
     '<p><strong>Teacher observations</strong> (separate from the game):</p>' + (tr.observations.length ? '<ul>' + tr.observations.map(o => '<li>' + h(dateText(o.date)) + ' · ' + h(o.kind) + ' · ' + h(o.context) + (o.note ? ' — ' + h(o.note) : '') + '</li>').join('') + '</ul>' : '<p>None recorded.</p>') +
     (tr.group ? '<p><strong>Current lesson group:</strong> ' + h(tr.group) + '</p>' : '') +
     '<p><strong>Next step:</strong> ' + h(tr.next) + '</p><p><strong>Offline transfer:</strong> ' + h(tr.offline) + '</p>' +
     (tr.limits.length ? '<p><strong>Limits:</strong></p><ul>' + tr.limits.map(x => '<li>' + h(x) + '</li>').join('') + '</ul>' : '') +
-    '<p class="teach-small">Snapshot ' + h(tr.snapshot) + ' · prepared ' + h(tr.prepared) + '.</p>';
+    '<p class="teach-small">Prepared ' + h(tr.prepared) + ' from Chef Capy\'s counting activity (a development preview).</p>';
 }
 /* Rendered from the allowlisted family object alone. */
 function familySheet(fr){
@@ -8767,12 +9061,17 @@ function teachAct(act, arg){
   if(act === 'report'){ teach.report.childId = arg; return teachGo('reports'); }
   if(act === 'revision') return teachGo('revision', { push: true, revisionId: arg });
   if(act === 'observe') return saveObservation(arg);
+  if(act === 'plan-start'){ planNew(); return teachGo('lessons'); }
   if(act === 'plan-new') return planNew();
   if(act === 'plan-regen') return planRegen();
   if(act === 'plan-save') return planSave();
   if(act === 'plan-publish') return planPublish();
   if(act === 'plan-copy') return planCopy(arg);
   if(act === 'unlock') return planUnlock(arg);
+  if(act === 'run'){ teach.runFrom = arg || null; teach.runStep = 0; teach.refocus = '.run-title'; return teachGo('run', { push: true }); }
+  if(act === 'run-next'){ teach.runStep = (teach.runStep || 0) + 1; teach.refocus = '.run-title'; return renderTeach(); }
+  if(act === 'run-prev'){ teach.runStep = Math.max(0, (teach.runStep || 0) - 1); teach.refocus = '.run-title'; return renderTeach(); }
+  if(act === 'run-exit') return teachBack();
   if(act === 'print') return teachPrint();
   if(act === 'csv') return teachCsv();
 }
@@ -8780,7 +9079,10 @@ function onTeachChange(ev){
   const t = ev && ev.target;
   if(!t || typeof t.getAttribute !== 'function') return;
   const k = t.getAttribute('data-change'), p = t.getAttribute('data-plan'), mv = t.getAttribute('data-move');
-  if(k === 'class'){ teach.classId = t.value === DEMO_CLASS.id ? DEMO_CLASS.id : PROTO_CLASS_ID; teach.draft = null; teach.inputs = null; teachGo(teach.view === 'student' || teach.view === 'revision' ? 'today' : teach.view); return; }
+  /* A notice belongs to the class it was about: "Draft saved" must not stay
+     on screen over another class, whose draft it is not. */
+  if(k === 'class'){ teach.classId = t.value === DEMO_CLASS.id ? DEMO_CLASS.id : PROTO_CLASS_ID; teach.draft = null; teach.inputs = null; teach.notice = '';
+    teachGo(teach.view === 'student' || teach.view === 'revision' || teach.view === 'run' ? 'today' : teach.view); return; }
   if(k === 'rep-child'){ teach.report.childId = t.value; renderTeach(); return; }
   if(k === 'rep-aud'){ teach.report.audience = t.value === 'family' ? 'family' : 'teacher'; renderTeach(); return; }
   if(k === 'rep-notes'){ teach.report.includeNotes = !!t.checked; renderTeach(); return; }
@@ -8932,6 +9234,7 @@ function learnWire(){
     body.addEventListener('click', onTeachClick);
     body.addEventListener('change', onTeachChange);
     body.addEventListener('input', onTeachInput);
+    body.addEventListener('toggle', onTeachToggle, true);   // toggle does not bubble
   }
   if(typeof window !== 'undefined' && typeof window.addEventListener === 'function'){
     window.addEventListener('beforeprint', beforePrint);

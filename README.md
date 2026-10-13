@@ -7,12 +7,12 @@ a slicing game — order, slice, the pieces separate, the chef reacts, plate,
 serve — and since 0.8.0 its direction is the classroom learning product in
 [docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md).
 
-**Status: a single-device development prototype (v0.8.0), not a release
+**Status: a single-device development prototype (v0.9.0), not a release
 for children and not a classroom tool.** A child starts outside the sushi
 bar, taps one of six fictional avatars and goes in; Chef Capy shows the task
-once, then the sleepy cat orders one to five pieces with a picture. The child
-cuts the roll, puts exactly that many pieces on the plate (tap, plus and
-minus, or keys) and rings the bell; a different number brings gentle help
+once, then the sleepy cat orders one to five pieces with a picture in its
+speech bubble. The child slices pieces off the roll, puts exactly that many
+on the plate (a tap, the plate buttons, or keys) and rings the bell; a different number brings gentle help
 and another try. Five orders make a round. Behind the grown-ups'
 times-table question, a teacher workspace (Today, Class, Students, Lessons,
 Reports) shows that evidence for the one counting skill, makes an editable
@@ -20,7 +20,9 @@ lesson draft and prints teacher and family reports. Everything stays in this
 browser: fictional profiles only, no sign-in, no backend, no syncing between
 devices — the times-table question is a parent gate, not teacher
 authentication. The counting content, its rule and the lesson template await
-an educator's review, and nothing here has been tried with children. The
+an educator's review, and nothing here has been tried with children. A guide for a supervised
+hands-on try-out with the fictional profiles is in
+[docs/TRY-OUT.md](docs/TRY-OUT.md). The
 chef, the cat and the food are first versions, not approved looks; there is
 no final branding or icon.
 **Real-device testing of the 3D scene and the chef is pending**
@@ -50,9 +52,10 @@ npx --yes http-server -p 8395 -c-1 .
 - Play with the developer feel-tuning sheet: <http://localhost:8395/?tune>
 
 In the counting rounds: swipe down across the roll, or press the knife
-button, Space, K or the down arrow, to cut; tap a piece, or use the plus and
-minus buttons (+ and −, or the right and left arrows), to move one piece
-between the board and the plate; ring the bell, or press Enter, to serve. The
+button, Space, K or the down arrow, to cut a slice off; tap a slice, or use
+the plate buttons (+ and −, or the right and left arrows), to move one piece
+between the board and the plate — only a slice goes on the plate, never the
+rest of the roll; ring the bell, or press Enter, to serve. The
 chef button or H asks for help; the order card or R says the order again.
 In the endless slicing (`?free`), Space, Enter or the down arrow cut, and a
 ghost finger shows the swipe after a quiet moment.
@@ -143,7 +146,9 @@ test/run.js             the runner
 ## Documentation
 
 - [docs/LEARNING-SPEC.md](docs/LEARNING-SPEC.md): the learning product
-  specification (a summary of v1.1) and what 0.8.0 implements.
+  specification (a summary of v1.1) and what 0.8.0 and 0.9.0 implement.
+- [docs/TRY-OUT.md](docs/TRY-OUT.md): a supervised hands-on try-out of the
+  whole loop with the fictional profiles, with space for notes.
 - [docs/PRODUCT.md](docs/PRODUCT.md): the product, its permanent rules, the
   roadmap and this phase.
 - [docs/DEVICE-QA.md](docs/DEVICE-QA.md): how to judge the slicing by hand,

@@ -1,8 +1,8 @@
 # Device QA
 
 **Status: not done on a device.** Nothing on this list has been tried on a
-real phone or tablet, and nothing in 0.8.0 has been tried with a child or
-reviewed by an educator. Browser QA ran in headless Edge on Windows, on an Intel
+real phone or tablet, and nothing in 0.8.0 or 0.9.0 has been tried with a
+child or reviewed by an educator. Browser QA ran in headless Edge on Windows, on an Intel
 integrated GPU through ANGLE (Direct3D 11), with browser-dispatched touch,
 mouse and pen input. That is simulated input on a desktop GPU, not an
 iPhone, an iPad or Safari. Record the device, OS and browser version, and the
@@ -20,17 +20,18 @@ on the device for offline play.
   and `?tune` on the end for tuning. It uses HTTPS, so the service worker,
   offline play and home-screen install all work there. Pages can take up to
   10 minutes to show a new push. The identity panel in `?tune` shows which
-  version a device is running (0.7.0 for this phase).
+  version a device is running (0.9.0 for this phase).
 - **Same Wi-Fi, for quick feel testing.** On the PC, run
   `npx --yes http-server -p 8395 -c-1 .` in the repository. On the device,
   open `http://<the PC's local IP>:8395/`. A plain-http address is not a
   secure context, so the service worker, offline play and a proper
   home-screen install cannot be tested this way.
 
-## The counting rounds and the teacher workspace (new in 0.8.0)
+## The counting rounds and the teacher workspace (0.8.0, clearer in 0.9.0)
 
 None of this is approved. Some of it is for an educator, and some only a
-child can answer: watch, do not lead.
+child can answer: watch, do not lead. [TRY-OUT.md](TRY-OUT.md) is a
+step-by-step guide for a supervised try-out of the whole loop.
 
 For an educator (before any classroom use):
 
@@ -45,13 +46,21 @@ With a child (supervised usability sessions, Phase A):
 
 - [ ] Outside the sushi bar, a child finds their avatar and goes in without
       help; the glide inside is short and pleasant, and a tap skips it.
-- [ ] Chef Capy's demonstration shows what to do without words.
-- [ ] The order card's maki read as "this many" in all three arrangements
-      (row, dice, scattered), with no numeral.
+- [ ] Chef Capy's demonstration shows what to do without words, including
+      what the plate button does (0.9.0 shows it pressed, with the hand on it).
+- [ ] The order card reads as the cat asking: its portrait with a speech
+      bubble (0.9.0), and the bubble's maki read as "this many" in all three
+      arrangements (row, dice, scattered), with no numeral.
 - [ ] Cuts are not mistaken for pieces: a child makes the number of pieces,
       not the number of cuts.
-- [ ] Tapping a piece onto the plate and back, and the plus and minus
-      buttons, are easy for small fingers; nothing serves until the bell.
+- [ ] Tapping a slice onto the plate and back, and the plate buttons (a
+      piece going up to the plate, a piece back to the board), are easy for
+      small fingers and understood without plus and minus; nothing serves
+      until the bell.
+- [ ] Only a slice goes on the plate (0.9.0): a child sees why the rest of
+      the roll stays on the board, and the knife pointing out helps rather
+      than confuses.
+- [ ] The hop and the ring where a piece lands help a child follow it.
 - [ ] A different number feels like help, never like a mistake; counting
       together, the rings and Chef Capy's hands each make sense.
 - [ ] Five orders feel like a short round, and "more orders" or "finish" is
@@ -74,6 +83,12 @@ On devices:
 - [ ] The teacher workspace on a phone, a tablet and a desktop: Today,
       Class, a child's profile, a lesson draft and a family report are
       readable without zooming; Print / Save as PDF prints the report alone.
+- [ ] A teacher finds, without help, the lesson action on Today, the
+      evidence behind a child's status, the teaching view's next step, and
+      the difference between this child's report and the class CSV.
+- [ ] With the browser's or the system's text made larger (200%), the dock
+      and the workspace still fit. Browser QA only emulated this with a
+      smaller window.
 
 ## Judging the feel and the look (hands-on)
 
@@ -230,6 +245,6 @@ values you prefer the new defaults.
 - [ ] Apple Pencil.
 - [ ] Home-screen install, standalone launch, and an offline launch after
       one online visit; storage and cache names `capybara-sushi.` and
-      `capybara-sushi-v0.8.0` (the identity panel in `?tune` shows them).
+      `capybara-sushi-v0.9.0` (the identity panel in `?tune` shows them).
 - [ ] If you have a device on iOS older than 16.4: it shows the note and
       the try-again button, not a blank screen.
